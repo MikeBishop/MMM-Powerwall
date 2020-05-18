@@ -9,79 +9,51 @@
 
 Module.register("MMM-Powerwall", {
 	defaults: {
-		updateInterval: 60000,
-		retryDelay: 5000
+		localUpdateInterval: 10000,
+		cloudUpdateInterval: 60000,
+		powerwallIP: null,
+		powerwallPassword: null,
+		siteID: null,
+		twcManagerIP: null,
+		teslaAPIUsername: null,
+		teslaAPIPassword: null
 	},
-
 	requiresVersion: "2.1.0", // Required version of MagicMirror
 
 	start: function() {
 		var self = this;
-		var dataRequest = null;
-		var dataNotification = null;
+		var aggregates = null;
+		var historySeries = null;
+		var chargingState = null;
 
 		//Flag for check if module is loaded
 		this.loaded = false;
 
-		// Schedule update timer.
-		this.getData();
-		setInterval(function() {
-			self.updateDom();
-		}, this.config.updateInterval);
-	},
+		//Send settings to helper
+		self.sendSocketNotification("MMM-Powerwall-Configure-Powerwall",
+		  {
+			updateInterval: self.config.localUpdateInterval,
+			powerwallIP: self.config.powerwallIP,
+			powerwallPassword: self.config.powerwallPassword
+		  });
 
-	/*
-	 * getData
-	 * function example return data and show it in the module wrapper
-	 * get a URL request
-	 *
-	 */
-	getData: function() {
-		var self = this;
-
-		var urlApi = "https://jsonplaceholder.typicode.com/posts/1";
-		var retry = true;
-
-		var dataRequest = new XMLHttpRequest();
-		dataRequest.open("GET", urlApi, true);
-		dataRequest.onreadystatechange = function() {
-			console.log(this.readyState);
-			if (this.readyState === 4) {
-				console.log(this.status);
-				if (this.status === 200) {
-					self.processData(JSON.parse(this.response));
-				} else if (this.status === 401) {
-					self.updateDom(self.config.animationSpeed);
-					Log.error(self.name, this.status);
-					retry = false;
-				} else {
-					Log.error(self.name, "Could not load data.");
-				}
-				if (retry) {
-					self.scheduleUpdate((self.loaded) ? -1 : self.config.retryDelay);
-				}
-			}
-		};
-		dataRequest.send();
-	},
-
-
-	/* scheduleUpdate()
-	 * Schedule next update.
-	 *
-	 * argument delay number - Milliseconds before next update.
-	 *  If empty, this.config.updateInterval is used.
-	 */
-	scheduleUpdate: function(delay) {
-		var nextLoad = this.config.updateInterval;
-		if (typeof delay !== "undefined" && delay >= 0) {
-			nextLoad = delay;
+		if (self.config.twcManagerIP) {
+			self.sendSocketNotification("MMM-Powerwall-Configure-TWCManager",
+			{
+				updateInterval: self.config.localUpdateInterval,
+				twcManagerIP: self.config.twcManagerIP
+			});
 		}
-		nextLoad = nextLoad ;
-		var self = this;
-		setTimeout(function() {
-			self.getData();
-		}, nextLoad);
+
+		if (self.config.teslaAPIUsername && self.config.teslaAPIPassword ) {
+			self.sendSocketNotification("MMM-Powerwall-Configure-TeslaAPI",
+			{
+				updateInterval: self.config.cloudUpdateInterval,
+				siteID: self.config.siteID,
+				teslaAPIUsername: self.config.teslaAPIUsername,
+				teslaAPIPassword: self.config.teslaAPIPassword
+			});
+		  }
 	},
 
 	getDom: function() {
@@ -100,7 +72,6 @@ Module.register("MMM-Powerwall", {
 			//             this id defined in translations files
 			labelDataRequest.innerHTML = this.translate("TITLE");
 
-
 			wrapper.appendChild(labelDataRequest);
 			wrapper.appendChild(wrapperDataRequest);
 		}
@@ -117,6 +88,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	getScripts: function() {
+		//TODO:  Will need the ChartJS script here
 		return [];
 	},
 
@@ -124,15 +96,6 @@ Module.register("MMM-Powerwall", {
 		return [
 			"MMM-Powerwall.css",
 		];
-	},
-
-	// Load translations files
-	getTranslations: function() {
-		//FIXME: This can be load a one file javascript definition
-		return {
-			en: "translations/en.json",
-			es: "translations/es.json"
-		};
 	},
 
 	processData: function(data) {
@@ -148,7 +111,7 @@ Module.register("MMM-Powerwall", {
 
 	// socketNotificationReceived from helper
 	socketNotificationReceived: function (notification, payload) {
-		if(notification === "MMM-Powerwall-NOTIFICATION_TEST") {
+		if(notification === "MMM-Powerwall-POWERWALL_COUNTERS") {
 			// set dataNotification
 			this.dataNotification = payload;
 			this.updateDom();
