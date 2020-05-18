@@ -19,12 +19,14 @@ Module.register("MMM-Powerwall", {
 		teslaAPIPassword: null
 	},
 	requiresVersion: "2.1.0", // Required version of MagicMirror
+	twcEnabled: null,
+	teslaAPIEnabled: null,
+	aggregates: null,
+	historySeries: null,
+	chargingState: null,
 
 	start: function() {
 		var self = this;
-		var aggregates = null;
-		var historySeries = null;
-		var chargingState = null;
 
 		//Flag for check if module is loaded
 		this.loaded = false;
@@ -43,6 +45,10 @@ Module.register("MMM-Powerwall", {
 				updateInterval: self.config.localUpdateInterval,
 				twcManagerIP: self.config.twcManagerIP
 			});
+			self.twcEnabled = true;
+		}
+		else {
+			self.twcEnabled = false;
 		}
 
 		if (self.config.teslaAPIUsername && self.config.teslaAPIPassword ) {
@@ -53,38 +59,26 @@ Module.register("MMM-Powerwall", {
 				teslaAPIUsername: self.config.teslaAPIUsername,
 				teslaAPIPassword: self.config.teslaAPIPassword
 			});
-		  }
+			self.teslaAPIEnabled = true;
+		}
+		else {
+			self.teslaAPIEnabled = false;
+		}
 	},
 
-	getDom: function() {
-		var self = this;
+	getTemplate: function() {
+		return "MMM-Powerwall.njk"
+	},
 
-		// create element wrapper for show into the module
-		var wrapper = document.createElement("div");
-		// If this.dataRequest is not empty
-		if (this.dataRequest) {
-			var wrapperDataRequest = document.createElement("div");
-			// check format https://jsonplaceholder.typicode.com/posts/1
-			wrapperDataRequest.innerHTML = this.dataRequest.title;
-
-			var labelDataRequest = document.createElement("label");
-			// Use translate function
-			//             this id defined in translations files
-			labelDataRequest.innerHTML = this.translate("TITLE");
-
-			wrapper.appendChild(labelDataRequest);
-			wrapper.appendChild(wrapperDataRequest);
+	getTemplateData: function() {
+		return {
+			config: this.config,
+			twcEnabled: this.twcEnabled,
+			teslaAPIEnabled: self.teslaAPIEnabled,
+			aggregates: self.aggregates,
+			historySeries: self.historySeries,
+			chargingState: self.chargingState,
 		}
-
-		// Data from helper
-		if (this.dataNotification) {
-			var wrapperDataNotification = document.createElement("div");
-			// translations  + datanotification
-			wrapperDataNotification.innerHTML =  this.translate("UPDATE") + ": " + this.dataNotification.date;
-
-			wrapper.appendChild(wrapperDataNotification);
-		}
-		return wrapper;
 	},
 
 	getScripts: function() {
@@ -98,23 +92,13 @@ Module.register("MMM-Powerwall", {
 		];
 	},
 
-	processData: function(data) {
-		var self = this;
-		this.dataRequest = data;
-		if (this.loaded === false) { self.updateDom(self.config.animationSpeed) ; }
-		this.loaded = true;
-
-		// the data if load
-		// send notification to helper
-		this.sendSocketNotification("MMM-Powerwall-NOTIFICATION_TEST", data);
-	},
-
 	// socketNotificationReceived from helper
 	socketNotificationReceived: function (notification, payload) {
 		if(notification === "MMM-Powerwall-POWERWALL_COUNTERS") {
 			// set dataNotification
 			this.dataNotification = payload;
-			this.updateDom();
+			//this.updateDom();
+			// May not need to updateDom; use chartJs to directly modify the graphs
 		}
 	},
 });

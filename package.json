@@ -1,10 +1,13 @@
 {
-  "name": "MMM-Powerwall",
+  "name": "mmm-powerwall",
   "version": "1.0.0",
-  "description": "Todo: Insert description here!",
+  "description": "MagicMirror module for Tesla Powerwall",
   "main": "MMM-Powerwall.js",
   "author": "Mike Bishop",
   "license": "MIT",
+  "dependencies": {
+    "chart.js": "latest"
+  },
   "devDependencies": {
     "grunt": "latest",
     "grunt-eslint": "latest",
