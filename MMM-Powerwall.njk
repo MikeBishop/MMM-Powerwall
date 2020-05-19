@@ -4,18 +4,18 @@
     {{ endDiv() }}
     <div class="module MMM-Powerwall module-content flexitem">
         {% if graph == "SolarProduction" -%}
-            {% if aggregates %}
+            {% if flows %}
                 <div class="MMM-Powerwall grid-left">
                   <div class="MMM-Powerwall col1">
                     <p class="small">Currently producing</p>
-                    <p id="{{config.powerwallIP}}-SolarProduction" class="big solar">
-                        {%- if aggregates.solar.instant_power > 950 -%}
-                            {{ aggregates.solar.instant_power // 100 / 10 }} kW
+                    <p id="{{id}}-SolarProduction" class="big solar">
+                        {%- if flows.sources.solar.total > 950 -%}
+                            {{ flows.sources.solar.total // 100 / 10 }} kW
                         {%- else -%}
-                            {{ aggregates.solar.instant_power // 1 }} W
+                            {{ flows.sources.solar.total // 1 }} W
                         {%- endif %}</p>
                   </div>
-                  <canvas id="{{config.powerwallIP}}-SolarDestinations" class="MMM-Powerwall col2">
+                  <canvas id="{{id}}-SolarDestinations" class="MMM-Powerwall col2">
                     Graph goes here
                   </canvas>
                 </div>
