@@ -6,8 +6,23 @@
  */
 
 var NodeHelper = require("node_helper");
+var Https = require("https");
+var unauthenticated_agent = new Https.Agent({
+	rejectUnauthorized: false,
+});
+var fetch = require("node-fetch");
+if (!globalThis.fetch) {
+	globalThis.fetch = fetch;
+}
+
 
 module.exports = NodeHelper.create({
+
+	start: function() {
+		this.powerwallEndpoints = {};
+		this.twcManagerEndpoints = {};
+		this.teslaApiAccounts = {};
+	},
 
 	// Override socketNotificationReceived method.
 
@@ -18,30 +33,67 @@ module.exports = NodeHelper.create({
 	 * argument payload mixed - The payload of the notification.
 	 */
 	socketNotificationReceived: function(notification, payload) {
-		if (notification === "MMM-Powerwall-NOTIFICATION_TEST") {
-			console.log("Working notification system. Notification:", notification, "payload: ", payload);
-			// Send notification
-			this.sendNotificationTest(this.anotherFunction()); //Is possible send objects :)
+		
+		let powerwallEndpoints = this.powerwallEndpoints;
+		var self = this;
+		if (notification === "MMM-Powerwall-Configure-Powerwall") {
+			let updateInterval = payload.updateInterval;
+			let powerwallIP = payload.powerwallIP;
+			let powerwallPassword = payload.powerwallPassword;
+
+			if( !powerwallEndpoints.hasOwnProperty(powerwallIP) ) {
+				// First configuration for this Powerwall; update immediately
+				powerwallEndpoints[powerwallIP] = {
+					password: powerwallPassword,
+					aggregates: null,
+					lastUpdate: 0,
+					updateInterval: updateInterval
+				};
+				self.updatePowerwall(powerwallIP, powerwallPassword);
+			}
+			else {
+				if (powerwallEndpoints[powerwallIP].aggregates) {
+					this.sendSocketNotification("MMM-Powerwall-Aggregates", {
+						ip: powerwallIP,
+						aggregates: powerwallEndpoints[powerwallIP].aggregates
+					});
+				}
+				powerwallEndpoints[powerwallIP = powerwallPassword];
+			}
+		}
+		else if (notification === "MMM-Powerwall-UpdateLocal") {
+			for(ip in powerwallEndpoints) {
+				if( powerwallEndpoints[ip].lastUpdate + powerwallEndpoints[ip].updateInterval < Date.now() ) {
+					self.updatePowerwall(ip, powerwallEndpoints[ip].password);
+				}
+				else {
+					if (powerwallEndpoints[ip].aggregates) {
+						this.sendSocketNotification("MMM-Powerwall-Aggregates", {
+							ip: ip,
+							aggregates: powerwallEndpoints[ip].aggregates
+						});
+					}	
+				}
+			}
 		}
 	},
 
-	// Example function send notification test
-	sendNotificationTest: function(payload) {
-		this.sendSocketNotification("MMM-Powerwall-NOTIFICATION_TEST", payload);
-	},
+	updatePowerwall: async function(powerwallIP, powerwallPassword) {
+		this.powerwallEndpoints[powerwallIP].lastUpdate = Date.now();
+		let url = "https://" + powerwallIP + "/api/meters/aggregates";
+		let result = await fetch(url, {agent: unauthenticated_agent});
 
-	// this you can create extra routes for your module
-	extraRoutes: function() {
-		var self = this;
-		this.expressApp.get("/MMM-Powerwall/extra_route", function(req, res) {
-			// call another function
-			values = self.anotherFunction();
-			res.send(values);
-		});
-	},
-
-	// Test another function
-	anotherFunction: function() {
-		return {date: new Date()};
+		if( result.ok ) {
+			var aggregates = await result.json();
+			this.powerwallEndpoints[powerwallIP].aggregates = aggregates;
+			// Send notification
+			this.sendSocketNotification("MMM-Powerwall-Aggregates", {
+				ip: powerwallIP,
+				aggregates: aggregates
+			});
+		}
+		else {
+			console.log("Powerwall fetch failed")
+		}
 	}
 });

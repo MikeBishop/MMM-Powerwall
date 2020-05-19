@@ -1,0 +1,34 @@
+<div class="MMM-Powerwall flexbox">
+{% set endDiv = joiner(["</div>"]) -%}
+{% for graph in config.graphs %}
+    {{ endDiv() }}
+    <div class="module MMM-Powerwall module-content flexitem">
+        {% if graph == "SolarProduction" -%}
+            {% if aggregates %}
+                <div class="MMM-Powerwall grid-left">
+                  <div class="MMM-Powerwall col1">
+                    <p class="small">Currently producing</p>
+                    <p id="{{config.powerwallIP}}-SolarProduction" class="big solar">
+                        {%- if aggregates.solar.instant_power > 950 -%}
+                            {{ aggregates.solar.instant_power // 100 / 10 }} kW
+                        {%- else -%}
+                            {{ aggregates.solar.instant_power // 1 }} W
+                        {%- endif %}</p>
+                  </div>
+                  <canvas id="{{config.powerwallIP}}-SolarDestinations" class="MMM-Powerwall col2">
+                    Graph goes here
+                  </canvas>
+                </div>
+            {%- else -%}
+                LOADING...
+            {%-endif -%}
+        {%- elif graph == "HouseConsumption" -%}
+        {%- elif graph == "SelfPoweredDay" -%}
+        {%- elif graph == "CarCharging" -%}
+        {%- elif graph == "PowerFlow" -%}
+        {%- else -%}
+        Unknown graph type selected
+        {%- endif -%}
+{%- endfor %}
+    </div>
+</div>

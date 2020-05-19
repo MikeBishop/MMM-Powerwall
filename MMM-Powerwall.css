@@ -8,3 +8,47 @@
  * Custom here your css module
  *
  */
+.module.MMM-Powerwall:not(.module-content) {
+    background-color: rgba(0,0,0,0);
+}
+
+.MMM-Powerwall.flexbox {
+    display: flexbox;
+    flex-wrap: wrap; 
+}
+
+.MMM-Powerwall.flexitem {
+    margin: 10px;
+    flex: 300px 1;
+    height: 200px;
+}
+
+.MMM-Powerwall[class*="grid-"] {
+    display: grid;
+    grid-template-rows: auto;
+}
+
+.MMM-Powerwall.grid-left {
+    grid-template-columns: 33% auto;
+}
+
+.MMM-Powerwall.grid-right {
+    grid-template-columns: auto 33%;
+}
+
+.MMM-Powerwall.col1 {
+    grid-column: 1;
+}
+
+.MMM-Powerwall.col2 {
+    grid-column: 2;
+}
+
+.MMM-Powerwall .solar {
+    color: gold
+}
+
+.MMM-Powerwall .big {
+    font-size: 45px;
+    line-height: 50px;
+}

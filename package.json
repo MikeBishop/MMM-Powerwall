@@ -6,7 +6,9 @@
   "author": "Mike Bishop",
   "license": "MIT",
   "dependencies": {
-    "chart.js": "latest"
+    "chart.js": "latest",
+    "chartjs": "^0.3.24",
+    "jslint": "^0.12.1"
   },
   "devDependencies": {
     "grunt": "latest",

@@ -9,6 +9,7 @@
 
 Module.register("MMM-Powerwall", {
 	defaults: {
+		graphs: ["SolarProduction"],
 		localUpdateInterval: 10000,
 		cloudUpdateInterval: 60000,
 		powerwallIP: null,
@@ -64,21 +65,31 @@ Module.register("MMM-Powerwall", {
 		else {
 			self.teslaAPIEnabled = false;
 		}
+
+		setInterval(function() {
+			self.sendSocketNotification("MMM-Powerwall-UpdateLocal");
+		}, self.config.localUpdateInterval);
+		setInterval(function() {
+			self.sendSocketNotification("MMM-Powerwall-UpdateCloud");
+		}, self.config.cloudUpdateInterval);
 	},
 
 	getTemplate: function() {
-		return "MMM-Powerwall.njk"
+		return "MMM-Powerwall.njk";
 	},
 
 	getTemplateData: function() {
-		return {
+		let result = {
 			config: this.config,
 			twcEnabled: this.twcEnabled,
-			teslaAPIEnabled: self.teslaAPIEnabled,
-			aggregates: self.aggregates,
-			historySeries: self.historySeries,
-			chargingState: self.chargingState,
-		}
+			teslaAPIEnabled: this.teslaAPIEnabled,
+			aggregates: this.aggregates,
+			historySeries: this.historySeries,
+			chargingState: this.chargingState,
+		};
+
+		Log.log("Returning " + JSON.stringify(result));
+		return result;
 	},
 
 	getScripts: function() {
@@ -92,13 +103,27 @@ Module.register("MMM-Powerwall", {
 		];
 	},
 
+	createCharts: function () {
+		if( !this.loaded ) {
+			if ( true /* charts have been created */ ) {
+				// Create the charts initially
+				this.loaded = true
+			}
+			else {
+				setTimeout(createCharts, 1000)
+			}
+		}
+	},
+
 	// socketNotificationReceived from helper
 	socketNotificationReceived: function (notification, payload) {
-		if(notification === "MMM-Powerwall-POWERWALL_COUNTERS") {
-			// set dataNotification
-			this.dataNotification = payload;
-			//this.updateDom();
-			// May not need to updateDom; use chartJs to directly modify the graphs
+		Log.log("Received " + notification + ": " + JSON.stringify(payload));
+		if(notification === "MMM-Powerwall-Aggregates") {
+			if( payload.ip === this.config.powerwallIP ) {
+				this.aggregates = payload.aggregates;
+				this.updateDom();
+				// May not need to updateDom; use chartJs to directly modify the graphs	
+			}
 		}
 	},
 });
