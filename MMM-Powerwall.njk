@@ -1,13 +1,13 @@
 <div class="MMM-Powerwall flexbox">
 {% set endDiv = joiner(["</div>"]) -%}
 {% for graph in config.graphs %}
-    {{ endDiv() }}
+    {{ endDiv() | safe }}
     <div class="module MMM-Powerwall module-content flexitem">
         {% if graph == "SolarProduction" -%}
             {% if flows %}
                 <div class="MMM-Powerwall grid-left">
                   <div class="MMM-Powerwall col1">
-                    <p class="small">Solar is currently producing</p>
+                    <p class="small bright">Solar is currently producing</p>
                     <p id="{{id}}-SolarProduction" class="big solar">
                         {%- if flows.sources.solar.total > 950 -%}
                             {{ flows.sources.solar.total // 100 / 10 }} kW
@@ -25,6 +25,27 @@
                 LOADING...
             {%-endif -%}
         {%- elif graph == "HouseConsumption" -%}
+            {% if flows %}
+                <div class="MMM-Powerwall grid-right">
+                  <div class="MMM-Powerwall col1 graph-container">
+                    <canvas id="{{id}}-HouseSources">
+                        Graph goes here
+                    </canvas>
+                  </div>
+                  <div class="MMM-Powerwall col2">
+                    <p class="small bright">House is currently consuming</p>
+                    <p id="{{id}}-HouseConsumption" class="big house">
+                        {%- if flows.sinks.house.total > 950 -%}
+                            {{ flows.sinks.house.total // 100 / 10 }} kW
+                        {%- else -%}
+                            {{ flows.sinks.house.total // 1 }} W
+                        {%- endif %}</p>
+                  </div>
+                </div>
+            {%- else -%}
+                LOADING...
+            {%-endif -%}
+
         {%- elif graph == "SelfPoweredDay" -%}
         {%- elif graph == "CarCharging" -%}
         {%- elif graph == "PowerFlow" -%}

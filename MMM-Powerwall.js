@@ -7,7 +7,7 @@
  * MIT Licensed.
  */
 
-const SOLAR = { key: "solar", displayAs: "Solar", color: "#DDBF29" };
+const SOLAR = { key: "solar", displayAs: "Solar", color: "gold" };
 const POWERWALL = { key: "battery", displayAs: "Powerwall", color: "#0BC60B"};
 const GRID = { key: "grid", displayAs: "Grid", color: "#CACECF" };
 const HOUSE = { key: "house", displayAs: "Local Usage", color: "#09A9E6" };
@@ -27,7 +27,7 @@ const DISPLAY_SINKS = [
 
 Module.register("MMM-Powerwall", {
 	defaults: {
-		graphs: ["SolarProduction"],
+		graphs: ["SolarProduction", "HouseConsumption"],
 		localUpdateInterval: 10000,
 		cloudUpdateInterval: 60000,
 		powerwallIP: null,
@@ -87,7 +87,10 @@ Module.register("MMM-Powerwall", {
 		}
 
 		setInterval(function() {
-			self.sendSocketNotification("MMM-Powerwall-UpdateLocal");
+			self.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
+				powerwallIP: self.config.powerwallIP,
+				twcManagerIP: self.config.twcManagerIP
+			});
 		}, self.config.localUpdateInterval);
 		setInterval(function() {
 			self.sendSocketNotification("MMM-Powerwall-UpdateCloud");
@@ -148,17 +151,14 @@ Module.register("MMM-Powerwall", {
 					/*******************
 					 * SolarProduction *
 					 *******************/
-					let productionNode = document.getElementById(this.identifier + "-SolarProduction");
-					if (productionNode) {
-						let solarProduction = this.flows.sources.solar.total;
-						productionNode.innerText = this.formatAsWkW(solarProduction);
-					}
+					this.updateNode(this.identifier + "-SolarProduction", this.flows.sources.solar.total);
+					this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
 
-					if( this.charts.solarProduction ) {
-						let distribution = this.flows.sources.solar.distribution;
-						this.charts.solarProduction.data.datasets[0].data = DISPLAY_SINKS.map( (entry) => distribution[entry.key] );
-						this.charts.solarProduction.update();
-					}
+					/********************
+					 * HouseConsumption *
+					 ********************/
+					this.updateNode(this.identifier + "-HouseConsumption", this.flows.sinks.house.total);
+					this.updateChart(this.charts.houseConsumption, DISPLAY_SOURCES, this.flows.sinks.house.sources);
 				}
 			}
 		}
@@ -170,6 +170,20 @@ Module.register("MMM-Powerwall", {
 		}
 		else {
 			return Math.round(number) + " W";
+		}
+	},
+
+	updateNode: function(id, value) {
+		let targetNode = document.getElementById(id);
+		if (targetNode) {
+			targetNode.innerText = this.formatAsWkW(value);
+		}
+	},
+
+	updateChart: function(chart, display_array, distribution) {
+		if( chart ) {
+			chart.data.datasets[0].data = display_array.map( (entry) => distribution[entry.key] );
+			chart.update();
 		}
 	},
 
@@ -272,6 +286,39 @@ Module.register("MMM-Powerwall", {
 				}
 			});
 			this.charts.solarProduction = solarProductionPie;
+			// self.kerfluffle.foo = 1
+		}
+
+		myCanvas = document.getElementById(this.identifier + "-HouseSources");
+		if( myCanvas ) {
+			let distribution = this.flows.sinks.house.sources;
+
+			// Build the chart on the canvas
+			var houseConsumptionPie = new Chart(myCanvas, {
+				type: "pie",
+				data: {
+					datasets: [
+					{
+						data: DISPLAY_SOURCES.map( (entry) => distribution[entry.key] ),
+						backgroundColor: DISPLAY_SOURCES.map( (entry) => entry.color ),
+						weight: 2,
+						labels: DISPLAY_SOURCES.map( (entry) => entry.displayAs )
+					},
+					{
+						data: [1],
+						backgroundColor: HOUSE.color,
+						weight: 1,
+						showLine: false,
+						datalabels: {
+							labels: {
+								title: null,
+								value: null
+							}
+						}
+					}]
+				}
+			});
+			this.charts.houseConsumption = houseConsumptionPie;
 			// self.kerfluffle.foo = 1
 		}
 	},
