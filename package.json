@@ -6,6 +6,7 @@
   "author": "Mike Bishop",
   "license": "MIT",
   "dependencies": {
-    "chart.js": "latest"
+    "chart.js": "latest",
+    "chartjs-plugin-datalabels": "^0.7.0"
   }
 }

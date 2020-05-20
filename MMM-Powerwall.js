@@ -7,16 +7,22 @@
  * MIT Licensed.
  */
 
+const SOLAR = { key: "solar", displayAs: "Solar", color: "#DDBF29" };
+const POWERWALL = { key: "battery", displayAs: "Powerwall", color: "#0BC60B"};
+const GRID = { key: "grid", displayAs: "Grid", color: "#CACECF" };
+const HOUSE = { key: "house", displayAs: "Local Usage", color: "#09A9E6" };
+const CAR = { key: "car", displayAs: "Car Charging", color: "#EA4659" };
+
 const DISPLAY_SOURCES = [
-	{ key: "solar", displayAs: "Solar", color: "gold" },
-	{ key: "battery", displayAs: "Powerwall Discharge", color: "green"},
-	{ key: "grid", displayAs: "Grid Import", color: "gray" }
+	SOLAR,
+	POWERWALL,
+	GRID
 ];
 const DISPLAY_SINKS = [
-	{ key: "house", displayAs: "Local Usage", color: "blue" },
-	{ key: "car", displayAs: "Car Charging", color: "red" },
-	{ key: "battery", displayAs: "Powerwall Charging", color: "green" },
-	{ key: "grid", displayAs: "Grid Export", color: "gray" }
+	HOUSE,
+	CAR,
+	POWERWALL,
+	GRID
 ];
 
 Module.register("MMM-Powerwall", {
@@ -108,7 +114,10 @@ Module.register("MMM-Powerwall", {
 	},
 
 	getScripts: function() {
-		return [this.file("node_modules/chart.js/dist/Chart.bundle.js")];
+		return [
+			this.file("node_modules/chart.js/dist/Chart.bundle.js"),
+			this.file("node_modules/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js")
+		];
 	},
 
 	getStyles: function () {
@@ -140,15 +149,27 @@ Module.register("MMM-Powerwall", {
 					 * SolarProduction *
 					 *******************/
 					let productionNode = document.getElementById(this.identifier + "-SolarProduction");
-					let solarProduction = this.flows.sources.solar.total;
-					if (solarProduction > 950) {
-						productionNode.innerText = Math.trunc(solarProduction / 100) / 10.0 + " kW";
+					if (productionNode) {
+						let solarProduction = this.flows.sources.solar.total;
+						productionNode.innerText = this.formatAsWkW(solarProduction);
 					}
-					else {
-						productionNode.innerText = Math.trunc(solarProduction) + " W"
+
+					if( this.charts.solarProduction ) {
+						let distribution = this.flows.sources.solar.distribution;
+						this.charts.solarProduction.data.datasets[0].data = DISPLAY_SINKS.map( (entry) => distribution[entry.key] );
+						this.charts.solarProduction.update();
 					}
 				}
 			}
+		}
+	},
+	
+	formatAsWkW: function(number) {
+		if( number > 950 ) {
+			return Math.round(number / 100) / 10.0 + " kW";
+		}
+		else {
+			return Math.round(number) + " W";
 		}
 	},
 
@@ -179,21 +200,75 @@ Module.register("MMM-Powerwall", {
 	},
 
 	buildGraphs: function() {
-		Log.log("Rebuilding graphs")
+		Log.log("Rebuilding graphs");
+		var self = this;
+
+		Chart.helpers.merge(Chart.defaults.global, {
+			responsive: true,
+			maintainAspectRatio: true,
+			legend: false,
+			aspectRatio: 1.2,
+			elements: {
+				arc: {
+					borderWidth: 0
+				}
+			},
+			tooltips: {
+				enabled: false
+			},
+			plugins: {
+				datalabels: {
+					color: "white",
+					anchor: "center",
+					textalign: "center",
+					display: function(context) {
+						return context.dataset.data[context.dataIndex] > 0 ? "auto" : false;
+					},
+					labels: {
+						title: {
+							font: {
+								size: 16,
+								weight: "bold"
+							}
+						}
+					},
+					formatter: function(value, context) {
+						return [
+							context.dataset.labels[context.dataIndex],
+							self.formatAsWkW(value)
+						];
+					}
+				}
+			}
+		});
+
 		var myCanvas = document.getElementById(this.identifier + "-SolarDestinations");
 		if( myCanvas ) {
 			let distribution = this.flows.sources.solar.distribution;
-			let toDisplay = DISPLAY_SINKS.filter((entry) => distribution[entry.key] > 0);
 
 			// Build the chart on the canvas
 			var solarProductionPie = new Chart(myCanvas, {
-				type: "doughnut",
+				type: "pie",
 				data: {
-					datasets: [{
-							data: toDisplay.map( (entry) => distribution[entry.key] ),
-							backgroundColor: toDisplay.map( (entry) => entry.color )
-						}],
-					labels: toDisplay.map( (entry) => entry.displayAs ),
+					datasets: [
+					{
+						data: DISPLAY_SINKS.map( (entry) => distribution[entry.key] ),
+						backgroundColor: DISPLAY_SINKS.map( (entry) => entry.color ),
+						weight: 2,
+						labels: DISPLAY_SINKS.map( (entry) => entry.displayAs )
+					},
+					{
+						data: [1],
+						backgroundColor: SOLAR.color,
+						weight: 1,
+						showLine: false,
+						datalabels: {
+							labels: {
+								title: null,
+								value: null
+							}
+						}
+					}]
 				}
 			});
 			this.charts.solarProduction = solarProductionPie;

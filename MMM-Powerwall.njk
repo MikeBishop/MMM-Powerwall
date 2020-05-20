@@ -7,7 +7,7 @@
             {% if flows %}
                 <div class="MMM-Powerwall grid-left">
                   <div class="MMM-Powerwall col1">
-                    <p class="small">Currently producing</p>
+                    <p class="small">Solar is currently producing</p>
                     <p id="{{id}}-SolarProduction" class="big solar">
                         {%- if flows.sources.solar.total > 950 -%}
                             {{ flows.sources.solar.total // 100 / 10 }} kW
@@ -15,9 +15,11 @@
                             {{ flows.sources.solar.total // 1 }} W
                         {%- endif %}</p>
                   </div>
-                  <canvas id="{{id}}-SolarDestinations" class="MMM-Powerwall col2">
-                    Graph goes here
-                  </canvas>
+                  <div class="MMM-Powerwall col2 graph-container">
+                    <canvas id="{{id}}-SolarDestinations">
+                        Graph goes here
+                    </canvas>
+                  </div>
                 </div>
             {%- else -%}
                 LOADING...

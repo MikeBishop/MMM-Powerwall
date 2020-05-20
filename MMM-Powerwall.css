@@ -20,7 +20,8 @@
 .MMM-Powerwall.flexitem {
     margin: 10px;
     flex: 300px 1;
-    height: 200px;
+    height: 250px;
+    max-width: fit-content;
 }
 
 .MMM-Powerwall[class*="grid-"] {
@@ -51,4 +52,11 @@
 .MMM-Powerwall .big {
     font-size: 45px;
     line-height: 50px;
+}
+
+.MMM-Powerwall .graph-container {
+    position: relative;
+    height: 250px;
+    max-width: 300px;
+    max-height: 250px;
 }
