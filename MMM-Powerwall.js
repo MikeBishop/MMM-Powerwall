@@ -45,6 +45,7 @@ Module.register("MMM-Powerwall", {
 	flows: null,
 	historySeries: null,
 	chargingState: null,
+	dayMode: "day",
 	charts: {},
 
 	start: function() {
@@ -106,6 +107,7 @@ Module.register("MMM-Powerwall", {
 	getTemplateData: function() {
 		let result = {
 			id: this.identifier,
+			dayMode: this.dayMode,
 			config: this.config,
 			twcEnabled: this.twcEnabled,
 			teslaAPIEnabled: this.teslaAPIEnabled,
@@ -121,7 +123,7 @@ Module.register("MMM-Powerwall", {
 	getScripts: function() {
 		return [
 			this.file("node_modules/chart.js/dist/Chart.bundle.js"),
-			this.file("node_modules/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js")
+			this.file("node_modules/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js"),
 		];
 	},
 
@@ -224,6 +226,27 @@ Module.register("MMM-Powerwall", {
 						Log.log("Found a non-match")
 					}
 				}
+			}
+		}
+		else if ( notification === "CURRENTWEATHER_DATA" ) {
+			let data = payload.data;
+			let sunrise = new Date(data.sys.sunrise * 1000);
+			let sunset = new Date(data.sys.sunset * 1000);
+			let now = new Date();
+
+			let newMode = "";
+			if (now < sunrise) {
+				newMode = "morning";
+			}
+			else if (sunset < now) {
+				newMode = "night";
+			}
+			else {
+				newMode = "day";
+			}
+			if( newMode != this.dayMode ) {
+				this.dayMode = newMode;
+				this.updateDom();
 			}
 		}
 	},

@@ -60,7 +60,6 @@ module.exports = NodeHelper.create({
 			}
 		}
 		else if (notification === "MMM-Powerwall-Configure-TWCManager") {
-			console.log(payload);
 			let ip = payload.twcManagerIP;
 			if( twcManagerEndpoints[ip] ) {
 				twcManagerEndpoints[ip].port = payload.port;
@@ -127,7 +126,6 @@ module.exports = NodeHelper.create({
 		this.twcManagerEndpoints[twcManagerIP].lastUpdate = Date.now();
 		let port = this.twcManagerEndpoints[twcManagerIP].port;
 		let url = "http://" + twcManagerIP + ":" + port + "/api/getStatus";
-		console.log("Fetching from TWC at " + url); 
 		let result = await fetch(url);
 
 		if( result.ok ) {
