@@ -155,8 +155,9 @@ Module.register("MMM-Powerwall", {
 		}
 		else if (notification === "MMM-Powerwall-ChargeStatus") {
 			if( payload.ip === this.config.twcManagerIP ) {
+				let oldConsumption = self.twcConsumption;
 				self.twcConsumption = Math.round( parseFloat(payload.status.chargerLoadWatts) );
-				if( this.teslaAggregates ) {
+				if( self.twcConsumption !== oldConsumption && this.teslaAggregates ) {
 					this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
 					this.updateData();
 				}
