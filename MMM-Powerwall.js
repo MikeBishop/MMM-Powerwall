@@ -19,9 +19,9 @@ const DISPLAY_SOURCES = [
 	GRID
 ];
 const DISPLAY_SINKS = [
-	HOUSE,
-	CAR,
 	POWERWALL,
+	CAR,
+	HOUSE,
 	GRID
 ];
 
