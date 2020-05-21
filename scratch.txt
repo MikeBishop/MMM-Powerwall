@@ -1,0 +1,110 @@
+https://owner-api.teslamotors.com/api/1/energy_sites/2609804/history?kind=power
+
+response.time_series: [
+            {
+                "timestamp": "2020-05-20T00:00:00-04:00",
+                "solar_power": 0,
+                "battery_power": 0,
+                "grid_power": 2288.938990783691,
+                "grid_services_power": 0,
+                "generator_power": 0
+            },
+            ...]
+Would need to integrate charger power series as well.
+
+
+https://owner-api.teslamotors.com/api/1/energy_sites/2609804/history?kind=self_consumption&period=day
+
+    "response": {
+        "period": "day",
+        "time_series": [
+            {
+                "timestamp": "2020-05-20T00:00:00-04:00",
+                "solar": 42.80884879901176,
+                "battery": 19.680123722678967
+            },
+            {
+                "timestamp": "2020-05-21T00:00:00-04:00",
+                "solar": 23.332183431052638,
+                "battery": 5.7802283820363245
+            }
+        ]
+    }
+
+https://owner-api.teslamotors.com/api/1/energy_sites/2609804/history?period=day&kind=energy
+{
+    "response": {
+        "serial_number": "1118431-00-L--TG119293000MAK",
+        "period": "day",
+        "time_series": [
+            {
+                "timestamp": "2020-05-20T01:00:00-04:00",
+                "solar_energy_exported": 17664.81138909422,
+                "generator_energy_exported": 0,
+                "grid_energy_imported": 9472.999722677516,
+                "grid_services_energy_imported": 0,
+                "grid_services_energy_exported": 0,
+                "grid_energy_exported_from_solar": 143.90483539667912,
+                "grid_energy_exported_from_generator": 0,
+                "grid_energy_exported_from_battery": 0,
+                "battery_energy_exported": 4970,
+                "battery_energy_imported_from_grid": 0,
+                "battery_energy_imported_from_solar": 6710,
+                "battery_energy_imported_from_generator": 0,
+                "consumer_energy_imported_from_grid": 9472.999722677516,
+                "consumer_energy_imported_from_solar": 10810.90655369754,
+                "consumer_energy_imported_from_battery": 4970,
+                "consumer_energy_imported_from_generator": 0
+            },
+            {
+                "timestamp": "2020-05-21T01:00:00-04:00",
+                "solar_energy_exported": 3742.946944481693,
+                "generator_energy_exported": 0,
+                "grid_energy_imported": 6747.5805556408595,
+                "grid_services_energy_imported": 0,
+                "grid_services_energy_exported": 0,
+                "grid_energy_exported_from_solar": 31.748638711404055,
+                "grid_energy_exported_from_generator": 0,
+                "grid_energy_exported_from_battery": 0,
+                "battery_energy_exported": 590,
+                "battery_energy_imported_from_grid": 0,
+                "battery_energy_imported_from_solar": 1170,
+                "battery_energy_imported_from_generator": 0,
+                "consumer_energy_imported_from_grid": 6747.5805556408595,
+                "consumer_energy_imported_from_solar": 2541.198305770289,
+                "consumer_energy_imported_from_battery": 590,
+                "consumer_energy_imported_from_generator": 0
+            }
+        ]
+    }
+}
+
+https://owner-api.teslamotors.com/api/1/energy_sites/2609804/history?end_date=2020-05-03T01:00:00-04:00&kind=self_consumption&period=week
+
+{
+    "response": {
+        "period": "week",
+        "time_series": [
+            {
+                "timestamp": "2020-05-14T00:00:00-04:00",
+                "solar": 37.93426179409109,
+                "battery": 28.52067850947364
+            }
+        ]
+    }
+}
+
+Parameters:
+# period #
+Level of aggregation; can be "day", "week", "month", "year", "lifetime"
+Default is "day"
+
+# kind #
+Values are "power", "energy", or "self_consumption"
+kind=power is only available for period=day
+
+# end_date # 
+UTC Timestamp (2020-01-03T02%3A29%3A20.866Z)
+Defaults to providing yesterday and today if not supplied
+
+Doesn't appear to be respected for kind=power; not sure why.
