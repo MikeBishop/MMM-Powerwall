@@ -45,6 +45,12 @@ Module.register("MMM-Powerwall", {
 	flows: null,
 	historySeries: null,
 	chargingState: null,
+	totals: {
+		grid: null,
+		solar: null,
+		battery: null,
+		house: null,
+	},
 	dayMode: "day",
 	charts: {},
 
@@ -116,6 +122,7 @@ Module.register("MMM-Powerwall", {
 			twcEnabled: this.twcEnabled,
 			teslaAPIEnabled: this.teslaAPIEnabled,
 			flows: this.flows,
+			totals: this.totals,
 			historySeries: this.historySeries,
 			chargingState: this.chargingState,
 		};
@@ -171,19 +178,19 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 	
-	formatAsWkW: function(number) {
+	formatAsK: function(number, unit) {
 		if( number > 950 ) {
-			return Math.round(number / 100) / 10.0 + " kW";
+			return Math.round(number / 100) / 10.0 + " k" + unit;
 		}
 		else {
-			return Math.round(number) + " W";
+			return Math.round(number) + " " + unit;
 		}
 	},
 
-	updateNode: function(id, value) {
+	updateNode: function(id, value, unit) {
 		let targetNode = document.getElementById(id);
 		if (targetNode) {
-			targetNode.innerText = this.formatAsWkW(value);
+			targetNode.innerText = this.formatAsK(value, unit);
 		}
 	},
 
@@ -198,13 +205,13 @@ Module.register("MMM-Powerwall", {
 		/*******************
 		 * SolarProduction *
 		 *******************/
-		this.updateNode(this.identifier + "-SolarProduction", this.flows.sources.solar.total);
+		this.updateNode(this.identifier + "-SolarProduction", this.flows.sources.solar.total, "W");
 		this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
 
 		/********************
 		 * HouseConsumption *
 		 ********************/
-		this.updateNode(this.identifier + "-HouseConsumption", this.flows.sinks.house.total);
+		this.updateNode(this.identifier + "-HouseConsumption", this.flows.sinks.house.total, "W");
 		this.updateChart(this.charts.houseConsumption, DISPLAY_SOURCES, this.flows.sinks.house.sources);
 	},
 
@@ -291,7 +298,7 @@ Module.register("MMM-Powerwall", {
 					formatter: function(value, context) {
 						return [
 							context.dataset.labels[context.dataIndex],
-							self.formatAsWkW(value)
+							self.formatAsK(value, "W")
 						];
 					}
 				}
