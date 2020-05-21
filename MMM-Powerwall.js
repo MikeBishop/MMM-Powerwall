@@ -88,16 +88,20 @@ Module.register("MMM-Powerwall", {
 		else {
 			self.teslaAPIEnabled = false;
 		}
-
-		setInterval(function() {
+		var updateLocal = function() {
 			self.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
 				powerwallIP: self.config.powerwallIP,
 				twcManagerIP: self.config.twcManagerIP
 			});
-		}, self.config.localUpdateInterval);
-		setInterval(function() {
+		};
+		var updateCloud = function() {
 			self.sendSocketNotification("MMM-Powerwall-UpdateCloud");
-		}, self.config.cloudUpdateInterval);
+		};
+
+		setInterval(updateLocal, self.config.localUpdateInterval);
+		setInterval(updateCloud, self.config.cloudUpdateInterval);
+		updateLocal();
+		updateCloud();
 	},
 
 	getTemplate: function() {
