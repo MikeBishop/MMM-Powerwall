@@ -35,13 +35,21 @@ module.exports = NodeHelper.create({
 	socketNotificationReceived: function(notification, payload) {
 		
 		let powerwallEndpoints = this.powerwallEndpoints;
+		let twcManagerEndpoints = this.twcManagerEndpoints;
 		var self = this;
 		if (notification === "MMM-Powerwall-Configure-Powerwall") {
 			let updateInterval = payload.updateInterval;
 			let powerwallIP = payload.powerwallIP;
 			let powerwallPassword = payload.powerwallPassword;
 
-			if( !powerwallEndpoints.hasOwnProperty(powerwallIP) ) {
+			if( powerwallEndpoints[powerwallIP] ) {
+				powerwallEndpoints[powerwallIP].password = powerwallPassword;
+				powerwallEndpoints[powerwallIP].updateInterval = Math.min(
+					powerwallEndpoints[powerwallIP].updateInterval,
+					updateInterval
+				);
+			}
+			else {
 				// First configuration for this Powerwall; update immediately
 				powerwallEndpoints[powerwallIP] = {
 					password: powerwallPassword,
@@ -49,20 +57,26 @@ module.exports = NodeHelper.create({
 					lastUpdate: 0,
 					updateInterval: updateInterval
 				};
-				self.updatePowerwall(powerwallIP, powerwallPassword);
+			}
+		}
+		else if (notification === "MMM-Powerwall-Configure-TWCManager") {
+			console.log(payload);
+			let ip = payload.twcManagerIP;
+			if( twcManagerEndpoints[ip] ) {
+				twcManagerEndpoints[ip].port = payload.port;
 			}
 			else {
-				if (powerwallEndpoints[powerwallIP].aggregates) {
-					this.sendSocketNotification("MMM-Powerwall-Aggregates", {
-						ip: powerwallIP,
-						aggregates: powerwallEndpoints[powerwallIP].aggregates
-					});
+				twcManagerEndpoints[ip] = {
+					updateInterval: payload.updateInterval,
+					status: null,
+					port: payload.port,
+					lastUpdate: 0
 				}
-				powerwallEndpoints[powerwallIP = powerwallPassword];
 			}
 		}
 		else if (notification === "MMM-Powerwall-UpdateLocal") {
-			for(ip in powerwallEndpoints) {
+			let ip = payload.powerwallIP;
+			if( powerwallEndpoints[ip] ) {
 				if( powerwallEndpoints[ip].lastUpdate + powerwallEndpoints[ip].updateInterval < Date.now() ) {
 					self.updatePowerwall(ip, powerwallEndpoints[ip].password);
 				}
@@ -73,6 +87,18 @@ module.exports = NodeHelper.create({
 							aggregates: powerwallEndpoints[ip].aggregates
 						});
 					}	
+				}
+			}
+			ip = payload.twcManagerIP
+			if( ip && twcManagerEndpoints[ip] ) {
+				if( twcManagerEndpoints[ip].lastUpdate + twcManagerEndpoints[ip].updateInterval < Date.now() ) {
+					self.updateTWCManager(ip, twcManagerEndpoints[ip].port)
+				}
+				else {
+					this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
+						ip: ip,
+						status: twcManagerEndpoints[ip].status
+					});
 				}
 			}
 		}
@@ -94,6 +120,27 @@ module.exports = NodeHelper.create({
 		}
 		else {
 			console.log("Powerwall fetch failed")
+		}
+	},
+
+	updateTWCManager: async function(twcManagerIP) {
+		this.twcManagerEndpoints[twcManagerIP].lastUpdate = Date.now();
+		let port = this.twcManagerEndpoints[twcManagerIP].port;
+		let url = "http://" + twcManagerIP + ":" + port + "/api/getStatus";
+		console.log("Fetching from TWC at " + url); 
+		let result = await fetch(url);
+
+		if( result.ok ) {
+			var status = await result.json();
+			this.twcManagerEndpoints[twcManagerIP].status = status;
+			// Send notification
+			this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
+				ip: twcManagerIP,
+				status: status
+			});
+		}
+		else {
+			console.log("TWCManager fetch failed")
 		}
 	}
 });

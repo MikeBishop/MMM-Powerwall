@@ -34,6 +34,7 @@ Module.register("MMM-Powerwall", {
 		powerwallPassword: null,
 		siteID: null,
 		twcManagerIP: null,
+		twcManagerPort: 8080,
 		teslaAPIUsername: null,
 		teslaAPIPassword: null
 	},
@@ -64,7 +65,8 @@ Module.register("MMM-Powerwall", {
 			self.sendSocketNotification("MMM-Powerwall-Configure-TWCManager",
 			{
 				updateInterval: self.config.localUpdateInterval,
-				twcManagerIP: self.config.twcManagerIP
+				twcManagerIP: self.config.twcManagerIP,
+				port: self.config.twcManagerPort
 			});
 			self.twcEnabled = true;
 		}
@@ -147,18 +149,16 @@ Module.register("MMM-Powerwall", {
 				}
 				else {
 					// We're updating the data in-place.
-
-					/*******************
-					 * SolarProduction *
-					 *******************/
-					this.updateNode(this.identifier + "-SolarProduction", this.flows.sources.solar.total);
-					this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
-
-					/********************
-					 * HouseConsumption *
-					 ********************/
-					this.updateNode(this.identifier + "-HouseConsumption", this.flows.sinks.house.total);
-					this.updateChart(this.charts.houseConsumption, DISPLAY_SOURCES, this.flows.sinks.house.sources);
+					this.updateData();
+				}
+			}
+		}
+		else if (notification === "MMM-Powerwall-ChargeStatus") {
+			if( payload.ip === this.config.twcManagerIP ) {
+				self.twcConsumption = Math.round( parseFloat(payload.status.chargerLoadWatts) );
+				if( this.teslaAggregates ) {
+					this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
+					this.updateData();
 				}
 			}
 		}
@@ -185,6 +185,20 @@ Module.register("MMM-Powerwall", {
 			chart.data.datasets[0].data = display_array.map( (entry) => distribution[entry.key] );
 			chart.update();
 		}
+	},
+
+	updateData: function() {
+		/*******************
+		 * SolarProduction *
+		 *******************/
+		this.updateNode(this.identifier + "-SolarProduction", this.flows.sources.solar.total);
+		this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
+
+		/********************
+		 * HouseConsumption *
+		 ********************/
+		this.updateNode(this.identifier + "-HouseConsumption", this.flows.sinks.house.total);
+		this.updateChart(this.charts.houseConsumption, DISPLAY_SOURCES, this.flows.sinks.house.sources);
 	},
 
 	notificationReceived: function(notification, payload, sender) {
@@ -333,7 +347,7 @@ Module.register("MMM-Powerwall", {
 				car = twcConsumption;
 				house -= car;
 			}
-			let grid = teslaAggregates.site.instant_power;
+			let grid = teslaAggregates.site.instant_power;			
 
 			let flows = {
 				solar: {
@@ -347,13 +361,15 @@ Module.register("MMM-Powerwall", {
 					unassigned: ((battery > 0) ? battery : 0),
 					house: 0,
 					car: 0,
-					grid: 0
+					grid: 0,
+					battery: 0
 				},
 				grid: {
 					unassigned: ((grid > 0) ? grid : 0),
 					battery: 0,
 					house: 0,
-					car: 0
+					car: 0,
+					grid: 0
 				},
 				unassigned: {
 					battery: ((battery < 0) ? Math.abs(battery) : 0),
@@ -363,8 +379,8 @@ Module.register("MMM-Powerwall", {
 				}
 			}
 
-			for( const source of ["solar", "battery", "grid"]) {
-				for( const sink of ["battery", "house", "car", "grid"]) {
+			for( const source of DISPLAY_SOURCES.map((value) => value.key) ) {
+				for( const sink of DISPLAY_SINKS.map((value) => value.key) ) {
 					let amount_to_claim = Math.min(flows[source].unassigned, flows.unassigned[sink]);
 					flows[source].unassigned -= amount_to_claim;
 					flows.unassigned[sink] -= amount_to_claim;
@@ -373,54 +389,33 @@ Module.register("MMM-Powerwall", {
 				delete flows[source].unassigned;
 			}
 
-			return {
-				sources: {
-					solar: {
-						total: solar,
-						distribution: flows.solar,
-					},
-					battery: {
-						total: ((battery > 0) ? battery : 0),
-						distribution: flows.battery,
-					},
-					grid: {
-						total: ((grid > 0) ? grid : 0),
-						distribution: flows.grid,
-					}
-				},
-				sinks: {
-					battery: {
-						total: ((battery < 0) ? Math.abs(battery) : 0),
-						sources: {
-							solar: flows.solar.battery,
-							grid: flows.grid.battery
-						}
-					},
-					house: {
-						total: house,
-						sources: {
-							solar: flows.solar.house,
-							battery: flows.battery.house,
-							grid: flows.grid.house
-						}
-					},
-					car: {
-						total: car,
-						sources: {
-							solar: flows.solar.car,
-							battery: flows.battery.car,
-							grid: flows.grid.car
-						}
-					},
-					grid: {
-						total: ((grid < 0) ? Math.abs(grid) : 0),
-						sources: {
-							solar: flows.solar.grid,
-							battery: flows.battery.grid
-						}
-					}
+			let result = {
+				sources: {},
+				sinks: {}
+			}
+
+			for (const source of DISPLAY_SOURCES) {
+				let target = {};
+				let total = 0;
+				target.distribution = flows[source.key]
+				for( const sink of DISPLAY_SINKS) {
+					total += flows[source.key][sink.key];
 				}
-			};
+				target.total = total;
+				result.sources[source.key] = target;
+			}
+			for (const sink of DISPLAY_SINKS) {
+				let target = {};
+				let total = 0;
+				target.sources = {};
+				for( const source of DISPLAY_SOURCES) {
+					total += flows[source.key][sink.key];
+					target.sources[source.key] = flows[source.key][sink.key];
+				}
+				target.total = total;
+				result.sinks[sink.key] = target;
+			}
+			return result;
 		}
 		else {
 			return null;
