@@ -23,6 +23,7 @@ module.exports = NodeHelper.create({
 		this.powerwallEndpoints = {};
 		this.twcManagerEndpoints = {};
 		this.teslaApiAccounts = {};
+		this.siteIds = {};
 		this.filenames = [];
 		this.lastUpdate = 0;
 	},
@@ -80,9 +81,18 @@ module.exports = NodeHelper.create({
 			let username = payload.teslaAPIUsername;
 			let password = payload.teslaAPIPassword;
 			let filename = payload.tokenFile;
+			let siteId = payload.siteID;
 
 			if( !this.filenames.includes(filename) ) {
 				this.filenames.push(filename)
+			}
+
+			if( !this.siteIds[username] ) {
+				this.siteIds[username] = [];
+			}
+
+			if( siteId && !this.siteIds[username].includes(siteId) ) {
+				this.siteIds[username].push(siteId);
 			}
 
 			if( !this.teslaApiAccounts[username] ) {
@@ -94,7 +104,7 @@ module.exports = NodeHelper.create({
 						...this.teslaApiAccounts,
 						...fileContent
 					};
-					console.log("Read Tesla API tokens from file");
+					this.log("Read Tesla API tokens from file");
 					await self.doTeslaApiTokenUpdate();
 				}
 				catch(e) {
@@ -102,7 +112,7 @@ module.exports = NodeHelper.create({
 						self.doTeslaApiLogin(username,password, filename);
 					}
 					else {
-						console.log("Missing both Tesla password and access tokens");
+						this.log("Missing both Tesla password and access tokens");
 					}
 				}
 			}
@@ -135,6 +145,9 @@ module.exports = NodeHelper.create({
 				}
 			}
 		}
+		else if (notification === "MMM-Powerwall-UpdatePower") {
+
+		}
 	},
 
 	updatePowerwall: async function(powerwallIP, powerwallPassword) {
@@ -152,7 +165,7 @@ module.exports = NodeHelper.create({
 			});
 		}
 		else {
-			console.log("Powerwall fetch failed")
+			this.log("Powerwall fetch failed")
 		}
 	},
 
@@ -172,7 +185,7 @@ module.exports = NodeHelper.create({
 			});
 		}
 		else {
-			console.log("TWCManager fetch failed")
+			this.log("TWCManager fetch failed")
 		}
 	},
 
@@ -192,11 +205,46 @@ module.exports = NodeHelper.create({
 			}
 		});
 
-		if( result.ok ) {
-			console.log("Got Tesla API tokens")
-			this.teslaApiAccounts[username] = await result.json();
-			await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+		if( !result.ok ) {
+			return;
 		}
+
+		this.log("Got Tesla API tokens")
+		this.teslaApiAccounts[username] = await result.json();
+		await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+
+		url = "https://owner-api.teslamotors.com/api/1/products";
+		result = await fetch (url, {
+			headers: {
+				"Authorization": "Bearer " + this.teslaApiAccounts[username].access_token
+			}
+		})
+
+		let response = (await result.json()).response;
+		let siteIds = response.filter(product => (product.battery_type === "ac_powerwall")).map(product => product.energy_site_id);
+
+		if( this.siteIds[username].length === 0 ) {	
+			if (siteIds.length === 1) {
+				this.siteIds[username].push(siteIds[0]);
+			}
+			else if (siteIds.length === 0) {
+				this.log("Could not find Powerwall in your Tesla account");
+			}
+			else {
+				this.log("Found multiple Powerwalls on your Tesla account:" + siteIds);
+				this.log("Add 'siteID' to your config.js to specify which to target");
+			}
+		}
+		else {
+			if( !this.siteIds[username].every(id => siteIds.includes(id)) ) {
+				this.log("Unknown site ID specified; found: " + siteIds);
+			}
+		}
+
+	},
+
+	log: function(message) {
+		console.log("MMM-Powerwall: " + message);
 	},
 
 	doTeslaApiTokenUpdate: async function() {
@@ -228,7 +276,7 @@ module.exports = NodeHelper.create({
 				});
 		
 				if( result.ok ) {
-					console.log("Updated Tesla API token");
+					this.log("Updated Tesla API token");
 					anyUpdates = true;
 					this.teslaApiAccounts[username] = await result.json();
 				}
