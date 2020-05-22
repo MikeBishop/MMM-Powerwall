@@ -87,7 +87,8 @@ Module.register("MMM-Powerwall", {
 				updateInterval: self.config.cloudUpdateInterval,
 				siteID: self.config.siteID,
 				teslaAPIUsername: self.config.teslaAPIUsername,
-				teslaAPIPassword: self.config.teslaAPIPassword
+				teslaAPIPassword: self.config.teslaAPIPassword,
+				tokenFile: this.file("tokens.json")
 			});
 			self.teslaAPIEnabled = true;
 		}

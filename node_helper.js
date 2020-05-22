@@ -6,6 +6,7 @@
  */
 
 var NodeHelper = require("node_helper");
+var fs = require("fs").promises;
 var Https = require("https");
 var unauthenticated_agent = new Https.Agent({
 	rejectUnauthorized: false,
@@ -22,6 +23,8 @@ module.exports = NodeHelper.create({
 		this.powerwallEndpoints = {};
 		this.twcManagerEndpoints = {};
 		this.teslaApiAccounts = {};
+		this.filenames = [];
+		this.lastUpdate = 0;
 	},
 
 	// Override socketNotificationReceived method.
@@ -32,7 +35,7 @@ module.exports = NodeHelper.create({
 	 * argument notification string - The identifier of the noitication.
 	 * argument payload mixed - The payload of the notification.
 	 */
-	socketNotificationReceived: function(notification, payload) {
+	socketNotificationReceived: async function(notification, payload) {
 		
 		let powerwallEndpoints = this.powerwallEndpoints;
 		let twcManagerEndpoints = this.twcManagerEndpoints;
@@ -70,6 +73,37 @@ module.exports = NodeHelper.create({
 					status: null,
 					port: payload.port,
 					lastUpdate: 0
+				}
+			}
+		}
+		else if (notification === "MMM-Powerwall-Configure-TeslaAPI") {
+			let username = payload.teslaAPIUsername;
+			let password = payload.teslaAPIPassword;
+			let filename = payload.tokenFile;
+
+			if( !this.filenames.includes(filename) ) {
+				this.filenames.push(filename)
+			}
+
+			if( !this.teslaApiAccounts[username] ) {
+				try {
+					let fileContent = JSON.parse(
+						await fs.readFile(filename)
+					);
+					this.teslaApiAccounts =  {
+						...this.teslaApiAccounts,
+						...fileContent
+					};
+					console.log("Read Tesla API tokens from file");
+					await self.doTeslaApiTokenUpdate();
+				}
+				catch(e) {
+					if( password ) {
+						self.doTeslaApiLogin(username,password, filename);
+					}
+					else {
+						console.log("Missing both Tesla password and access tokens");
+					}
 				}
 			}
 		}
@@ -139,6 +173,73 @@ module.exports = NodeHelper.create({
 		}
 		else {
 			console.log("TWCManager fetch failed")
+		}
+	},
+
+	doTeslaApiLogin: async function(username, password, filename) {
+		url = "https://owner-api.teslamotors.com/oauth/token";
+		let result = await fetch(url, {
+			method: "POST",
+			body: JSON.stringify({
+				email: username,
+				password: password,
+				grant_type: "password",
+				client_secret: "c7257eb71a564034f9419ee651c7d0e5f7aa6bfbd18bafb5c5c033b093bb2fa3",
+				client_id: "81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384"
+			}),
+			headers: {
+				"content-type": "application/json"
+			}
+		});
+
+		if( result.ok ) {
+			console.log("Got Tesla API tokens")
+			this.teslaApiAccounts[username] = await result.json();
+			await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+		}
+	},
+
+	doTeslaApiTokenUpdate: async function() {
+		let anyUpdates = false;
+
+		if( new Date() < this.lastUpdate + 3600 ) {
+			// Only check for expired tokens hourly
+			return;
+		}
+
+		// We don't actually track which tokens came from which file.
+		// If there are multiple, write all to all.
+		for( const username in this.teslaApiAccounts ) {
+			let tokens = this.teslaApiAccounts[username];
+			if( new Date() > tokens.created_at + (tokens.expires_in / 3)) {
+				url = "https://owner-api.teslamotors.com/oauth/token";
+				let result = await fetch(url, {
+					method: "POST",
+					body: JSON.stringify({
+						email: username,
+						grant_type: "refresh_token",
+						client_secret: "c7257eb71a564034f9419ee651c7d0e5f7aa6bfbd18bafb5c5c033b093bb2fa3",
+						client_id: "81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384",
+						refresh_token: tokens.refresh_token
+					}),
+					headers: {
+						"content-type": "application/json",
+					}
+				});
+		
+				if( result.ok ) {
+					console.log("Updated Tesla API token");
+					anyUpdates = true;
+					this.teslaApiAccounts[username] = await result.json();
+				}
+		
+			}
+		}
+
+		if( anyUpdates ) {
+			for( const filename of this.filenames ) {
+				await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+			}
 		}
 	}
 });
