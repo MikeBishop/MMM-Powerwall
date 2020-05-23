@@ -45,13 +45,15 @@ Module.register("MMM-Powerwall", {
 	flows: null,
 	historySeries: null,
 	chargingState: null,
-	totals: {
+	yesterdaySolar: null,
+	dayStart: {
 		grid: null,
 		solar: null,
 		battery: null,
 		house: null,
 	},
 	dayMode: "day",
+	dayDate: null,
 	charts: {},
 
 	start: function() {
@@ -90,7 +92,6 @@ Module.register("MMM-Powerwall", {
 				teslaAPIPassword: self.config.teslaAPIPassword,
 				tokenFile: this.file("tokens.json")
 			});
-			self.teslaAPIEnabled = true;
 			Log.log("Enabled Tesla API");
 		}
 		else {
@@ -141,24 +142,28 @@ Module.register("MMM-Powerwall", {
 		];
 	},
 
+	updateEnergy: function() {
+		if( this.teslaAPIEnabled ) {
+			this.sendSocketNotification("MMM-Powerwall-UpdateEnergy", {
+				username: this.config.teslaAPIUsername,
+				siteID: this.config.siteID,
+				updateInterval: this.config.cloudUpdateInterval
+			});
+		}
+	},
+
 	// socketNotificationReceived from helper
 	socketNotificationReceived: function (notification, payload) {
 		var self = this;
-		Log.log("Received " + notification + ": " + JSON.stringify(payload));
+		//Log.log("Received " + notification + ": " + JSON.stringify(payload));
 		if(notification === "MMM-Powerwall-TeslaAPIConfigured") {
 			if( payload.username === self.config.teslaAPIUsername ) {
+				self.teslaAPIEnabled = true;
 				if( !self.config.siteID ) {
 					self.config.siteID = payload.siteID;
 				}
-				var updateCloud = function() {
-					self.sendSocketNotification("MMM-Powerwall-UpdateEnergy", {
-						username: self.config.teslaAPIUsername,
-						siteID: self.config.siteID,
-						updateInterval: self.config.cloudUpdateInterval
-					});
-				};
-				setInterval(updateCloud, self.config.cloudUpdateInterval);
-				updateCloud();	
+				//setInterval(updateCloud, self.config.cloudUpdateInterval);
+				this.updateEnergy();	
 			}
 		}
 		else if(notification === "MMM-Powerwall-Aggregates") {
@@ -178,6 +183,33 @@ Module.register("MMM-Powerwall", {
 					// We're updating the data in-place.
 					this.updateData();
 				}
+
+				let todayDate = new Date().getDate();
+				if( this.todayDate !== todayDate ) {
+					if( this.dayStart.solar ) {
+						this.yesterdaySolar = (
+							this.teslaAggregates.solar.energy_exported -
+							this.dayStart.solar.export
+						);
+					}
+					else {
+						this.updateEnergy();
+					}
+					this.dayStart = {
+						solar: {
+							export: this.teslaAggregates.solar.energy_exported
+						},
+						grid: {
+							export: this.teslaAggregates.site.energy_exported,
+							import: this.teslaAggregates.site.energy_imported
+						},
+						house: {
+							import: this.teslaAggregates.load.energy_imported
+						}
+					};
+
+					this.todayDate = todayDate;
+				}
 			}
 		}
 		else if (notification === "MMM-Powerwall-ChargeStatus") {
@@ -191,34 +223,54 @@ Module.register("MMM-Powerwall", {
 			}
 		}
 		else if (notification === "MMM-Powerwall-EnergyData") {
+			Log.log(notification + ": " + JSON.stringify(payload));
 			if( payload.username === this.config.teslaAPIUsername && 
 				(!this.config.siteID || this.config.siteID == payload.siteID) ) {
-
-					let yesterdaySolar = payload.energy[0].solar_energy_exported;
-					let todaySolar = payload.energy[1].solar_energy_exported;
-					let yesterdayGridIn = payload.energy[0].grid_energy_imported;
-					let todayGridIn = payload.energy[1].grid_energy_imported;
-					let yesterdayGridOut = payload.energy[0].grid_energy_exported_from_solar +
-						payload.energy[0].grid_energy_exported_from_battery +
-						payload.energy[0].grid_energy_exported_from_generator;
-					let todayGridOut = payload.energy[1].grid_energy_exported_from_solar +
-						payload.energy[1].grid_energy_exported_from_battery +
-						payload.energy[1].grid_energy_exported_from_generator;
-					let todayUsage = payload.energy[1].consumer_energy_imported_from_grid +
-						payload.energy[1].consumer_energy_imported_from_solar +
-						payload.energy[1].consumer_energy_imported_from_battery;
-	
-					this.updateNode(
-						this.identifier + "-SolarTotal",
-						this.dayMode === "morning" ? yesterdaySolar : todaySolar,
-						"Wh " + (this.dayMode === "morning" ? "yesterday" : "today")
-					);
-					this.updateNode(
-						this.identifier + "-UsageTotal",
-						todayUsage,
-						"Wh today"
-					);
 					
+					this.yesterdaySolar = payload.energy[0].solar_energy_exported;
+
+					let todaySolar = payload.energy[1].solar_energy_exported;
+					
+					let todayGridIn = payload.energy[1].grid_energy_imported;
+					let todayGridOut = (
+						payload.energy[1].grid_energy_exported_from_solar +
+						payload.energy[1].grid_energy_exported_from_battery +
+						payload.energy[1].grid_energy_exported_from_generator
+					);
+
+					let todayUsage = (
+						payload.energy[1].consumer_energy_imported_from_grid +
+						payload.energy[1].consumer_energy_imported_from_solar +
+						payload.energy[1].consumer_energy_imported_from_battery
+					);
+
+					this.dayStart = {
+						solar: {
+							export: (
+								this.teslaAggregates.solar.energy_exported -
+								todaySolar
+							)
+						},
+						grid: {
+							export: (
+								this.teslaAggregates.site.energy_exported -
+								todayGridOut
+							),
+							import: (
+								this.teslaAggregates.site.energy_imported -
+								todayGridIn
+							)
+						},
+						house: {
+							import: (
+								this.teslaAggregates.load.energy_imported -
+								todayUsage
+							)
+						}
+					};
+					Log.log(JSON.stringify(this.dayStart));
+
+					this.dayDate = new Date().getDate();
 			}
 		}
 	},
@@ -252,12 +304,28 @@ Module.register("MMM-Powerwall", {
 		 *******************/
 		this.updateNode(this.identifier + "-SolarProduction", this.flows.sources.solar.total, "W");
 		this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
+		if( this.dayStart.solar ) {
+			this.updateNode(
+				this.identifier + "-SolarTotal",
+				this.dayMode === "morning" ?
+				this.yesterdaySolar : 
+				(this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export),
+				"Wh " + (this.dayMode === "morning" ? "yesterday" : "today")
+			);
+		}
 
 		/********************
 		 * HouseConsumption *
 		 ********************/
 		this.updateNode(this.identifier + "-HouseConsumption", this.flows.sinks.house.total, "W");
 		this.updateChart(this.charts.houseConsumption, DISPLAY_SOURCES, this.flows.sinks.house.sources);
+		if( this.dayStart.house ) {
+			this.updateNode(
+				this.identifier + "-UsageTotal",
+				this.teslaAggregates.load.energy_imported - this.dayStart.house.import,
+				"Wh today"
+			);
+		}
 	},
 
 	notificationReceived: function(notification, payload, sender) {
@@ -302,6 +370,7 @@ Module.register("MMM-Powerwall", {
 			}
 			if( newMode != this.dayMode ) {
 				this.dayMode = newMode;
+				this.updateEnergy();
 				this.updateDom();
 			}
 		}

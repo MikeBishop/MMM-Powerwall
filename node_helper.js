@@ -260,6 +260,12 @@ module.exports = NodeHelper.create({
 
 	inferSiteID: async function(username) {
 		url = "https://owner-api.teslamotors.com/api/1/products";
+
+		if( !this.teslaApiAccounts[username] ) {
+			this.log("Called inferSiteID() without credentials!")
+			return null;
+		}
+
 		result = await fetch (url, {
 			headers: {
 				"Authorization": "Bearer " + this.teslaApiAccounts[username].access_token
