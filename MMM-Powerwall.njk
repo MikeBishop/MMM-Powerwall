@@ -14,16 +14,7 @@
                         {%- else -%}
                             {{ flows.sources.solar.total // 1 }} W
                         {%- endif %}</p>
-                    <p class="small bright">
-                        {%- if teslaApiEnabled %}<div class="solar" id="{{id}}-SolarTotal">
-                            {%- if totals.solar -%}
-                                {%- if totals.solar > 950 -%}
-                                    {{ totals.solar // 100 / 10 }} kWh
-                                {%- else -%}
-                                    {{ totals.solar // 1 }} Wh
-                                {%- endif -%}
-                            {%- endif %}</div> <div id="{{id}}-SolarTodayYesterday">today</div>
-                        {%- endif %}</p>
+                    <p class="small bright" id="{{id}}-SolarTotal"></p>
                   </div>
                   <div class="MMM-Powerwall col2 graph-container">
                     <canvas id="{{id}}-SolarDestinations">
@@ -50,6 +41,7 @@
                         {%- else -%}
                             {{ flows.sinks.house.total // 1 }} W
                         {%- endif %}</p>
+                    <p class="small bright" id="{{id}}-UsageTotal"></p>
                   </div>
                 </div>
             {%- else -%}

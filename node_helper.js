@@ -12,9 +12,6 @@ var unauthenticated_agent = new Https.Agent({
 	rejectUnauthorized: false,
 });
 var fetch = require("node-fetch");
-if (!globalThis.fetch) {
-	globalThis.fetch = fetch;
-}
 
 
 module.exports = NodeHelper.create({
@@ -23,6 +20,7 @@ module.exports = NodeHelper.create({
 		this.powerwallEndpoints = {};
 		this.twcManagerEndpoints = {};
 		this.teslaApiAccounts = {};
+		this.energy = {};
 		this.siteIds = {};
 		this.filenames = [];
 		this.lastUpdate = 0;
@@ -41,6 +39,9 @@ module.exports = NodeHelper.create({
 		let powerwallEndpoints = this.powerwallEndpoints;
 		let twcManagerEndpoints = this.twcManagerEndpoints;
 		var self = this;
+
+		this.log(notification + JSON.stringify(payload));
+
 		if (notification === "MMM-Powerwall-Configure-Powerwall") {
 			let updateInterval = payload.updateInterval;
 			let powerwallIP = payload.powerwallIP;
@@ -105,6 +106,7 @@ module.exports = NodeHelper.create({
 						...fileContent
 					};
 					this.log("Read Tesla API tokens from file");
+					this.log(JSON.stringify(this.teslaApiAccounts));
 					await self.doTeslaApiTokenUpdate();
 				}
 				catch(e) {
@@ -116,6 +118,16 @@ module.exports = NodeHelper.create({
 					}
 				}
 			}
+			if( !siteId ) {
+				this.log("Attempting to infer siteID");
+				siteId = await this.inferSiteID(username);
+			}
+			this.log("Found siteID " + siteId);
+
+			this.sendSocketNotification("MMM-Powerwall-TeslaAPIConfigured", {
+				username: username,
+				siteID: siteId
+			});
 		}
 		else if (notification === "MMM-Powerwall-UpdateLocal") {
 			let ip = payload.powerwallIP;
@@ -145,8 +157,34 @@ module.exports = NodeHelper.create({
 				}
 			}
 		}
-		else if (notification === "MMM-Powerwall-UpdatePower") {
+		else if (notification === "MMM-Powerwall-UpdateEnergy") {
+			let username = payload.username;
+			let siteID = payload.siteID;
 
+			if( !siteID ) {
+				let siteID = await this.inferSiteID(username);
+			}
+			if( !this.energy[username] ) {
+				this.energy[username] = {}
+			}
+			if( !this.energy[username][siteID] ) {
+				this.energy[username][siteID] = {
+					lastUpdate: 0,
+					lastResult: null
+				};
+			}
+
+			this.log([this.energy[username][siteID].lastUpdate,payload.updateInterval, Date.now()].join());
+			if( this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+				self.doTeslaApiGetEnergy(username, siteID);
+			}
+			else {
+				this.sendSocketNotification("MMM-Powerwall-EnergyData", {
+					username: username,
+					siteID: siteID,
+					energy: this.energy[username][siteID].lastResult
+				});
+			}
 		}
 	},
 
@@ -173,9 +211,15 @@ module.exports = NodeHelper.create({
 		this.twcManagerEndpoints[twcManagerIP].lastUpdate = Date.now();
 		let port = this.twcManagerEndpoints[twcManagerIP].port;
 		let url = "http://" + twcManagerIP + ":" + port + "/api/getStatus";
-		let result = await fetch(url);
+		let success = true;
+		try {
+			var result = await fetch(url);
+		}
+		catch (e) {
+			success = false;
+		}
 
-		if( result.ok ) {
+		if( success && result.ok ) {
 			var status = await result.json();
 			this.twcManagerEndpoints[twcManagerIP].status = status;
 			// Send notification
@@ -212,20 +256,25 @@ module.exports = NodeHelper.create({
 		this.log("Got Tesla API tokens")
 		this.teslaApiAccounts[username] = await result.json();
 		await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+	},
 
+	inferSiteID: async function(username) {
 		url = "https://owner-api.teslamotors.com/api/1/products";
 		result = await fetch (url, {
 			headers: {
 				"Authorization": "Bearer " + this.teslaApiAccounts[username].access_token
 			}
-		})
+		});
 
 		let response = (await result.json()).response;
 		let siteIds = response.filter(product => (product.battery_type === "ac_powerwall")).map(product => product.energy_site_id);
 
+		this.log(JSON.stringify(this.siteIds));
 		if( this.siteIds[username].length === 0 ) {	
 			if (siteIds.length === 1) {
+				this.log("Inferred site ID " + siteIds[0]);
 				this.siteIds[username].push(siteIds[0]);
+				return siteIds[0];
 			}
 			else if (siteIds.length === 0) {
 				this.log("Could not find Powerwall in your Tesla account");
@@ -239,8 +288,11 @@ module.exports = NodeHelper.create({
 			if( !this.siteIds[username].every(id => siteIds.includes(id)) ) {
 				this.log("Unknown site ID specified; found: " + siteIds);
 			}
+			else {
+				return this.siteIds[username][0];
+			}
 		}
-
+		return null;
 	},
 
 	log: function(message) {
@@ -250,7 +302,7 @@ module.exports = NodeHelper.create({
 	doTeslaApiTokenUpdate: async function() {
 		let anyUpdates = false;
 
-		if( new Date() < this.lastUpdate + 3600 ) {
+		if( Date.now() < this.lastUpdate + 3600 ) {
 			// Only check for expired tokens hourly
 			return;
 		}
@@ -259,7 +311,7 @@ module.exports = NodeHelper.create({
 		// If there are multiple, write all to all.
 		for( const username in this.teslaApiAccounts ) {
 			let tokens = this.teslaApiAccounts[username];
-			if( new Date() > tokens.created_at + (tokens.expires_in / 3)) {
+			if( (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
 				url = "https://owner-api.teslamotors.com/oauth/token";
 				let result = await fetch(url, {
 					method: "POST",
@@ -289,5 +341,49 @@ module.exports = NodeHelper.create({
 				await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
 			}
 		}
+	},
+
+	doTeslaApiGetEnergy: async function(username, siteId) {
+		this.log("GetEnergy called");
+		
+		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteId + "/history?period=day&kind=energy";
+		let result = {};
+		try {
+			this.log(url);
+			result = await fetch(url, {
+				headers: {
+					"Authorization": "Bearer " + this.teslaApiAccounts[username].access_token
+				}
+			});
+		}
+		catch (e) {
+			this.log(e);
+			return;
+		}
+
+		if( result.ok ) {
+			let json = await result.json();
+			this.log(JSON.stringify(json));
+			let response = json.response.time_series;
+			if( !this.energy[username] ) {
+				this.energy[username] = {};
+			}
+			this.log("Energy result: " + JSON.stringify(response));
+
+			this.energy[username][siteId] = {
+				lastUpdate: Date.now(),
+				lastResult: response
+			};
+			this.sendSocketNotification("MMM-Powerwall-EnergyData", {
+				username: username,
+				siteID: siteId,
+				energy: response
+			});
+		}
+		else {
+			this.log("Energy returned " + result.status);
+			this.log(await result.text());
+		}
+		
 	}
 });

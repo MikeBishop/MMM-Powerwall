@@ -29,7 +29,7 @@ Module.register("MMM-Powerwall", {
 	defaults: {
 		graphs: ["SolarProduction", "HouseConsumption"],
 		localUpdateInterval: 10000,
-		cloudUpdateInterval: 60000,
+		cloudUpdateInterval: 300000,
 		powerwallIP: null,
 		powerwallPassword: null,
 		siteID: null,
@@ -91,6 +91,7 @@ Module.register("MMM-Powerwall", {
 				tokenFile: this.file("tokens.json")
 			});
 			self.teslaAPIEnabled = true;
+			Log.log("Enabled Tesla API");
 		}
 		else {
 			self.teslaAPIEnabled = false;
@@ -101,14 +102,9 @@ Module.register("MMM-Powerwall", {
 				twcManagerIP: self.config.twcManagerIP
 			});
 		};
-		var updateCloud = function() {
-			self.sendSocketNotification("MMM-Powerwall-UpdateCloud");
-		};
 
 		setInterval(updateLocal, self.config.localUpdateInterval);
-		setInterval(updateCloud, self.config.cloudUpdateInterval);
 		updateLocal();
-		updateCloud();
 	},
 
 	getTemplate: function() {
@@ -147,8 +143,25 @@ Module.register("MMM-Powerwall", {
 
 	// socketNotificationReceived from helper
 	socketNotificationReceived: function (notification, payload) {
+		var self = this;
 		Log.log("Received " + notification + ": " + JSON.stringify(payload));
-		if(notification === "MMM-Powerwall-Aggregates") {
+		if(notification === "MMM-Powerwall-TeslaAPIConfigured") {
+			if( payload.username === self.config.teslaAPIUsername ) {
+				if( !self.config.siteID ) {
+					self.config.siteID = payload.siteID;
+				}
+				var updateCloud = function() {
+					self.sendSocketNotification("MMM-Powerwall-UpdateEnergy", {
+						username: self.config.teslaAPIUsername,
+						siteID: self.config.siteID,
+						updateInterval: self.config.cloudUpdateInterval
+					});
+				};
+				setInterval(updateCloud, self.config.cloudUpdateInterval);
+				updateCloud();	
+			}
+		}
+		else if(notification === "MMM-Powerwall-Aggregates") {
 			if( payload.ip === this.config.powerwallIP ) {
 				let needUpdate = false;
 				if (!this.flows) {
@@ -175,6 +188,37 @@ Module.register("MMM-Powerwall", {
 					this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
 					this.updateData();
 				}
+			}
+		}
+		else if (notification === "MMM-Powerwall-EnergyData") {
+			if( payload.username === this.config.teslaAPIUsername && 
+				(!this.config.siteID || this.config.siteID == payload.siteID) ) {
+
+					let yesterdaySolar = payload.energy[0].solar_energy_exported;
+					let todaySolar = payload.energy[1].solar_energy_exported;
+					let yesterdayGridIn = payload.energy[0].grid_energy_imported;
+					let todayGridIn = payload.energy[1].grid_energy_imported;
+					let yesterdayGridOut = payload.energy[0].grid_energy_exported_from_solar +
+						payload.energy[0].grid_energy_exported_from_battery +
+						payload.energy[0].grid_energy_exported_from_generator;
+					let todayGridOut = payload.energy[1].grid_energy_exported_from_solar +
+						payload.energy[1].grid_energy_exported_from_battery +
+						payload.energy[1].grid_energy_exported_from_generator;
+					let todayUsage = payload.energy[1].consumer_energy_imported_from_grid +
+						payload.energy[1].consumer_energy_imported_from_solar +
+						payload.energy[1].consumer_energy_imported_from_battery;
+	
+					this.updateNode(
+						this.identifier + "-SolarTotal",
+						this.dayMode === "morning" ? yesterdaySolar : todaySolar,
+						"Wh " + (this.dayMode === "morning" ? "yesterday" : "today")
+					);
+					this.updateNode(
+						this.identifier + "-UsageTotal",
+						todayUsage,
+						"Wh today"
+					);
+					
 			}
 		}
 	},
