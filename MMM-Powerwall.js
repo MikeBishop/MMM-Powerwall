@@ -323,7 +323,7 @@ Module.register("MMM-Powerwall", {
 				this.dayMode === "morning" ?
 				this.yesterdaySolar : 
 				(this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export),
-				"Wh " + (this.dayMode === "morning" ? "yesterday" : "today")
+				"Wh"
 			);
 		}
 

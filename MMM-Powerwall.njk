@@ -7,19 +7,32 @@
             {% if flows %}
                 <div class="MMM-Powerwall grid-left">
                   <div class="MMM-Powerwall col1">
-                    <p class="small bright">Solar is currently producing</p>
-                    <p id="{{id}}-SolarProduction" class="big solar">
-                        {%- if flows.sources.solar.total > 950 -%}
-                            {{ flows.sources.solar.total // 100 / 10 }} kW
-                        {%- else -%}
-                            {{ flows.sources.solar.total // 1 }} W
-                        {%- endif %}</p>
-                    <p class="small bright" id="{{id}}-SolarTotal"></p>
+                    {% if dayMode === "day" -%}
+                        <p class="small bright">Solar is currently producing</p>
+                        <p id="{{id}}-SolarProduction" class="big solar">
+                            {%- if flows.sources.solar.total > 950 -%}
+                                {{ flows.sources.solar.total // 100 / 10 }} kW
+                            {%- else -%}
+                                {{ flows.sources.solar.total // 1 }} W
+                            {%- endif %}</p>
+                        <p class="small bright"><div id="{{id}}-SolarTotal"></div> today</p>
+                    {%- else -%}
+                        <p class="small bright">Solar produced</p>
+                        <p id="{{id}}-SolarTotal" class="big solar"></p>
+                        <p class="small bright">
+                            {%- if dayMode === "night" %}today
+                            {%- else %}yesterday
+                            {%- endif %}</p>
+                    {%- endif %}
                   </div>
                   <div class="MMM-Powerwall col2 graph-container">
-                    <canvas id="{{id}}-SolarDestinations">
-                        Graph goes here
-                    </canvas>
+                    {% if dayMode === "day" -%}
+                        <canvas id="{{id}}-SolarDestinations">
+                            Graph goes here
+                        </canvas>
+                    {% else %}
+                        <p class="big">Sunrise time</p>
+                    {% endif %}
                   </div>
                 </div>
             {%- else -%}
