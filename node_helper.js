@@ -141,6 +141,10 @@ module.exports = NodeHelper.create({
 							ip: ip,
 							aggregates: powerwallEndpoints[ip].aggregates
 						});
+						this.sendSocketNotification("MMM-Powerwall-SOE", {
+							ip: ip,
+							soe: powerwallEndpoints[ip].soe
+						});				
 					}	
 				}
 			}
@@ -193,18 +197,33 @@ module.exports = NodeHelper.create({
 		let url = "https://" + powerwallIP + "/api/meters/aggregates";
 		let result = await fetch(url, {agent: unauthenticated_agent});
 
-		if( result.ok ) {
-			var aggregates = await result.json();
-			this.powerwallEndpoints[powerwallIP].aggregates = aggregates;
-			// Send notification
-			this.sendSocketNotification("MMM-Powerwall-Aggregates", {
-				ip: powerwallIP,
-				aggregates: aggregates
-			});
-		}
-		else {
+		if( !result.ok ) {
 			this.log("Powerwall fetch failed")
+			return
 		}
+
+		var aggregates = await result.json();
+		this.powerwallEndpoints[powerwallIP].aggregates = aggregates;
+		// Send notification
+		this.sendSocketNotification("MMM-Powerwall-Aggregates", {
+			ip: powerwallIP,
+			aggregates: aggregates
+		});
+
+		url = "https://192.168.200.41/api/system_status/soe";
+		result = await fetch(url, {agent: unauthenticated_agent});
+
+		if( !result.ok ) {
+			this.log("Powerwall SOE fetch failed");
+			return;
+		}
+
+		var response = await result.json();
+		this.powerwallEndpoints[powerwallIP].soe = response.percentage;
+		this.sendSocketNotification("MMM-Powerwall-SOE", {
+			ip: powerwallIP,
+			soe: response.percentage
+		});
 	},
 
 	updateTWCManager: async function(twcManagerIP) {

@@ -47,8 +47,25 @@
             {%- else -%}
                 LOADING...
             {%-endif -%}
+        {%- elif graph == "PowerwallSelfPowered" -%}
+            <div class="MMM-Powerwall grid-equal">
+                <div class="scene MMM-Powerwall col1">
+                    <div class="MMM-Powerwall cube">
+                        <div class="cube__face cube__face--front" 
+                             id="{{id}}-PowerwallSOE"></div>
+                        <div class="cube__face cube__face--right">
+                            <div class="battery meter" style="height: 0%;"
+                                 id="{{id}}-battery-meter"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="MMM-Powerwall col2 graph-container">
+                    <canvas id="{{id}}-SelfPowered">
+                        Graph goes here
+                    </canvas>
+                </div>
+            </div>
 
-        {%- elif graph == "SelfPoweredDay" -%}
         {%- elif graph == "CarCharging" -%}
         {%- elif graph == "PowerFlow" -%}
         {%- else -%}

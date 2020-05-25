@@ -27,7 +27,7 @@ const DISPLAY_SINKS = [
 
 Module.register("MMM-Powerwall", {
 	defaults: {
-		graphs: ["SolarProduction", "HouseConsumption"],
+		graphs: ["PowerwallSelfPowered", "SolarProduction", "HouseConsumption"],
 		localUpdateInterval: 10000,
 		cloudUpdateInterval: 300000,
 		powerwallIP: null,
@@ -120,6 +120,7 @@ Module.register("MMM-Powerwall", {
 			twcEnabled: this.twcEnabled,
 			teslaAPIEnabled: this.teslaAPIEnabled,
 			flows: this.flows,
+			charge: true,
 			totals: this.totals,
 			historySeries: this.historySeries,
 			chargingState: this.chargingState,
@@ -209,6 +210,18 @@ Module.register("MMM-Powerwall", {
 					};
 
 					this.todayDate = todayDate;
+				}
+			}
+		}
+		else if (notification === "MMM-Powerwall-SOE") {
+			if( payload.ip === this.config.powerwallIP ) {
+				this.updateNode(
+					this.identifier + "-PowerwallSOE",
+					payload.soe,
+					"%");
+				let meterNode = document.getElementById(this.identifier + "-battery-meter");
+				if (meterNode) {
+					meterNode.style = "height: " + payload.soe + "%;";
 				}
 			}
 		}
@@ -482,7 +495,6 @@ Module.register("MMM-Powerwall", {
 				}
 			});
 			this.charts.houseConsumption = houseConsumptionPie;
-			// self.kerfluffle.foo = 1
 		}
 	},
 	

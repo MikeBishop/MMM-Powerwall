@@ -37,6 +37,62 @@
     grid-template-columns: auto minmax(min-content,33%);
 }
 
+.MMM-Powerwall.grid-equal {
+    grid-template-columns: minmax(min-content,50%) auto;
+    margin: 10pt;
+}
+
+
+.scene {
+    margin: 0;
+    position: absolute;
+    width: 180px;
+    height: 240px;
+    perspective: 600px;
+}
+
+.cube__face {
+    position: absolute;
+    border: 2px solid black;
+    line-height: 200px;
+    font-size: 40px;
+    font-weight: bold;
+    color: black;
+    text-align: center;
+}
+
+.cube {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  transform-style: preserve-3d;
+  transform: translateZ(-100px) rotateY(-35deg);
+}
+
+.cube__face {
+    backface-visibility: hidden;
+    height: 240px;
+}
+
+.cube__face--front  { 
+    background: ghostwhite;
+    width: 150px;
+    transform: rotateY(  0deg) translateZ(15px);
+}
+
+.cube__face--right  { 
+    background: black; 
+    transform: rotateY( 90deg) translateZ(137px); 
+    width: 30px;
+}
+
+.meter {
+    width:80%;
+    position: absolute;
+    bottom: 0;
+    transition: height 1s;
+}
+
 .MMM-Powerwall.col1 {
     grid-column: 1;
 }
@@ -47,6 +103,10 @@
 
 .MMM-Powerwall .solar {
     color: gold
+}
+
+.MMM-Powerwall .battery {
+    background: #0BC60B;
 }
 
 .MMM-Powerwall .grid {
