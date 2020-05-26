@@ -14,8 +14,8 @@ const HOUSE = { key: "house", displayAs: "Local Usage", color: "#09A9E6" };
 const CAR = { key: "car", displayAs: "Car Charging", color: "#EA4659" };
 
 const DISPLAY_SOURCES = [
-	SOLAR,
 	POWERWALL,
+	SOLAR,
 	GRID
 ];
 const DISPLAY_SINKS = [
@@ -55,6 +55,7 @@ Module.register("MMM-Powerwall", {
 	dayMode: "day",
 	dayDate: null,
 	charts: {},
+	soe: 0,
 
 	start: function() {
 		var self = this;
@@ -122,6 +123,7 @@ Module.register("MMM-Powerwall", {
 			flows: this.flows,
 			charge: true,
 			totals: this.totals,
+			soe: this.soe,
 			historySeries: this.historySeries,
 			chargingState: this.chargingState,
 		};
@@ -156,15 +158,16 @@ Module.register("MMM-Powerwall", {
 	// socketNotificationReceived from helper
 	socketNotificationReceived: function (notification, payload) {
 		var self = this;
-		//Log.log("Received " + notification + ": " + JSON.stringify(payload));
+		Log.log("Received " + notification + ": " + JSON.stringify(payload));
 		if(notification === "MMM-Powerwall-TeslaAPIConfigured") {
 			if( payload.username === self.config.teslaAPIUsername ) {
-				self.teslaAPIEnabled = true;
 				if( !self.config.siteID ) {
 					self.config.siteID = payload.siteID;
 				}
-				//setInterval(updateCloud, self.config.cloudUpdateInterval);
-				this.updateEnergy();	
+				if( self.config.siteID === payload.siteID ) {
+					self.teslaAPIEnabled = true;					
+					this.updateEnergy();	
+				}
 			}
 		}
 		else if(notification === "MMM-Powerwall-Aggregates") {
@@ -215,6 +218,7 @@ Module.register("MMM-Powerwall", {
 		}
 		else if (notification === "MMM-Powerwall-SOE") {
 			if( payload.ip === this.config.powerwallIP ) {
+				this.soe = payload.soe;
 				this.updateNode(
 					this.identifier + "-PowerwallSOE",
 					payload.soe,
@@ -236,7 +240,6 @@ Module.register("MMM-Powerwall", {
 			}
 		}
 		else if (notification === "MMM-Powerwall-EnergyData") {
-			Log.log(notification + ": " + JSON.stringify(payload));
 			if( payload.username === this.config.teslaAPIUsername && 
 				(!this.config.siteID || this.config.siteID == payload.siteID) ) {
 					
@@ -297,10 +300,10 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
-	updateNode: function(id, value, unit) {
+	updateNode: function(id, value, unit, prefix="") {
 		let targetNode = document.getElementById(id);
 		if (targetNode) {
-			targetNode.innerText = this.formatAsK(value, unit);
+			targetNode.innerText = prefix + this.formatAsK(value, unit);
 		}
 	},
 
@@ -338,6 +341,26 @@ Module.register("MMM-Powerwall", {
 				this.teslaAggregates.load.energy_imported - this.dayStart.house.import,
 				"Wh today"
 			);
+		}
+
+		/*******************
+		 * Powerwall Meter *
+		 *******************/
+		let battery = this.teslaAggregates.battery.instant_power;
+		let targetId = this.identifier + "-PowerwallStatus";
+		if( battery != 0) {
+			this.updateNode(
+				targetId,
+				Math.abs(this.teslaAggregates.battery.instant_power),
+				"W",
+				this.teslaAggregates.battery.instant_power > 0 ? "Supplying " : "Charging at "
+			);
+		}
+		else {
+			let targetNode = document.getElementById(targetId);
+			if (targetNode) {
+				targetNode.innerText = "Standby";
+			}	
 		}
 	},
 

@@ -15,7 +15,7 @@
                             {%- else -%}
                                 {{ flows.sources.solar.total // 1 }} W
                             {%- endif %}</p>
-                        <p class="small bright"><div id="{{id}}-SolarTotal"></div> today</p>
+                        <p class="small bright"><span id="{{id}}-SolarTotal"></span> today</p>
                     {%- else -%}
                         <p class="small bright">Solar produced</p>
                         <p id="{{id}}-SolarTotal" class="big solar"></p>
@@ -63,11 +63,18 @@
         {%- elif graph == "PowerwallSelfPowered" -%}
             <div class="MMM-Powerwall grid-equal">
                 <div class="scene MMM-Powerwall col1">
+                    <div class="small bright">
+                        <span id="{{id}}-PowerwallStatus">
+                            {%- if flows.sinks.battery.total > 0 %}Charging at {{ flows.sinks.battery.total }} W
+                            {%- else %}Supplying {{ flows.sources.battery.total }} W
+                            {%- endif %}
+                        </span>
+                    </div>
                     <div class="MMM-Powerwall cube">
                         <div class="cube__face cube__face--front" 
-                             id="{{id}}-PowerwallSOE"></div>
+                             id="{{id}}-PowerwallSOE">{{soe}}%</div>
                         <div class="cube__face cube__face--right">
-                            <div class="battery meter" style="height: 0%;"
+                            <div class="battery meter" style="height: {{soe}}%;"
                                  id="{{id}}-battery-meter"></div>
                         </div>
                     </div>

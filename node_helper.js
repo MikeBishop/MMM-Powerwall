@@ -144,7 +144,7 @@ module.exports = NodeHelper.create({
 						this.sendSocketNotification("MMM-Powerwall-SOE", {
 							ip: ip,
 							soe: powerwallEndpoints[ip].soe
-						});				
+						});
 					}	
 				}
 			}

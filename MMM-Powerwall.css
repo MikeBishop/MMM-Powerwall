@@ -67,6 +67,7 @@
   position: relative;
   transform-style: preserve-3d;
   transform: translateZ(-100px) rotateY(-35deg);
+  margin: -10px 0px 0px 20px;
 }
 
 .cube__face {
