@@ -61,7 +61,7 @@
                 LOADING...
             {%-endif -%}
         {%- elif graph == "PowerwallSelfPowered" -%}
-            <div class="MMM-Powerwall grid-equal">
+            <div class="MMM-Powerwall grid-left">
                 <div class="scene MMM-Powerwall col1">
                     <div class="small bright">
                         <span id="{{id}}-PowerwallStatus">
@@ -80,9 +80,10 @@
                     </div>
                 </div>
                 <div class="MMM-Powerwall col2 graph-container">
-                    <canvas id="{{id}}-SelfPowered">
+                    <canvas id="{{id}}-SelfPoweredDetails">
                         Graph goes here
                     </canvas>
+                    <div class="MMM-Powerwall overlay bright" id="{{id}}-SelfPoweredTotal"></div>
                 </div>
             </div>
 

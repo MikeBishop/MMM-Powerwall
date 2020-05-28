@@ -21,7 +21,8 @@ module.exports = NodeHelper.create({
 		this.twcManagerEndpoints = {};
 		this.teslaApiAccounts = {};
 		this.energy = {};
-		this.siteIds = {};
+		this.selfConsumption = {};
+		this.siteIDs = {};
 		this.filenames = [];
 		this.lastUpdate = 0;
 	},
@@ -82,18 +83,18 @@ module.exports = NodeHelper.create({
 			let username = payload.teslaAPIUsername;
 			let password = payload.teslaAPIPassword;
 			let filename = payload.tokenFile;
-			let siteId = payload.siteID;
+			let siteID = payload.siteID;
 
 			if( !this.filenames.includes(filename) ) {
 				this.filenames.push(filename)
 			}
 
-			if( !this.siteIds[username] ) {
-				this.siteIds[username] = [];
+			if( !this.siteIDs[username] ) {
+				this.siteIDs[username] = [];
 			}
 
-			if( siteId && !this.siteIds[username].includes(siteId) ) {
-				this.siteIds[username].push(siteId);
+			if( siteID && !this.siteIDs[username].includes(siteID) ) {
+				this.siteIDs[username].push(siteID);
 			}
 
 			if( !this.teslaApiAccounts[username] ) {
@@ -118,15 +119,15 @@ module.exports = NodeHelper.create({
 					}
 				}
 			}
-			if( !siteId ) {
+			if( !siteID ) {
 				this.log("Attempting to infer siteID");
-				siteId = await this.inferSiteID(username);
+				siteID = await this.infersiteID(username);
 			}
-			this.log("Found siteID " + siteId);
+			this.log("Found siteID " + siteID);
 
 			this.sendSocketNotification("MMM-Powerwall-TeslaAPIConfigured", {
 				username: username,
-				siteID: siteId
+				siteID: siteID
 			});
 		}
 		else if (notification === "MMM-Powerwall-UpdateLocal") {
@@ -165,9 +166,6 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			if( !siteID ) {
-				let siteID = await this.inferSiteID(username);
-			}
 			if( !this.energy[username] ) {
 				this.energy[username] = {}
 			}
@@ -178,9 +176,8 @@ module.exports = NodeHelper.create({
 				};
 			}
 
-			this.log([this.energy[username][siteID].lastUpdate,payload.updateInterval, Date.now()].join());
 			if( this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
-				self.doTeslaApiGetEnergy(username, siteID);
+				await self.doTeslaApiGetEnergy(username, siteID);
 			}
 			else {
 				this.sendSocketNotification("MMM-Powerwall-EnergyData", {
@@ -189,6 +186,32 @@ module.exports = NodeHelper.create({
 					energy: this.energy[username][siteID].lastResult
 				});
 			}
+		}
+		else if (notification === "MMM-Powerwall-UpdateSelfConsumption") {
+			let username = payload.username;
+			let siteID = payload.siteID;
+
+			if( !this.selfConsumption[username] ) {
+				this.selfConsumption[username] = {}
+			}
+			if( !this.selfConsumption[username][siteID] ) {
+				this.selfConsumption[username][siteID] = {
+					lastUpdate: 0,
+					lastResult: null
+				};
+			}
+
+			if( this.selfConsumption[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+				await self.doTeslaApiGetSelfConsumption(username, siteID);
+			}
+			else {
+				this.sendSocketNotification("MMM-Powerwall-SelfConsumption", {
+					username: username,
+					siteID: siteID,
+					selfConsumption: this.selfConsumption[username][siteID].lastResult
+				});
+			}
+
 		}
 	},
 
@@ -277,11 +300,11 @@ module.exports = NodeHelper.create({
 		await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
 	},
 
-	inferSiteID: async function(username) {
+	infersiteID: async function(username) {
 		url = "https://owner-api.teslamotors.com/api/1/products";
 
 		if( !this.teslaApiAccounts[username] ) {
-			this.log("Called inferSiteID() without credentials!")
+			this.log("Called infersiteID() without credentials!")
 			return null;
 		}
 
@@ -292,29 +315,29 @@ module.exports = NodeHelper.create({
 		});
 
 		let response = (await result.json()).response;
-		let siteIds = response.filter(product => (product.battery_type === "ac_powerwall")).map(product => product.energy_site_id);
+		let siteIDs = response.filter(product => (product.battery_type === "ac_powerwall")).map(product => product.energy_site_id);
 
-		this.log(JSON.stringify(this.siteIds));
-		if( this.siteIds[username].length === 0 ) {	
-			if (siteIds.length === 1) {
-				this.log("Inferred site ID " + siteIds[0]);
-				this.siteIds[username].push(siteIds[0]);
-				return siteIds[0];
+		this.log(JSON.stringify(this.siteIDs));
+		if( this.siteIDs[username].length === 0 ) {	
+			if (siteIDs.length === 1) {
+				this.log("Inferred site ID " + siteIDs[0]);
+				this.siteIDs[username].push(siteIDs[0]);
+				return siteIDs[0];
 			}
-			else if (siteIds.length === 0) {
+			else if (siteIDs.length === 0) {
 				this.log("Could not find Powerwall in your Tesla account");
 			}
 			else {
-				this.log("Found multiple Powerwalls on your Tesla account:" + siteIds);
+				this.log("Found multiple Powerwalls on your Tesla account:" + siteIDs);
 				this.log("Add 'siteID' to your config.js to specify which to target");
 			}
 		}
 		else {
-			if( !this.siteIds[username].every(id => siteIds.includes(id)) ) {
-				this.log("Unknown site ID specified; found: " + siteIds);
+			if( !this.siteIDs[username].every(id => siteIDs.includes(id)) ) {
+				this.log("Unknown site ID specified; found: " + siteIDs);
 			}
 			else {
-				return this.siteIds[username][0];
+				return this.siteIDs[username][0];
 			}
 		}
 		return null;
@@ -368,13 +391,9 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApiGetEnergy: async function(username, siteId) {
-		this.log("GetEnergy called");
-		
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteId + "/history?period=day&kind=energy";
+	doTeslaApi: async function(url, username, siteID, cache_node, event_name, response_key, event_key) {
 		let result = {};
 		try {
-			this.log(url);
 			result = await fetch(url, {
 				headers: {
 					"Authorization": "Bearer " + this.teslaApiAccounts[username].access_token
@@ -389,26 +408,33 @@ module.exports = NodeHelper.create({
 		if( result.ok ) {
 			let json = await result.json();
 			this.log(JSON.stringify(json));
-			let response = json.response.time_series;
-			if( !this.energy[username] ) {
-				this.energy[username] = {};
+			let response = json.response;
+			if (response_key) {
+				response = response[response_key];
 			}
-			this.log("Energy result: " + JSON.stringify(response));
 
-			this.energy[username][siteId] = {
-				lastUpdate: Date.now(),
-				lastResult: response
-			};
-			this.sendSocketNotification("MMM-Powerwall-EnergyData", {
+			cache_node[username][siteID].lastUpdate = Date.now();
+			cache_node[username][siteID].lastResult = response;
+			let event = {
 				username: username,
-				siteID: siteId,
-				energy: response
-			});
+				siteID: siteID
+			};
+			event[event_key] = response;
+			this.sendSocketNotification(event_name, event);
 		}
 		else {
-			this.log("Energy returned " + result.status);
+			this.log(url + " returned " + result.status);
 			this.log(await result.text());
 		}
-		
+	},
+
+	doTeslaApiGetEnergy: async function(username, siteID) {
+		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=energy";
+		await this.doTeslaApi(url, username, siteID, this.energy, "MMM-Powerwall-EnergyData", "time_series", "energy");
+	},
+
+	doTeslaApiGetSelfConsumption: async function(username, siteID) {
+		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=self_consumption&period=day";
+		await this.doTeslaApi(url, username, siteID, this.selfConsumption, "MMM-Powerwall-SelfConsumption", "time_series", "selfConsumption");
 	}
 });

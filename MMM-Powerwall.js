@@ -11,7 +11,7 @@ const SOLAR = { key: "solar", displayAs: "Solar", color: "gold" };
 const POWERWALL = { key: "battery", displayAs: "Powerwall", color: "#0BC60B"};
 const GRID = { key: "grid", displayAs: "Grid", color: "#CACECF" };
 const HOUSE = { key: "house", displayAs: "Local Usage", color: "#09A9E6" };
-const CAR = { key: "car", displayAs: "Car Charging", color: "#EA4659" };
+const CAR = { key: "car", displayAs: "Car Charging", color: "#B91413" };
 
 const DISPLAY_SOURCES = [
 	POWERWALL,
@@ -53,8 +53,10 @@ Module.register("MMM-Powerwall", {
 		house: null,
 	},
 	dayMode: "day",
-	dayDate: null,
+	todayDate: null,
 	charts: {},
+	selfConsumptionToday: [0, 0, 100],
+	selfConsumptionYesterday: null,
 	soe: 0,
 
 	start: function() {
@@ -155,6 +157,16 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
+	updateSelfConsumption: function() {
+		if( this.teslaAPIEnabled ) {
+			this.sendSocketNotification("MMM-Powerwall-UpdateSelfConsumption", {
+				username: this.config.teslaAPIUsername,
+				siteID: this.config.siteID,
+				updateInterval: this.config.cloudUpdateInterval
+			});
+		}
+	},
+
 	// socketNotificationReceived from helper
 	socketNotificationReceived: function (notification, payload) {
 		var self = this;
@@ -166,7 +178,9 @@ Module.register("MMM-Powerwall", {
 				}
 				if( self.config.siteID === payload.siteID ) {
 					self.teslaAPIEnabled = true;					
-					this.updateEnergy();	
+					this.updateEnergy();
+					this.updateSelfConsumption();
+					setInterval(() => self.updateSelfConsumption(), this.config.cloudUpdateInterval);
 				}
 			}
 		}
@@ -179,14 +193,6 @@ Module.register("MMM-Powerwall", {
 
 				this.teslaAggregates = payload.aggregates;
 				this.flows = this.attributeFlows(payload.aggregates, self.twcConsumption);
-				if (needUpdate) {
-					// If we didn't have data before, we need to redraw
-					this.updateDom();
-				}
-				else {
-					// We're updating the data in-place.
-					this.updateData();
-				}
 
 				let todayDate = new Date().getDate();
 				if( this.todayDate !== todayDate ) {
@@ -196,9 +202,8 @@ Module.register("MMM-Powerwall", {
 							this.dayStart.solar.export
 						);
 					}
-					else {
-						this.updateEnergy();
-					}
+					this.updateEnergy();
+					this.todayDate = todayDate;
 					this.dayStart = {
 						solar: {
 							export: this.teslaAggregates.solar.energy_exported
@@ -212,7 +217,15 @@ Module.register("MMM-Powerwall", {
 						}
 					};
 
-					this.todayDate = todayDate;
+				}
+
+				if (needUpdate) {
+					// If we didn't have data before, we need to redraw
+					this.updateDom();
+				}
+				else {
+					// We're updating the data in-place.
+					this.updateData();
 				}
 			}
 		}
@@ -241,7 +254,7 @@ Module.register("MMM-Powerwall", {
 		}
 		else if (notification === "MMM-Powerwall-EnergyData") {
 			if( payload.username === this.config.teslaAPIUsername && 
-				(!this.config.siteID || this.config.siteID == payload.siteID) ) {
+				this.config.siteID == payload.siteID ) {
 					
 					this.yesterdaySolar = payload.energy[0].solar_energy_exported;
 
@@ -286,17 +299,35 @@ Module.register("MMM-Powerwall", {
 					};
 					Log.log(JSON.stringify(this.dayStart));
 
-					this.dayDate = new Date().getDate();
+					this.todayDate = new Date().getDate();
+			}
+		}
+		else if (notification === "MMM-Powerwall-SelfConsumption") {
+			if( payload.username === this.config.teslaAPIUsername && 
+				this.config.siteID == payload.siteID ) {
+					let yesterday = payload.selfConsumption[0];
+					let today = payload.selfConsumption[1];
+					this.selfConsumptionYesterday = [
+						yesterday.solar,
+						yesterday.battery,
+						100 - yesterday.solar - yesterday.battery
+					];
+					this.selfConsumptionToday = [
+						today.solar,
+						today.battery,
+						100 - today.solar - today.battery
+					];
 			}
 		}
 	},
 	
 	formatAsK: function(number, unit) {
+		let separator = (unit[0] === "%") ? "" : " "
 		if( number > 950 ) {
-			return Math.round(number / 100) / 10.0 + " k" + unit;
+			return Math.round(number / 100) / 10.0 + separator + "k" + unit;
 		}
 		else {
-			return Math.round(number) + " " + unit;
+			return Math.round(number) + separator + unit;
 		}
 	},
 
@@ -360,6 +391,18 @@ Module.register("MMM-Powerwall", {
 			let targetNode = document.getElementById(targetId);
 			if (targetNode) {
 				targetNode.innerText = "Standby";
+			}	
+		}
+
+		/********************
+		 * Self-Consumption *
+		 ********************/
+		if( this.selfConsumptionToday ) {
+			this.updateNode(this.identifier + "-SelfPoweredTotal", this.selfConsumptionToday[0] + this.selfConsumptionToday[1], "%");
+			let scChart = this.charts.selfConsumption
+			if( scChart ) {
+				scChart.data.datasets[0].data = this.selfConsumptionToday;
+				scChart.update();
 			}	
 		}
 	},
@@ -485,7 +528,6 @@ Module.register("MMM-Powerwall", {
 				}
 			});
 			this.charts.solarProduction = solarProductionPie;
-			// self.kerfluffle.foo = 1
 		}
 
 		myCanvas = document.getElementById(this.identifier + "-HouseSources");
@@ -518,6 +560,30 @@ Module.register("MMM-Powerwall", {
 				}
 			});
 			this.charts.houseConsumption = houseConsumptionPie;
+		}
+
+		myCanvas = document.getElementById(this.identifier + "-SelfPoweredDetails");
+		if( myCanvas ) {
+			let scSources = [SOLAR, POWERWALL, GRID];
+			var selfConsumptionDoughnut = new Chart(myCanvas, {
+				type: "doughnut",
+				data: {
+					datasets: [{
+						data: this.selfConsumptionToday,
+						backgroundColor: scSources.map( entry => entry.color),
+						labels: scSources.map( entry => entry.displayAs ),
+						datalabels: {
+							formatter: function(value, context) {
+								return [
+									context.dataset.labels[context.dataIndex],
+									Math.round(value) + "%"
+								];
+							}
+						}
+					}]
+				}
+			});
+			this.charts.selfConsumption = selfConsumptionDoughnut;
 		}
 	},
 	

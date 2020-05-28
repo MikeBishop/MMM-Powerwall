@@ -97,7 +97,7 @@ https://owner-api.teslamotors.com/api/1/energy_sites/2609804/history?end_date=20
 Parameters:
 # period #
 Level of aggregation; can be "day", "week", "month", "year", "lifetime"
-Default is "day"
+Default is "day" for power/energy; no default for self_consumption (request fails)
 
 # kind #
 Values are "power", "energy", or "self_consumption"
