@@ -19,9 +19,8 @@
 
 .MMM-Powerwall.flexitem {
     margin: 10px;
-    flex: 300px 1;
     height: 250px;
-    max-width: fit-content;
+    min-width: 480px;
 }
 
 .MMM-Powerwall[class*="grid-"] {
@@ -38,7 +37,7 @@
 }
 
 .MMM-Powerwall.grid-equal {
-    grid-template-columns: minmax(min-content,50%) auto;
+    grid-template-columns: auto auto;
     margin: 10pt;
 }
 

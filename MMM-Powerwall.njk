@@ -4,10 +4,9 @@
     {{ endDiv() | safe }}
     <div class="module MMM-Powerwall module-content flexitem">
         {% if graph == "SolarProduction" -%}
-            {% if flows %}
+            {% if dayMode === "day" and flows -%}
                 <div class="MMM-Powerwall grid-left">
-                  <div class="MMM-Powerwall col1">
-                    {% if dayMode === "day" -%}
+                    <div class="MMM-Powerwall col1">
                         <p class="small bright">Solar is currently producing</p>
                         <p id="{{id}}-SolarProduction" class="big solar">
                             {%- if flows.sources.solar.total > 950 -%}
@@ -16,28 +15,27 @@
                                 {{ flows.sources.solar.total // 1 }} W
                             {%- endif %}</p>
                         <p class="small bright"><span id="{{id}}-SolarTotal"></span> today</p>
-                    {%- else -%}
-                        <p class="small bright">Solar produced</p>
-                        <p id="{{id}}-SolarTotal" class="big solar"></p>
-                        <p class="small bright">
-                            {%- if dayMode === "night" %}today
-                            {%- else %}yesterday
-                            {%- endif %}</p>
-                    {%- endif %}
-                  </div>
-                  <div class="MMM-Powerwall col2 graph-container">
-                    {% if dayMode === "day" -%}
-                        <canvas id="{{id}}-SolarDestinations">
-                            Graph goes here
-                        </canvas>
-                    {% else %}
-                        <p class="big">Sunrise time</p>
-                    {% endif %}
-                  </div>
+                    </div>
+                    <div class="MMM-Powerwall col2 graph-container">
+                        {% if dayMode === "day" -%}
+                            <canvas id="{{id}}-SolarDestinations">
+                                Graph goes here
+                            </canvas>
+                        {% else %}
+                            <p class="wi wi-sunrise">{{sunrise}}</p>
+                        {% endif %}
+                    </div>
                 </div>
+            {%- elif dayMode !== "day" -%}
+                <p class="small bright">Solar produced</p>
+                <p id="{{id}}-SolarTotal" class="big solar"></p>
+                <p class="small bright">
+                    {%- if dayMode === "night" %}today
+                    {%- else %}yesterday
+                    {%- endif %}</p>
             {%- else -%}
                 LOADING...
-            {%-endif -%}
+            {%- endif -%}
         {%- elif graph == "HouseConsumption" -%}
             {% if flows %}
                 <div class="MMM-Powerwall grid-right">

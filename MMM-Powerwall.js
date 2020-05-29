@@ -125,6 +125,7 @@ Module.register("MMM-Powerwall", {
 			flows: this.flows,
 			charge: true,
 			totals: this.totals,
+			sunrise: this.sunrise,
 			soe: this.soe,
 			historySeries: this.historySeries,
 			chargingState: this.chargingState,
@@ -437,6 +438,8 @@ Module.register("MMM-Powerwall", {
 			let sunset = new Date(data.sys.sunset * 1000);
 			let now = new Date();
 
+			this.sunrise = sunrise.getHours() + ":" + sunrise.getMinutes();
+
 			let newMode = "";
 			if (now < sunrise) {
 				newMode = "morning";
@@ -601,7 +604,7 @@ Module.register("MMM-Powerwall", {
 
 			let flows = {
 				solar: {
-					unassigned: solar,
+					unassigned: ((solar > 0) ? solar : 0),
 					battery: 0,
 					house: 0,
 					car: 0,
