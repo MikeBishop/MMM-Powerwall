@@ -481,7 +481,7 @@ Module.register("MMM-Powerwall", {
 					anchor: "center",
 					textalign: "center",
 					display: function(context) {
-						return context.dataset.data[context.dataIndex] > 0 ? "auto" : false;
+						return context.dataset.data[context.dataIndex] >= 0.5 ? "auto" : false;
 					},
 					labels: {
 						title: {
