@@ -23,6 +23,7 @@ module.exports = NodeHelper.create({
 		this.energy = {};
 		this.selfConsumption = {};
 		this.siteIDs = {};
+		this.vehicles = {};
 		this.filenames = [];
 		this.lastUpdate = 0;
 	},
@@ -112,22 +113,29 @@ module.exports = NodeHelper.create({
 				}
 				catch(e) {
 					if( password ) {
-						self.doTeslaApiLogin(username,password, filename);
+						self.doTeslaApiLogin(username,password,filename);
 					}
 					else {
 						this.log("Missing both Tesla password and access tokens");
 					}
 				}
 			}
+
+			if( !this.vehicles[username]) {
+				// See if there are any cars on the account.
+				this.vehicles[username] = this.doTeslaApiGetVehicleList();
+			}
+
 			if( !siteID ) {
 				this.log("Attempting to infer siteID");
-				siteID = await this.infersiteID(username);
+				siteID = await this.inferSiteID(username);
 			}
 			this.log("Found siteID " + siteID);
 
 			this.sendSocketNotification("MMM-Powerwall-TeslaAPIConfigured", {
 				username: username,
-				siteID: siteID
+				siteID: siteID,
+				vehicles = this.vehicles[username]
 			});
 		}
 		else if (notification === "MMM-Powerwall-UpdateLocal") {
@@ -300,22 +308,13 @@ module.exports = NodeHelper.create({
 		await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
 	},
 
-	infersiteID: async function(username) {
+	inferSiteID: async function(username) {
 		url = "https://owner-api.teslamotors.com/api/1/products";
 
-		if( !this.teslaApiAccounts[username] ) {
-			this.log("Called infersiteID() without credentials!")
-			return null;
-		}
-
-		result = await fetch (url, {
-			headers: {
-				"Authorization": "Bearer " + this.teslaApiAccounts[username].access_token
-			}
-		});
-
-		let response = (await result.json()).response;
-		let siteIDs = response.filter(product => (product.battery_type === "ac_powerwall")).map(product => product.energy_site_id);
+		let response = await this.doTeslaApi(url, username);
+		let siteIDs = response.filter(
+			product =>(product.battery_type === "ac_powerwall")
+			).map(product => product.energy_site_id);
 
 		this.log(JSON.stringify(this.siteIDs));
 		if( this.siteIDs[username].length === 0 ) {	
@@ -391,8 +390,16 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApi: async function(url, username, siteID, cache_node, event_name, response_key, event_key) {
+	doTeslaApi: async function(url, username,
+			siteID=null, cache_node=null, event_name=null,
+			response_key=null, event_key=null) {
 		let result = {};
+
+		if( !this.teslaApiAccounts[username] ) {
+			this.log("Called doTeslaApi() without credentials!")
+			return null;
+		}
+
 		try {
 			result = await fetch(url, {
 				headers: {
@@ -413,18 +420,27 @@ module.exports = NodeHelper.create({
 				response = response[response_key];
 			}
 
-			cache_node[username][siteID].lastUpdate = Date.now();
-			cache_node[username][siteID].lastResult = response;
-			let event = {
-				username: username,
-				siteID: siteID
-			};
-			event[event_key] = response;
-			this.sendSocketNotification(event_name, event);
+			if( event_key ) {
+				let event = {
+					username: username,
+					siteID: siteID
+				};
+
+				event[event_key] = response;
+				this.sendSocketNotification(event_name, event);
+			}
+
+			if( cache_node && siteID ) {
+				cache_node[username][siteID].lastUpdate = Date.now();
+				cache_node[username][siteID].lastResult = response;
+			}
+
+			return response;
 		}
 		else {
 			this.log(url + " returned " + result.status);
 			this.log(await result.text());
+			return null;
 		}
 	},
 
@@ -436,5 +452,19 @@ module.exports = NodeHelper.create({
 	doTeslaApiGetSelfConsumption: async function(username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=self_consumption&period=day";
 		await this.doTeslaApi(url, username, siteID, this.selfConsumption, "MMM-Powerwall-SelfConsumption", "time_series", "selfConsumption");
+	},
+
+	doTeslaApiGetVehicleList: async function(username) {
+		url = "https://owner-api.teslamotors.com/api/1/vehicles";
+		let response = await this.doTeslaApi(url, username);
+		
+		// response is an array of vehicle objects.  Don't need all the properties.
+		return response.map(
+			function(vehicle) {
+				return {
+				id: vehicle.id,
+				vin: vehicle.vin,
+				display_name: vehicle.display_name
+			}});
 	}
 });

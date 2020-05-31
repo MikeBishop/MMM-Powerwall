@@ -58,6 +58,7 @@ Module.register("MMM-Powerwall", {
 	selfConsumptionToday: [0, 0, 100],
 	selfConsumptionYesterday: null,
 	soe: 0,
+	vehicles: null,
 
 	start: function() {
 		var self = this;
@@ -183,6 +184,7 @@ Module.register("MMM-Powerwall", {
 					this.updateSelfConsumption();
 					setInterval(() => self.updateSelfConsumption(), this.config.cloudUpdateInterval);
 				}
+				this.vehicles = payload.vehicles;
 			}
 		}
 		else if(notification === "MMM-Powerwall-Aggregates") {
