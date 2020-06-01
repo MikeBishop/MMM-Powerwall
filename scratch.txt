@@ -108,3 +108,23 @@ UTC Timestamp (2020-01-03T02%3A29%3A20.866Z)
 Defaults to providing yesterday and today if not supplied
 
 Doesn't appear to be respected for kind=power; not sure why.
+
+
+######################
+
+Vehicle images:
+
+https://static-assets.tesla.com/v1/compositor/?model=m3&view=STUD_3QTR&size=1440&options=DV4W,IN3PW,COL3-PPMR,W38B,MT303&bkba_opt=1&context=design_studio_2
+DV4W- AWD
+IN3PW- Black interior (incorrect, but sufficient for picture)
+COL3-PPMR- Exterior (multicoat - red)
+COL2-PPSB- Exterior (metallic - blue)
+
+W38B- Aero wheels
+MT303- LR AWD
+https://static-assets.tesla.com/v1/compositor/?model=ms&view=STUD_3QTR&size=1440&options=MI01,COL3-PPSW,W38B&bkba_opt=1&context=design_studio_2
+(wheels aren't right)
+
+https://static-assets.tesla.com/v1/compositor/?model=mx&view=STUD_3QTR&size=1440&options=APPF,CH04,DRLH,FG02,PI00,COL2-PMSS,RFPX,X021,WT20&bkba_opt=1&context=design_studio_2
+
+Can no longer get options codes from API, but might be able to translate a sufficient set from data_request/vehicle_config values (model, color, wheel).
