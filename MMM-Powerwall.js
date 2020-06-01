@@ -503,6 +503,11 @@ Module.register("MMM-Powerwall", {
 			}
 		});
 
+		for( const oldChart in this.charts ) {
+			this.charts[oldChart].destroy();
+		}
+		this.charts = {};
+
 		var myCanvas = document.getElementById(this.identifier + "-SolarDestinations");
 		if( myCanvas ) {
 			let distribution = this.flows.sources.solar.distribution;
