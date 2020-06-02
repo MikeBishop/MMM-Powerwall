@@ -27,7 +27,7 @@ const DISPLAY_SINKS = [
 
 Module.register("MMM-Powerwall", {
 	defaults: {
-		graphs: ["PowerwallSelfPowered", "SolarProduction", "HouseConsumption"],
+		graphs: ["CarCharging", "PowerwallSelfPowered", "SolarProduction", "HouseConsumption"],
 		localUpdateInterval: 10000,
 		cloudUpdateInterval: 300000,
 		powerwallIP: null,
@@ -591,6 +591,9 @@ Module.register("MMM-Powerwall", {
 							}
 						}
 					}]
+				},
+				options: {
+					cutoutPercentage: 65
 				}
 			});
 			this.charts.selfConsumption = selfConsumptionDoughnut;

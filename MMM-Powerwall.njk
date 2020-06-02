@@ -72,7 +72,7 @@
                         <div class="cube__face cube__face--front" 
                              id="{{id}}-PowerwallSOE">{{soe // 1}}%</div>
                         <div class="cube__face cube__face--right">
-                            <div class="battery meter" style="height: {{soe // 1}}%;"
+                            <div class="battery meter-vertical" style="height: {{soe // 1}}%;"
                                  id="{{id}}-battery-meter"></div>
                         </div>
                     </div>
@@ -81,11 +81,34 @@
                     <canvas id="{{id}}-SelfPoweredDetails">
                         Graph goes here
                     </canvas>
-                    <div class="MMM-Powerwall overlay bright" id="{{id}}-SelfPoweredTotal"></div>
+                    <div class="MMM-Powerwall overlay bright small">
+                        <span class="MMM-Powerwall bright big" id="{{id}}-SelfPoweredTotal"></span><br>
+                        Self-Powered
+                    </div>
                 </div>
             </div>
-
         {%- elif graph == "CarCharging" -%}
+            <div class="MMM-Powerwall grid-right">
+                <div class="MMM-Powerwall col1">
+                    <div class="MMM-Powerwall cbattery">
+                        <div class="battery meter-horizontal" style="width: 85%;" id="{{id}}-car-meter"></div>
+                        <div class="MMM-Powerwall overlay bright">85%</div>
+                    </div>
+                    <div>
+                        <img src="https://static-assets.tesla.com/v1/compositor/?model=m3&view=STUD_3QTR&size=300&options=DV4W,IN3PW,COL3-PPMR,W38B,MT303&bkba_opt=1">
+                    </div>
+                </div>
+                <div class="MMM-Powerwall col2">
+                    <p class="small bright"><span id="{{id}}-CarIs">Car is</span> currently <span id="{{id}}-CarStatus">charging at</span></p>
+                    <p id="{{id}}-CarConsumption" class="big car">
+                        {%- if flows.sinks.car.total > 950 -%}
+                            {{ flows.sinks.car.total // 100 / 10 }} kW
+                        {%- else -%}
+                            {{ flows.sinks.car.total // 1 }} W
+                        {%- endif %}</p>
+                    <p class="small bright">Finishing in <span id="{{id}}-CarCompletion"></span></p>
+                </div>
+            </div>
         {%- elif graph == "PowerFlow" -%}
         {%- else -%}
         Unknown graph type selected

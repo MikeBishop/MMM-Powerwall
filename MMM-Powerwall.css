@@ -86,11 +86,40 @@
     width: 30px;
 }
 
-.meter {
+.meter-vertical {
     width:80%;
     position: absolute;
     bottom: 0;
     transition: height 1s;
+}
+
+.meter-horizontal {
+    height:99%;
+    margin: 1px;
+    transition: height 1s;
+}
+
+.cbattery:after {
+    border: 2px solid #000;
+    background: darkgray;
+    content: "";
+    display: block;
+    height: 16px;
+    position: absolute;
+    right: -10px;
+    top: 29px;
+    width: 6px;
+}
+
+.cbattery {
+    border: 2px solid #000;
+    background: black;
+    height: 80px;
+    margin-left: auto;
+    margin-right: auto;
+    position: relative;
+    width: 150px;
+    text-align: center;
 }
 
 .MMM-Powerwall.col1 {
@@ -115,6 +144,10 @@
 
 .MMM-Powerwall .house {
     color: #09A9E6
+}
+
+.MMM-Powerwall .car {
+    color: #B91413;
 }
 
 .MMM-Powerwall .big {
