@@ -123,7 +123,7 @@ module.exports = NodeHelper.create({
 
 			if( !this.vehicles[username]) {
 				// See if there are any cars on the account.
-				this.vehicles[username] = this.doTeslaApiGetVehicleList();
+				this.vehicles[username] = this.doTeslaApiGetVehicleList(username);
 			}
 
 			if( !siteID ) {
@@ -135,7 +135,7 @@ module.exports = NodeHelper.create({
 			this.sendSocketNotification("MMM-Powerwall-TeslaAPIConfigured", {
 				username: username,
 				siteID: siteID,
-				vehicles = this.vehicles[username]
+				vehicles: this.vehicles[username]
 			});
 		}
 		else if (notification === "MMM-Powerwall-UpdateLocal") {
