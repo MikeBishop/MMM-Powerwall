@@ -20,7 +20,8 @@
 .MMM-Powerwall.flexitem {
     margin: 10px;
     height: 250px;
-    min-width: 480px;
+    width: 450px;
+    flex: auto;
 }
 
 .MMM-Powerwall[class*="grid-"] {
@@ -120,6 +121,7 @@
     position: relative;
     width: 150px;
     text-align: center;
+    border-radius: 5px;
 }
 
 .MMM-Powerwall.col1 {
@@ -168,4 +170,22 @@
     height: 250px;
     max-width: 300px;
     max-height: 250px;
+}
+
+.MMM-Powerwall .no-overflow {
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.MMM-Powerwall .two-cars {
+    text-indent: -40%;
+}
+
+.MMM-Powerwall .flip-image {
+    transform: scaleX(-1);
+}
+
+.MMM-Powerwall .car-image {
+    overflow: hidden;
+    max-width: 275px;
 }

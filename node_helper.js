@@ -24,6 +24,8 @@ module.exports = NodeHelper.create({
 		this.selfConsumption = {};
 		this.siteIDs = {};
 		this.vehicles = {};
+		this.driveState = {};
+		this.chargeState = {};
 		this.filenames = [];
 		this.lastUpdate = 0;
 	},
@@ -123,7 +125,7 @@ module.exports = NodeHelper.create({
 
 			if( !this.vehicles[username]) {
 				// See if there are any cars on the account.
-				this.vehicles[username] = this.doTeslaApiGetVehicleList(username);
+				this.vehicles[username] = await this.doTeslaApiGetVehicleList(username);
 			}
 
 			if( !siteID ) {
@@ -271,11 +273,31 @@ module.exports = NodeHelper.create({
 
 		if( success && result.ok ) {
 			var status = await result.json();
+			var vins = [];
+			if( status.carsCharging > 0 ) {
+				url = "http://" + twcManagerIP + ":" + port + "/api/getSlaveTWCs";
+
+				try {
+					result = await fetch(url);
+				}
+				catch {}
+
+				if ( result.ok ) {
+					let slaves = await result.json();
+					for (let slave of slaves) {
+						if( slave.currentVIN ) {
+							vins.push(slave.currentVIN);
+						}
+					}
+				}
+			}
+
 			this.twcManagerEndpoints[twcManagerIP].status = status;
 			// Send notification
 			this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
 				ip: twcManagerIP,
-				status: status
+				status: status,
+				vins: vins
 			});
 		}
 		else {
@@ -390,14 +412,14 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApi: async function(url, username,
-			siteID=null, cache_node=null, event_name=null,
+	doTeslaApi: async function(url, username, id_key=null,
+			deviceID=null, cache_node=null, event_name=null,
 			response_key=null, event_key=null) {
 		let result = {};
 
 		if( !this.teslaApiAccounts[username] ) {
 			this.log("Called doTeslaApi() without credentials!")
-			return null;
+			return {};
 		}
 
 		try {
@@ -409,7 +431,7 @@ module.exports = NodeHelper.create({
 		}
 		catch (e) {
 			this.log(e);
-			return;
+			return {};
 		}
 
 		if( result.ok ) {
@@ -420,19 +442,24 @@ module.exports = NodeHelper.create({
 				response = response[response_key];
 			}
 
-			if( event_key ) {
+			if( event_name && id_key && event_key ) {
 				let event = {
 					username: username,
-					siteID: siteID
+					[id_key]: deviceID,
+					[event_key]: response
 				};
-
-				event[event_key] = response;
 				this.sendSocketNotification(event_name, event);
 			}
 
-			if( cache_node && siteID ) {
-				cache_node[username][siteID].lastUpdate = Date.now();
-				cache_node[username][siteID].lastResult = response;
+			if( cache_node && deviceID ) {
+				if( !cache_node[username] ) {
+					cache_node[username] = {};
+				}
+				if( !cache_node[username][deviceID] ) {
+					cache_node[username][deviceID] = {};
+				}
+				cache_node[username][deviceID].lastUpdate = Date.now();
+				cache_node[username][deviceID].lastResult = response;
 			}
 
 			return response;
@@ -440,18 +467,18 @@ module.exports = NodeHelper.create({
 		else {
 			this.log(url + " returned " + result.status);
 			this.log(await result.text());
-			return null;
+			return {};
 		}
 	},
 
 	doTeslaApiGetEnergy: async function(username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=energy";
-		await this.doTeslaApi(url, username, siteID, this.energy, "MMM-Powerwall-EnergyData", "time_series", "energy");
+		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "MMM-Powerwall-EnergyData", "time_series", "energy");
 	},
 
 	doTeslaApiGetSelfConsumption: async function(username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=self_consumption&period=day";
-		await this.doTeslaApi(url, username, siteID, this.selfConsumption, "MMM-Powerwall-SelfConsumption", "time_series", "selfConsumption");
+		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "MMM-Powerwall-SelfConsumption", "time_series", "selfConsumption");
 	},
 
 	doTeslaApiGetVehicleList: async function(username) {
@@ -466,5 +493,93 @@ module.exports = NodeHelper.create({
 				vin: vehicle.vin,
 				display_name: vehicle.display_name
 			}});
+	},
+
+	doTeslaApiCommand: async function(url, username, body) {
+		if( !this.teslaApiAccounts[username] ) {
+			this.log("Called doTeslaApiCommand() without credentials!")
+			return {};
+		}
+
+		try {
+			result = await fetch(url, {
+				method: "POST",
+				body: JSON.stringify(body),
+				headers: {
+					"Authorization": "Bearer " + this.teslaApiAccounts[username].access_token
+				}
+			});
+		}
+		catch (e) {
+			this.log(e);
+			return {};
+		}
+
+		if( result.ok ) {
+			let json = await result.json();
+			this.log(JSON.stringify(json));
+			let response = json.response;
+			return response;
+		}
+		else {
+			this.log(url + " returned " + result.status);
+			this.log(await result.text());
+			return {};
+		}
+	},
+
+	delay: function wait(ms) {
+		return new Promise(resolve => {
+			setTimeout(resolve, ms);
+		});
+	},
+
+	doTeslaApiGetVehicleState: async function(username, vehicleID, forceWake) {
+		// Slightly more complicated; involves calling multiple APIs
+		let timeout = 5000;
+		let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
+		do {
+			let response = await this.doTeslaApi(url, username);
+	
+			if( response.state !== "online" && forceWake ) {
+				if( timeout > 600000 ) {
+					break;
+				}
+				await this.delay(timeout);
+				timeout *= 2;
+			}
+		} while (state !== "online" && forceWake );
+
+		var drive_state, charge_state;
+		if( state !== "online" ) {
+			// Car is asleep and either can't wake or we aren't asking
+			drive_state = 
+				(this.driveState[username][vehicleID] || {}).lastResult;
+			charge_state = 
+				(this.chargeState[username][vehicleID] || {}).lastResult;
+		}
+		else {
+			// Get vehicle state
+			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/data_request/drive_state";
+			driveState = await this.doTeslaApi(url, username, "ID", vehicleID, this.driveState);
+			
+			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/data_request/charge_state";
+			chargeState = await this.doTeslaApi(url, username, "ID", vehicleID, this.chargeState);
+		}
+
+		this.sendSocketNotification("MMM-Powerwall-VehicleState", {
+			username: username,
+			ID: vehicleID,
+			state: state,
+			speed: driveState.speed,
+			location: [drive_state.latitude, drive_state.longitude],
+			charge: {
+				state: chargeState.charging_state,
+				soc: chargeState.battery_level,
+				limit: chargeState.charge_limit_soc,
+				power: chargeState.charger_power,
+				time: chargeState.time_to_full_charge
+			}
+		});
 	}
 });

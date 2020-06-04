@@ -185,6 +185,7 @@ Module.register("MMM-Powerwall", {
 					setInterval(() => self.updateSelfConsumption(), this.config.cloudUpdateInterval);
 				}
 				this.vehicles = payload.vehicles;
+				this.focusOnVehicle(this.vehicles, 0);
 			}
 		}
 		else if(notification === "MMM-Powerwall-Aggregates") {
@@ -252,6 +253,43 @@ Module.register("MMM-Powerwall", {
 				if( self.twcConsumption !== oldConsumption && this.teslaAggregates ) {
 					this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
 					this.updateData();
+				}
+
+				if( payload.status.carsCharging > 0 ) {
+					// Charging at least one car
+					// How to pick which to show?
+					let vinsWeKnow = (payload.vins || []).filter(
+						chargingVIN => this.vehicles.some(
+							knownVehicle => knownVehicle.vin == chargingVIN
+						)) || [];
+					let vehicles;
+
+					if (vinsWeKnow.length > 0) {
+						// We recognize some charging VINs!
+						vehicles = vinsWeKnow.map(vin => this.vehicles.find(
+							vehicle => vehicle.vin == vin
+						));
+						vehicles.sort( (a,b) => (
+							a.charge && b.charge && 
+								a.charge.soc && b.charge.soc ?
+							(a.charge.soc - b.charge.soc) :
+							a.charge ? -1 : 1));
+					}
+					else {
+						// Charging cars are unknown; TWCs can't report VINs?
+						// Show any cars the API indicates are currently charging.
+						// This will have some false positives if charging off-site.
+						vehicles = this.vehicles.filter(
+							knownVehicle =>
+								knownVehicle.charge && 
+								knownVehicle.charge.charging_state === "Charging"
+						);
+					}
+					this.focusOnVehicle(vehicles, payload.status.carsCharging)
+				}
+				else {
+					// No cars are charging.
+					this.focusOnVehicle(this.vehicles, 0);
 				}
 			}
 		}
@@ -408,6 +446,12 @@ Module.register("MMM-Powerwall", {
 				scChart.update();
 			}	
 		}
+
+		/****************
+		 * Car Charging *
+		 ****************/
+		let charging = this.flows.sinks.car.total;
+		this.updateNode(this.identifier + "-CarConsumption", charging, "W");
 	},
 
 	notificationReceived: function(notification, payload, sender) {
@@ -682,6 +726,29 @@ Module.register("MMM-Powerwall", {
 		}
 		else {
 			return null;
+		}
+	},
+
+	focusOnVehicle: function(vehicles, numCharging) {
+		// Makes the "car status" tile focus on particular vehicles
+		// "vehicle" is a set, but might be empty
+		// "numCharging" indicates how many cars are charging
+		
+		if( numCharging > 0 ) {
+			// Cars are charging
+			if( vehicles && vehicles.length > 0 ) {
+				// Display info on the charging cars
+				// Note that other cars might be charging, too
+
+			}
+			else {
+				// Don't know which cars are charging
+				// Display generic info about power usage
+
+			}
+		}
+		else {
+			// Not currently charging; show vehicle status
 		}
 	}
 });
