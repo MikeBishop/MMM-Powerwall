@@ -372,10 +372,23 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
-	updateNode: function(id, value, unit, prefix="") {
+	updateNode: function(id, value, unit, prefix="", animate=true) {
+		this.updateText(id, prefix + this.formatAsK(value, unit), animate);
+	},
+
+	updateText: function(id, text, animate = true) {
 		let targetNode = document.getElementById(id);
-		if (targetNode) {
-			targetNode.innerText = prefix + this.formatAsK(value, unit);
+		if (targetNode && targetNode.innerText !== text ) {
+			if( animate ) {
+				targetNode.style.opacity = 0
+				setTimeout(function (){
+					targetNode.innerText = text;
+					targetNode.style.opacity = 1;
+				}, 100)
+			}
+			else {
+				targetNode.innerText = text;
+			}
 		}
 	},
 
@@ -390,15 +403,40 @@ Module.register("MMM-Powerwall", {
 		/*******************
 		 * SolarProduction *
 		 *******************/
-		this.updateNode(this.identifier + "-SolarProduction", this.flows.sources.solar.total, "W");
+		this.updateNode(
+			this.identifier + "-SolarProduction",
+			this.flows.sources.solar.total,
+			"W",
+			"",
+			this.dayMode === "day"
+		);
 		this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
 		if( this.dayStart.solar ) {
 			this.updateNode(
-				this.identifier + "-SolarTotal",
+				this.identifier + "-SolarTotalA",
+				this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
+				"Wh"
+			);
+			this.updateNode(
+				this.identifier + "-SolarTotalB",
 				this.dayMode === "morning" ?
 				this.yesterdaySolar : 
 				(this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export),
 				"Wh"
+			);
+		}
+		let solarFlip = document.getElementById(this.identifier + "-SolarFlip");
+		let solarCanvas = document.getElementById(this.identifier + "-SolarDestinations");
+		if( this.dayMode === "day" ) {
+			solarFlip.style.transform = "none";
+			solarCanvas.style.visibility = "visible"
+		}
+		else {
+			solarFlip.style.transform = "rotateX(180deg)";
+			solarCanvas.style.visibility = "hidden";
+			this.updateText(
+				this.identifier + "-SolarTodayYesterday",
+				this.dayMode === "morning" ? "yesterday" : "today"
 			);
 		}
 
@@ -429,10 +467,7 @@ Module.register("MMM-Powerwall", {
 			);
 		}
 		else {
-			let targetNode = document.getElementById(targetId);
-			if (targetNode) {
-				targetNode.innerText = "Standby";
-			}	
+			this.updateText(targetId, "Standby");
 		}
 
 		/********************
@@ -512,7 +547,7 @@ Module.register("MMM-Powerwall", {
 			responsive: true,
 			maintainAspectRatio: true,
 			legend: false,
-			aspectRatio: 1.2,
+			aspectRatio: 1.1,
 			elements: {
 				arc: {
 					borderWidth: 0

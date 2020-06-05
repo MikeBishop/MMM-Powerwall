@@ -4,69 +4,62 @@
     {{ endDiv() | safe }}
     <div class="module MMM-Powerwall module-content flexitem">
         {% if graph == "SolarProduction" -%}
-            {% if dayMode === "day" and flows -%}
+        <div class="MMM-Powerwall flip-outer" id="{{id}}-SolarFlip">
+            <div class="MMM-Powerwall flip-front">
                 <div class="MMM-Powerwall grid-left">
                     <div class="MMM-Powerwall col1">
                         <p class="small bright">Solar is currently producing</p>
-                        <p id="{{id}}-SolarProduction" class="big solar">
+                        <p id="{{id}}-SolarProduction" class="big solar text">
                             {%- if flows.sources.solar.total > 950 -%}
                                 {{ flows.sources.solar.total // 100 / 10 }} kW
                             {%- else -%}
                                 {{ flows.sources.solar.total // 1 }} W
                             {%- endif %}</p>
-                        <p class="small bright"><span id="{{id}}-SolarTotal"></span> today</p>
+                        <p class="small bright">
+                            <span id="{{id}}-SolarTotalA" class="small bright text"></span> today
+                        </p>
                     </div>
                     <div class="MMM-Powerwall col2 graph-container">
-                        {% if dayMode === "day" -%}
-                            <canvas id="{{id}}-SolarDestinations">
-                                Graph goes here
-                            </canvas>
-                        {% else %}
-                            <p class="wi wi-sunrise">{{sunrise}}</p>
-                        {% endif %}
+                        <canvas id="{{id}}-SolarDestinations">
+                            Graph goes here
+                        </canvas>
                     </div>
                 </div>
-            {%- elif dayMode !== "day" -%}
+            </div>
+            <div class="MMM-Powerwall flip-back">
                 <p class="small bright">Solar produced</p>
-                <p id="{{id}}-SolarTotal" class="big solar"></p>
-                <p class="small bright">
+                <p id="{{id}}-SolarTotalB" class="big solar text"></p>
+                <p class="small bright text" id="{{id}}-SolarTodayYesterday">
                     {%- if dayMode === "night" %}today
                     {%- else %}yesterday
                     {%- endif %}</p>
-            {%- else -%}
-                LOADING...
-            {%- endif -%}
+            </div>
+        </div>
         {%- elif graph == "HouseConsumption" -%}
-            {% if flows %}
-                <div class="MMM-Powerwall grid-right">
-                  <div class="MMM-Powerwall col1 graph-container">
-                    <canvas id="{{id}}-HouseSources">
-                        Graph goes here
-                    </canvas>
-                  </div>
-                  <div class="MMM-Powerwall col2">
-                    <p class="small bright">House is currently consuming</p>
-                    <p id="{{id}}-HouseConsumption" class="big house">
-                        {%- if flows.sinks.house.total > 950 -%}
-                            {{ flows.sinks.house.total // 100 / 10 }} kW
-                        {%- else -%}
-                            {{ flows.sinks.house.total // 1 }} W
-                        {%- endif %}</p>
-                    <p class="small bright" id="{{id}}-UsageTotal"></p>
-                  </div>
+            <div class="MMM-Powerwall grid-right">
+                <div class="MMM-Powerwall col1 graph-container">
+                <canvas id="{{id}}-HouseSources">
+                    Graph goes here
+                </canvas>
                 </div>
-            {%- else -%}
-                LOADING...
-            {%-endif -%}
+                <div class="MMM-Powerwall col2">
+                <p class="small bright">House is currently consuming</p>
+                <p id="{{id}}-HouseConsumption" class="big house text">
+                    {%- if flows.sinks.house.total > 950 -%}
+                        {{ flows.sinks.house.total // 100 / 10 }} kW
+                    {%- else -%}
+                        {{ flows.sinks.house.total // 1 }} W
+                    {%- endif %}</p>
+                <p class="small bright text" id="{{id}}-UsageTotal"></p>
+                </div>
+            </div>
         {%- elif graph == "PowerwallSelfPowered" -%}
             <div class="MMM-Powerwall grid-left">
                 <div class="scene MMM-Powerwall col1">
-                    <div class="small bright">
-                        <span id="{{id}}-PowerwallStatus">
+                    <div class="small bright text" id="{{id}}-PowerwallStatus">
                             {%- if flows.sinks.battery.total > 0 %}Charging at {{ flows.sinks.battery.total }} W
                             {%- else %}Supplying {{ flows.sources.battery.total }} W
                             {%- endif %}
-                        </span>
                     </div>
                     <div class="MMM-Powerwall cube">
                         <div class="cube__face cube__face--front" 
@@ -82,7 +75,7 @@
                         Graph goes here
                     </canvas>
                     <div class="MMM-Powerwall overlay bright small">
-                        <span class="MMM-Powerwall bright big" id="{{id}}-SelfPoweredTotal"></span><br>
+                        <span class="MMM-Powerwall bright big text" id="{{id}}-SelfPoweredTotal"></span><br>
                         Self-Powered
                     </div>
                 </div>
@@ -92,7 +85,7 @@
                 <div class="MMM-Powerwall col1">
                     <div class="MMM-Powerwall cbattery">
                         <div class="battery meter-horizontal" style="width: 85%;" id="{{id}}-car-meter"></div>
-                        <div class="MMM-Powerwall overlay bright">85%</div>
+                        <div class="MMM-Powerwall overlay bright text">85%</div>
                     </div>
                     <div id="{{id}}-PictureContainer" class="MMM-Powerwall no-overflow">
                         <div class="MMM-Powerwall car-image">
@@ -102,13 +95,15 @@
                 </div>
                 <div class="MMM-Powerwall col2">
                     <p class="small bright"><span id="{{id}}-CarIs">Car is</span> currently <span id="{{id}}-CarStatus">charging at</span></p>
-                    <p id="{{id}}-CarConsumption" class="big car">
+                    <p id="{{id}}-CarConsumption" class="big car text">
                         {%- if flows.sinks.car.total > 950 -%}
                             {{ flows.sinks.car.total // 100 / 10 }} kW
                         {%- else -%}
                             {{ flows.sinks.car.total // 1 }} W
                         {%- endif %}</p>
-                    <p class="small bright">Finishing in <span id="{{id}}-CarCompletion"></span></p>
+                    <p class="small bright">Finishing in
+                        <span class="small bright text" id="{{id}}-CarCompletion"></span>
+                    </p>
                 </div>
             </div>
         {%- elif graph == "PowerFlow" -%}
