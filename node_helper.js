@@ -17,8 +17,10 @@ var fetch = require("node-fetch");
 module.exports = NodeHelper.create({
 
 	start: function() {
-		this.powerwallEndpoints = {};
-		this.twcManagerEndpoints = {};
+		this.powerwallAggregates = {};
+		this.powerwallSOE = {};
+		this.twcStatus = {};
+		this.twcVINs = {};
 		this.teslaApiAccounts = {};
 		this.energy = {};
 		this.selfConsumption = {};
@@ -46,43 +48,7 @@ module.exports = NodeHelper.create({
 
 		this.log(notification + JSON.stringify(payload));
 
-		if (notification === "MMM-Powerwall-Configure-Powerwall") {
-			let updateInterval = payload.updateInterval;
-			let powerwallIP = payload.powerwallIP;
-			let powerwallPassword = payload.powerwallPassword;
-
-			if( powerwallEndpoints[powerwallIP] ) {
-				powerwallEndpoints[powerwallIP].password = powerwallPassword;
-				powerwallEndpoints[powerwallIP].updateInterval = Math.min(
-					powerwallEndpoints[powerwallIP].updateInterval,
-					updateInterval
-				);
-			}
-			else {
-				// First configuration for this Powerwall; update immediately
-				powerwallEndpoints[powerwallIP] = {
-					password: powerwallPassword,
-					aggregates: null,
-					lastUpdate: 0,
-					updateInterval: updateInterval
-				};
-			}
-		}
-		else if (notification === "MMM-Powerwall-Configure-TWCManager") {
-			let ip = payload.twcManagerIP;
-			if( twcManagerEndpoints[ip] ) {
-				twcManagerEndpoints[ip].port = payload.port;
-			}
-			else {
-				twcManagerEndpoints[ip] = {
-					updateInterval: payload.updateInterval,
-					status: null,
-					port: payload.port,
-					lastUpdate: 0
-				}
-			}
-		}
-		else if (notification === "MMM-Powerwall-Configure-TeslaAPI") {
+		if (notification === "MMM-Powerwall-Configure-TeslaAPI") {
 			let username = payload.teslaAPIUsername;
 			let password = payload.teslaAPIPassword;
 			let filename = payload.tokenFile;
@@ -142,32 +108,40 @@ module.exports = NodeHelper.create({
 		}
 		else if (notification === "MMM-Powerwall-UpdateLocal") {
 			let ip = payload.powerwallIP;
-			if( powerwallEndpoints[ip] ) {
-				if( powerwallEndpoints[ip].lastUpdate + powerwallEndpoints[ip].updateInterval < Date.now() ) {
-					self.updatePowerwall(ip, powerwallEndpoints[ip].password);
-				}
-				else {
-					if (powerwallEndpoints[ip].aggregates) {
-						this.sendSocketNotification("MMM-Powerwall-Aggregates", {
-							ip: ip,
-							aggregates: powerwallEndpoints[ip].aggregates
-						});
-						this.sendSocketNotification("MMM-Powerwall-SOE", {
-							ip: ip,
-							soe: powerwallEndpoints[ip].soe
-						});
-					}	
-				}
+			this.initializeCache(this.powerwallAggregates, ip);
+			this.initializeCache(this.powerwallSOE, ip);
+
+			if( this.powerwallAggregates[ip].lastUpdate + payload.updateInterval < Date.now() ) {
+				self.updatePowerwall(ip);
 			}
-			ip = payload.twcManagerIP
-			if( ip && twcManagerEndpoints[ip] ) {
-				if( twcManagerEndpoints[ip].lastUpdate + twcManagerEndpoints[ip].updateInterval < Date.now() ) {
-					self.updateTWCManager(ip, twcManagerEndpoints[ip].port)
+			else {
+				if (this.powerwallAggregates[ip].lastResult) {
+					this.sendSocketNotification("MMM-Powerwall-Aggregates", {
+						ip: ip,
+						aggregates: this.powerwallAggregates[ip].lastResult
+					});
+				}
+				if (this.powerwallSOE[ip].lastResult) {
+					this.sendSocketNotification("MMM-Powerwall-SOE", {
+						ip: ip,
+						soe: this.powerwallSOE[ip].lastResult
+					});
+				}	
+			}
+
+			ip = payload.twcManagerIP;
+			let port = payload.twcManagerPort;
+			if( ip ) {
+				this.initializeCache(this.twcStatus, ip);
+				this.initializeCache(this.twcVINs, ip);
+				if( this.twcStatus[ip].lastUpdate + (payload.updateInterval || 0) < Date.now() ) {
+					self.updateTWCManager(ip, port);
 				}
 				else {
 					this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
 						ip: ip,
-						status: twcManagerEndpoints[ip].status
+						status: this.twcStatus.lastResult,
+						vins: this.twcVINs.lastResult
 					});
 				}
 			}
@@ -176,15 +150,7 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			if( !this.energy[username] ) {
-				this.energy[username] = {}
-			}
-			if( !this.energy[username][siteID] ) {
-				this.energy[username][siteID] = {
-					lastUpdate: 0,
-					lastResult: null
-				};
-			}
+			this.initializeCache(this.energy, username, siteID);
 
 			if( this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetEnergy(username, siteID);
@@ -201,15 +167,7 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			if( !this.selfConsumption[username] ) {
-				this.selfConsumption[username] = {}
-			}
-			if( !this.selfConsumption[username][siteID] ) {
-				this.selfConsumption[username][siteID] = {
-					lastUpdate: 0,
-					lastResult: null
-				};
-			}
+			this.initializeCache(this.selfConsumption, username, siteID);
 
 			if( this.selfConsumption[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetSelfConsumption(username, siteID);
@@ -221,22 +179,55 @@ module.exports = NodeHelper.create({
 					selfConsumption: this.selfConsumption[username][siteID].lastResult
 				});
 			}
+		}
+		else if (notification === "MMM-Powerwall-UpdateVehicleState") {
+			let username = payload.username;
+			let vehicleID = payload.ID;
+
+			this.initializeCache(this.driveState, username, vehicleID);
+			this.initializeCache(this.chargeState, username, vehicleID);
 
 		}
 	},
 
+	initializeCache: function(node, ...rest) {
+		let lastKey = rest.pop();
+		for( let key of rest) {
+			if( !node[key] ) {
+				node[key] = {};
+			}
+			node = node[key];
+		}
+		if( !node[lastKey] ) {
+			node[lastKey] = {
+				lastUpdate: 0,
+				lastResult: null
+			};
+		}
+	},
+	
+	updateCache: function(data, node, ...keys) {
+		let lastKey = keys.pop();
+		for( let key of keys) {
+			node = node[key];
+		}
+		node[lastKey] = {
+			lastUpdate: Date.now(),
+			lastResult: data
+		};
+	},
+
 	updatePowerwall: async function(powerwallIP, powerwallPassword) {
-		this.powerwallEndpoints[powerwallIP].lastUpdate = Date.now();
 		let url = "https://" + powerwallIP + "/api/meters/aggregates";
 		let result = await fetch(url, {agent: unauthenticated_agent});
-
+		
 		if( !result.ok ) {
 			this.log("Powerwall fetch failed")
 			return
 		}
-
+		
 		var aggregates = await result.json();
-		this.powerwallEndpoints[powerwallIP].aggregates = aggregates;
+		this.updateCache(aggregates, this.powerwallAggregates, powerwallIP);
 		// Send notification
 		this.sendSocketNotification("MMM-Powerwall-Aggregates", {
 			ip: powerwallIP,
@@ -252,7 +243,7 @@ module.exports = NodeHelper.create({
 		}
 
 		var response = await result.json();
-		this.powerwallEndpoints[powerwallIP].soe = response.percentage;
+		this.updateCache(response.percentage, this.powerwallSOE, powerwallIP);
 		this.sendSocketNotification("MMM-Powerwall-SOE", {
 			ip: powerwallIP,
 			soe: response.percentage
@@ -293,7 +284,11 @@ module.exports = NodeHelper.create({
 				}
 			}
 
-			this.twcManagerEndpoints[twcManagerIP].status = status;
+			// Cache results
+			let now = Date.now();
+			this.updateCache(status, this.twcStatus, twcManagerIP);
+			this.updateCache(vins, this.twcVINs, twcManagerIP);
+
 			// Send notification
 			this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
 				ip: twcManagerIP,
@@ -459,8 +454,7 @@ module.exports = NodeHelper.create({
 				if( !cache_node[username][deviceID] ) {
 					cache_node[username][deviceID] = {};
 				}
-				cache_node[username][deviceID].lastUpdate = Date.now();
-				cache_node[username][deviceID].lastResult = response;
+				this.updateCache(response, cache_node, username, deviceID);
 			}
 
 			return response;
@@ -540,29 +534,46 @@ module.exports = NodeHelper.create({
 		});
 	},
 
-	doTeslaApiGetVehicleState: async function(username, vehicleID, forceWake) {
-		// Slightly more complicated; involves calling multiple APIs
+	doTeslaApiWakeVehicle: async function(username, vehicleID) {
 		let timeout = 5000;
-		let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
+		let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/wake_up";
+		let state = "initial";
+
 		do {
-			let response = await this.doTeslaApi(url, username);
-	
-			if( response.state !== "online" && forceWake ) {
+			let response = this.doTeslaApiCommand(url, username);
+			state = response.state;
+			if( response.state !== "online") {
 				if( timeout > 600000 ) {
 					break;
 				}
 				await this.delay(timeout);
 				timeout *= 2;
 			}
-		} while (state !== "online" && forceWake );
+		} while( state != "online" );
+
+		return state === "online";
+	},
+
+	doTeslaApiGetVehicleState: async function(username, vehicleID, useCached) {
+		// Slightly more complicated; involves calling multiple APIs
+		let state = "cached";
+		const forceWake = !(this.driveState[username][vehicleID] && 
+			this.chargeState[username][vehicleID]);
+		if( !useCached || forceWake ) {
+			let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
+			let response = await this.doTeslaApi(url, username);
+			state = response.state;
+			if (state !== "online" && forceWake &&
+				await doTeslaApiWakeVehicle(username, vehicleID)) {
+					state = "online";
+			}
+		}
 
 		var drive_state, charge_state;
 		if( state !== "online" ) {
 			// Car is asleep and either can't wake or we aren't asking
-			drive_state = 
-				(this.driveState[username][vehicleID] || {}).lastResult;
-			charge_state = 
-				(this.chargeState[username][vehicleID] || {}).lastResult;
+			drive_state = this.driveState[username][vehicleID].lastResult;
+			charge_state = this.chargeState[username][vehicleID].lastResult;
 		}
 		else {
 			// Get vehicle state

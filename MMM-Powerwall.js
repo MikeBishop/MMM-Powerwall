@@ -31,7 +31,6 @@ Module.register("MMM-Powerwall", {
 		localUpdateInterval: 10000,
 		cloudUpdateInterval: 300000,
 		powerwallIP: null,
-		powerwallPassword: null,
 		siteID: null,
 		twcManagerIP: null,
 		twcManagerPort: 8080,
@@ -68,27 +67,14 @@ Module.register("MMM-Powerwall", {
 		//Flag for check if module is loaded
 		this.loaded = false;
 
-		//Send settings to helper
-		self.sendSocketNotification("MMM-Powerwall-Configure-Powerwall",
-		  {
-			updateInterval: self.config.localUpdateInterval,
-			powerwallIP: self.config.powerwallIP,
-			powerwallPassword: self.config.powerwallPassword
-		  });
-
 		if (self.config.twcManagerIP) {
-			self.sendSocketNotification("MMM-Powerwall-Configure-TWCManager",
-			{
-				updateInterval: self.config.localUpdateInterval,
-				twcManagerIP: self.config.twcManagerIP,
-				port: self.config.twcManagerPort
-			});
 			self.twcEnabled = true;
 		}
 		else {
 			self.twcEnabled = false;
 		}
-
+		
+		//Send settings to helper
 		if (self.config.teslaAPIUsername && self.config.teslaAPIPassword ) {
 			self.sendSocketNotification("MMM-Powerwall-Configure-TeslaAPI",
 			{
@@ -106,7 +92,9 @@ Module.register("MMM-Powerwall", {
 		var updateLocal = function() {
 			self.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
 				powerwallIP: self.config.powerwallIP,
-				twcManagerIP: self.config.twcManagerIP
+				twcManagerIP: self.config.twcManagerIP,
+				twcManagerPort: self.config.twcManagerPort,
+				updateInterval: self.config.localUpdateInterval
 			});
 		};
 
