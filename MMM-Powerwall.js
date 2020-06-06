@@ -59,6 +59,8 @@ Module.register("MMM-Powerwall", {
 	selfConsumptionYesterday: null,
 	soe: 0,
 	vehicles: null,
+	chargingVehicles: [],
+	vehicleInFocus: null,
 
 	start: function() {
 		var self = this;
@@ -185,7 +187,7 @@ Module.register("MMM-Powerwall", {
 					setInterval(() => self.updateSelfConsumption(), this.config.cloudUpdateInterval);
 				}
 				this.vehicles = payload.vehicles;
-				this.focusOnVehicle(this.vehicles, 0);
+				this.focusOnVehicles(this.vehicles, 0);
 			}
 		}
 		else if(notification === "MMM-Powerwall-Aggregates") {
@@ -255,7 +257,7 @@ Module.register("MMM-Powerwall", {
 					this.updateData();
 				}
 
-				if( payload.status.carsCharging > 0 ) {
+				if( payload.status.carsCharging > 0 && this.vehicles ) {
 					// Charging at least one car
 					// How to pick which to show?
 					let vinsWeKnow = (payload.vins || []).filter(
@@ -285,11 +287,11 @@ Module.register("MMM-Powerwall", {
 								knownVehicle.charge.charging_state === "Charging"
 						);
 					}
-					this.focusOnVehicle(vehicles, payload.status.carsCharging)
+					this.focusOnVehicles(vehicles, payload.status.carsCharging)
 				}
 				else {
 					// No cars are charging.
-					this.focusOnVehicle(this.vehicles, 0);
+					this.focusOnVehicles(this.vehicles, 0);
 				}
 			}
 		}
@@ -764,10 +766,30 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
-	focusOnVehicle: function(vehicles, numCharging) {
+	focusOnVehicles: function(vehicles, numCharging) {
 		// Makes the "car status" tile focus on particular vehicles
 		// "vehicle" is a set, but might be empty
 		// "numCharging" indicates how many cars are charging
+
+		if( !vehicles ) {
+			vehicles = [];
+		}
+
+		// For the purposes of this function, it's sufficient to check length and equality of values
+		let areVehiclesSame =
+			vehicles.length === this.chargingVehicles.length &&
+			vehicles.every( (newVehicle, index) => newVehicle === this.chargingVehicles[index] );
+		
+		let indexToFocus = 0;
+		let focusSameVehicle = false;
+		if( areVehiclesSame ) {
+			// Nothing has changed, so advance to the next car
+			indexToFocus = (this.chargingVehicles.indexOf(this.vehicleInFocus) + 1) % this.chargingVehicles.length;
+			focusSameVehicle = this.chargingVehicles[indexToFocus] === this.vehicleInFocus;
+		}
+		else {
+			this.chargingVehicles = vehicles;
+		}
 		
 		if( numCharging > 0 ) {
 			// Cars are charging

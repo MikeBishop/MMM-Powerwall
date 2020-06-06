@@ -8,7 +8,7 @@
             <div class="MMM-Powerwall flip-front">
                 <div class="MMM-Powerwall grid-left">
                     <div class="MMM-Powerwall col1">
-                        <p class="small bright">Solar is currently producing</p>
+                        <p class="small bright">Solar is producing</p>
                         <p id="{{id}}-SolarProduction" class="big solar text">
                             {%- if flows.sources.solar.total > 950 -%}
                                 {{ flows.sources.solar.total // 100 / 10 }} kW
@@ -43,7 +43,7 @@
                 </canvas>
                 </div>
                 <div class="MMM-Powerwall col2">
-                <p class="small bright">House is currently consuming</p>
+                <p class="small bright">House is consuming</p>
                 <p id="{{id}}-HouseConsumption" class="big house text">
                     {%- if flows.sinks.house.total > 950 -%}
                         {{ flows.sinks.house.total // 100 / 10 }} kW
@@ -94,7 +94,7 @@
                     </div>
                 </div>
                 <div class="MMM-Powerwall col2">
-                    <p class="small bright"><span id="{{id}}-CarIs">Car is</span> currently <span id="{{id}}-CarStatus">charging at</span></p>
+                    <p class="small bright"><span id="{{id}}-CarStatus">Car is charging at</span></p>
                     <p id="{{id}}-CarConsumption" class="big car text">
                         {%- if flows.sinks.car.total > 950 -%}
                             {{ flows.sinks.car.total // 100 / 10 }} kW

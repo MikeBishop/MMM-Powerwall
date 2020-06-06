@@ -284,7 +284,8 @@ module.exports = NodeHelper.create({
 
 				if ( result.ok ) {
 					let slaves = await result.json();
-					for (let slave of slaves) {
+					for (let slaveID in slaves) {
+						let slave = slaves[slaveID];
 						if( slave.currentVIN ) {
 							vins.push(slave.currentVIN);
 						}
@@ -486,13 +487,18 @@ module.exports = NodeHelper.create({
 		let response = await this.doTeslaApi(url, username);
 		
 		// response is an array of vehicle objects.  Don't need all the properties.
-		return response.map(
-			function(vehicle) {
-				return {
-				id: vehicle.id,
-				vin: vehicle.vin,
-				display_name: vehicle.display_name
-			}});
+		if( Array.isArray(response) ) {
+			return response.map(
+				function(vehicle) {
+					return {
+						id: vehicle.id,
+						vin: vehicle.vin,
+						display_name: vehicle.display_name
+					}});
+		}
+		else {
+			return [];
+		}
 	},
 
 	doTeslaApiCommand: async function(url, username, body) {
