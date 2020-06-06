@@ -386,7 +386,7 @@ Module.register("MMM-Powerwall", {
 				setTimeout(function (){
 					targetNode.innerText = text;
 					targetNode.style.opacity = 1;
-				}, 100)
+				}, 250)
 			}
 			else {
 				targetNode.innerText = text;

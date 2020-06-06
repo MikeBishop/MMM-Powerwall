@@ -51,7 +51,7 @@
 }
 
 .MMM-Powerwall .text {
-    transition: all 100ms;
+    transition: all 250ms;
 }
 
 .cube__face {
