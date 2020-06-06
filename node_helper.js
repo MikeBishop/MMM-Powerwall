@@ -140,8 +140,8 @@ module.exports = NodeHelper.create({
 				else {
 					this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
 						ip: ip,
-						status: this.twcStatus.lastResult,
-						vins: this.twcVINs.lastResult
+						status: this.twcStatus[ip].lastResult,
+						vins: this.twcVINs[ip].lastResult
 					});
 				}
 			}
@@ -182,11 +182,14 @@ module.exports = NodeHelper.create({
 		}
 		else if (notification === "MMM-Powerwall-UpdateVehicleState") {
 			let username = payload.username;
-			let vehicleID = payload.ID;
+			let vehicleID = payload.vehicleID;
 
 			this.initializeCache(this.driveState, username, vehicleID);
 			this.initializeCache(this.chargeState, username, vehicleID);
 
+			let useCache = !(this.driveState[username][vehicleID].lastUpdate + payload.updateInterval
+				<= Date.now() );
+			this.doTeslaApiGetVehicleState(username, vehicleID, useCache);
 		}
 	},
 
@@ -250,10 +253,8 @@ module.exports = NodeHelper.create({
 		});
 	},
 
-	updateTWCManager: async function(twcManagerIP) {
-		this.twcManagerEndpoints[twcManagerIP].lastUpdate = Date.now();
-		let port = this.twcManagerEndpoints[twcManagerIP].port;
-		let url = "http://" + twcManagerIP + ":" + port + "/api/getStatus";
+	updateTWCManager: async function(twcManagerIP, twcManagerPort) {
+		let url = "http://" + twcManagerIP + ":" + twcManagerPort + "/api/getStatus";
 		let success = true;
 		try {
 			var result = await fetch(url);
@@ -485,7 +486,7 @@ module.exports = NodeHelper.create({
 			return response.map(
 				function(vehicle) {
 					return {
-						id: vehicle.id,
+						id: vehicle.id_s,
 						vin: vehicle.vin,
 						display_name: vehicle.display_name
 					}});
@@ -557,8 +558,8 @@ module.exports = NodeHelper.create({
 	doTeslaApiGetVehicleState: async function(username, vehicleID, useCached) {
 		// Slightly more complicated; involves calling multiple APIs
 		let state = "cached";
-		const forceWake = !(this.driveState[username][vehicleID] && 
-			this.chargeState[username][vehicleID]);
+		const forceWake = !(this.driveState[username][vehicleID].lastResult && 
+			this.chargeState[username][vehicleID].lastResult);
 		if( !useCached || forceWake ) {
 			let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
 			let response = await this.doTeslaApi(url, username);
@@ -588,8 +589,11 @@ module.exports = NodeHelper.create({
 			username: username,
 			ID: vehicleID,
 			state: state,
-			speed: driveState.speed,
-			location: [drive_state.latitude, drive_state.longitude],
+			drive: {
+				speed: driveState.speed,
+				gear: driveState.shift_state,
+				location: [driveState.latitude, driveState.longitude]
+			},
 			charge: {
 				state: chargeState.charging_state,
 				soc: chargeState.battery_level,

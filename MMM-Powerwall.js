@@ -175,6 +175,17 @@ Module.register("MMM-Powerwall", {
 					setInterval(() => self.updateSelfConsumption(), this.config.cloudUpdateInterval);
 				}
 				this.vehicles = payload.vehicles;
+				let updateVehicles = function() {
+					for( let vehicle of self.vehicles) {
+						self.sendSocketNotification("MMM-Powerwall-UpdateVehicleState", {
+							username: self.config.teslaAPIUsername,
+							vehicleID: vehicle.id,
+							updateInterval: self.config.cloudUpdateInterval
+						});
+					}
+				};
+				updateVehicles();
+				setInterval(updateVehicles, self.config.cloudUpdateInterval);
 				this.focusOnVehicles(this.vehicles, 0);
 			}
 		}
@@ -215,7 +226,7 @@ Module.register("MMM-Powerwall", {
 
 				if (needUpdate) {
 					// If we didn't have data before, we need to redraw
-					this.updateDom();
+					this.buildGraphs;
 				}
 				else {
 					// We're updating the data in-place.
@@ -453,7 +464,8 @@ Module.register("MMM-Powerwall", {
 				targetId,
 				Math.abs(this.teslaAggregates.battery.instant_power),
 				"W",
-				this.teslaAggregates.battery.instant_power > 0 ? "Supplying " : "Charging at "
+				this.teslaAggregates.battery.instant_power > 0 ? "Supplying " : "Charging at ",
+				false
 			);
 		}
 		else {
@@ -571,102 +583,106 @@ Module.register("MMM-Powerwall", {
 				}
 			}
 		});
-
+		
 		for( const oldChart in this.charts ) {
 			this.charts[oldChart].destroy();
 		}
 		this.charts = {};
+		
+		if( this.flows ) {
 
-		var myCanvas = document.getElementById(this.identifier + "-SolarDestinations");
+			
+			var myCanvas = document.getElementById(this.identifier + "-SolarDestinations");
 		if( myCanvas ) {
 			let distribution = this.flows.sources.solar.distribution;
-
+			
 			// Build the chart on the canvas
 			var solarProductionPie = new Chart(myCanvas, {
 				type: "pie",
 				data: {
 					datasets: [
-					{
-						data: DISPLAY_SINKS.map( (entry) => distribution[entry.key] ),
-						backgroundColor: DISPLAY_SINKS.map( (entry) => entry.color ),
-						weight: 2,
-						labels: DISPLAY_SINKS.map( (entry) => entry.displayAs )
-					},
-					{
-						data: [1],
-						backgroundColor: SOLAR.color,
-						weight: 1,
-						showLine: false,
-						datalabels: {
-							labels: {
-								title: null,
-								value: null
+						{
+							data: DISPLAY_SINKS.map( (entry) => distribution[entry.key] ),
+							backgroundColor: DISPLAY_SINKS.map( (entry) => entry.color ),
+							weight: 2,
+							labels: DISPLAY_SINKS.map( (entry) => entry.displayAs )
+						},
+						{
+							data: [1],
+							backgroundColor: SOLAR.color,
+							weight: 1,
+							showLine: false,
+							datalabels: {
+								labels: {
+									title: null,
+									value: null
+								}
 							}
+						}]
+					}
+				});
+				this.charts.solarProduction = solarProductionPie;
+			}
+			
+			myCanvas = document.getElementById(this.identifier + "-HouseSources");
+			if( myCanvas ) {
+				let distribution = this.flows.sinks.house.sources;
+				
+				// Build the chart on the canvas
+				var houseConsumptionPie = new Chart(myCanvas, {
+					type: "pie",
+					data: {
+						datasets: [
+							{
+								data: DISPLAY_SOURCES.map( (entry) => distribution[entry.key] ),
+								backgroundColor: DISPLAY_SOURCES.map( (entry) => entry.color ),
+								weight: 2,
+								labels: DISPLAY_SOURCES.map( (entry) => entry.displayAs )
+							},
+							{
+								data: [1],
+								backgroundColor: HOUSE.color,
+								weight: 1,
+								showLine: false,
+								datalabels: {
+									labels: {
+										title: null,
+										value: null
+									}
+								}
+							}]
 						}
-					}]
+					});
+					this.charts.houseConsumption = houseConsumptionPie;
 				}
-			});
-			this.charts.solarProduction = solarProductionPie;
-		}
-
-		myCanvas = document.getElementById(this.identifier + "-HouseSources");
-		if( myCanvas ) {
-			let distribution = this.flows.sinks.house.sources;
-
-			// Build the chart on the canvas
-			var houseConsumptionPie = new Chart(myCanvas, {
-				type: "pie",
-				data: {
-					datasets: [
-					{
-						data: DISPLAY_SOURCES.map( (entry) => distribution[entry.key] ),
-						backgroundColor: DISPLAY_SOURCES.map( (entry) => entry.color ),
-						weight: 2,
-						labels: DISPLAY_SOURCES.map( (entry) => entry.displayAs )
-					},
-					{
-						data: [1],
-						backgroundColor: HOUSE.color,
-						weight: 1,
-						showLine: false,
-						datalabels: {
-							labels: {
-								title: null,
-								value: null
-							}
+				
+				myCanvas = document.getElementById(this.identifier + "-SelfPoweredDetails");
+				if( myCanvas ) {
+					let scSources = [SOLAR, POWERWALL, GRID];
+					var selfConsumptionDoughnut = new Chart(myCanvas, {
+						type: "doughnut",
+						data: {
+							datasets: [{
+								data: this.selfConsumptionToday,
+								backgroundColor: scSources.map( entry => entry.color),
+								labels: scSources.map( entry => entry.displayAs ),
+								datalabels: {
+									formatter: function(value, context) {
+										return [
+											context.dataset.labels[context.dataIndex],
+											Math.round(value) + "%"
+										];
+									}
+								}
+							}]
+						},
+						options: {
+							cutoutPercentage: 65
 						}
-					}]
+					});
+					this.charts.selfConsumption = selfConsumptionDoughnut;
 				}
-			});
-			this.charts.houseConsumption = houseConsumptionPie;
-		}
-
-		myCanvas = document.getElementById(this.identifier + "-SelfPoweredDetails");
-		if( myCanvas ) {
-			let scSources = [SOLAR, POWERWALL, GRID];
-			var selfConsumptionDoughnut = new Chart(myCanvas, {
-				type: "doughnut",
-				data: {
-					datasets: [{
-						data: this.selfConsumptionToday,
-						backgroundColor: scSources.map( entry => entry.color),
-						labels: scSources.map( entry => entry.displayAs ),
-						datalabels: {
-							formatter: function(value, context) {
-								return [
-									context.dataset.labels[context.dataIndex],
-									Math.round(value) + "%"
-								];
-							}
-						}
-					}]
-				},
-				options: {
-					cutoutPercentage: 65
-				}
-			});
-			this.charts.selfConsumption = selfConsumptionDoughnut;
-		}
+			}
 	},
 	
 	attributeFlows: function(teslaAggregates, twcConsumption) {
