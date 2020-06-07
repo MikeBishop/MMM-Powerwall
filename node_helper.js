@@ -267,7 +267,7 @@ module.exports = NodeHelper.create({
 			var status = await result.json();
 			var vins = [];
 			if( status.carsCharging > 0 ) {
-				url = "http://" + twcManagerIP + ":" + port + "/api/getSlaveTWCs";
+				url = "http://" + twcManagerIP + ":" + twcManagerPort + "/api/getSlaveTWCs";
 
 				try {
 					result = await fetch(url);
