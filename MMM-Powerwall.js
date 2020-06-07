@@ -1,5 +1,3 @@
-/* global Module */
-
 /* Magic Mirror
  * Module: MMM-Powerwall
  *
@@ -160,7 +158,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	// socketNotificationReceived from helper
-	socketNotificationReceived: function (notification, payload) {
+	socketNotificationReceived: async function (notification, payload) {
 		var self = this;
 		Log.log("Received " + notification + ": " + JSON.stringify(payload));
 		if(notification === "MMM-Powerwall-TeslaAPIConfigured") {
@@ -226,12 +224,11 @@ Module.register("MMM-Powerwall", {
 
 				if (needUpdate) {
 					// If we didn't have data before, we need to redraw
-					this.buildGraphs;
+					this.buildGraphs();
 				}
-				else {
-					// We're updating the data in-place.
-					this.updateData();
-				}
+
+				// We're updating the data in-place.
+				this.updateData();
 			}
 		}
 		else if (notification === "MMM-Powerwall-SOE") {
@@ -360,6 +357,103 @@ Module.register("MMM-Powerwall", {
 						100 - today.solar - today.battery
 					];
 			}
+		}
+		else if( notification === "MMM-Powerwall-VehicleState" ) {
+			// username: username,
+			// ID: vehicleID,
+			// state: state,
+			// drive: {
+			// 	speed: driveState.speed,
+			// 	gear: driveState.shift_state,
+			// 	location: [driveState.latitude, driveState.longitude]
+			// },
+			// charge: {
+			// 	state: chargeState.charging_state,
+			// 	soc: chargeState.battery_level,
+			// 	limit: chargeState.charge_limit_soc,
+			// 	power: chargeState.charger_power,
+			// 	time: chargeState.time_to_full_charge
+			// }
+
+			if( payload.username === this.config.teslaAPIUsername ) {
+				let statusFor = this.vehicles.find(vehicle => vehicle.id == payload.ID);
+				if( statusFor ) {
+					statusFor.drive = payload.drive;
+					statusFor.charge = payload.charge;
+
+					if( statusFor === this.vehicleInFocus ) {
+						let statusText = statusFor.display_name + " is ";
+						let number = 0;
+						let unit = "W";
+						switch (statusFor.drive.gear) {
+							case "D":
+							case "R":
+								statusText += "driving at";
+								
+								// TODO:  This really should handle imperial/metric
+								number =  statusFor.drive.speed;
+								unit = "mph";
+								break;
+
+							default:
+								if( statusFor.charge.power > 0 ) {
+									statusText += "charging at";
+									number = statusFor.charge.power;
+								}
+								else {
+									statusText += "parked";
+									number = null;
+									unit = "";
+									
+									if( this.isHome(statusFor.drive.location) ) {
+										statusText += " at home";
+									}
+									else {
+										let url = 
+											"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
+											"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
+											statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
+										try {
+											let result = await fetch(url);
+											if( result.ok ) {
+												let revGeo = await result.json();
+												statusText += " in " + revGeo.address.Match_addr;
+											}
+										}
+										catch {}
+									}
+								}
+								break;
+						}
+						this.updateText(this.identifier + "-CarStatus", statusText);
+
+						let timeText = "";
+						if( statusFor.charge.time > 60 ) {
+							let hours = Math.trunc(statusFor.charge.time / 60);
+							timeText = hours > 2 ? (hours + " hours ") : "1 hour ";
+						}
+						timeText += Math.trunc(statusFor.charge.time % 60);
+						this.updateText(this.identifier + "-CarCompletion", timeText);
+
+						this.updateNode(
+							this.identifier + "-car-meter-text",
+							statusFor.charge.soc,
+							"%"
+						);
+						let meterNode = document.getElementById(this.identifier + "-car-meter");
+						if( meterNode ) {
+							meterNode.style.width = statusFor.charge.soc + "%";
+						}
+					}
+				}
+			}
+		}
+	},
+
+	isHome: function(location) {
+		if( Array.isArray(this.config.home) && Array.isArray(location) ) {
+			return Math.abs(this.config[0] - location[0]) < 0.0289 &&
+				Math.abs(this.config[1] - location[1]) < 0.0289;
 		}
 	},
 	
@@ -810,6 +904,11 @@ Module.register("MMM-Powerwall", {
 		}
 		else {
 			// Not currently charging; show vehicle status
+		}
+
+		// TEMP:  Just to test display
+		if( this.vehicles ) {
+			this.vehicleInFocus = this.vehicles[0];
 		}
 	}
 });

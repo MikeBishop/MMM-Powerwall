@@ -541,7 +541,7 @@ module.exports = NodeHelper.create({
 		let state = "initial";
 
 		do {
-			let response = this.doTeslaApiCommand(url, username);
+			let response = await this.doTeslaApiCommand(url, username);
 			state = response.state;
 			if( response.state !== "online") {
 				if( timeout > 600000 ) {
@@ -565,7 +565,7 @@ module.exports = NodeHelper.create({
 			let response = await this.doTeslaApi(url, username);
 			state = response.state;
 			if (state !== "online" && forceWake &&
-				await doTeslaApiWakeVehicle(username, vehicleID)) {
+				await this.doTeslaApiWakeVehicle(username, vehicleID)) {
 					state = "online";
 			}
 		}
