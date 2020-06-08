@@ -431,6 +431,7 @@ Module.register("MMM-Powerwall", {
 		}
 		else {
 			// Cars not charging; show current instead
+			statusText += " is";
 			switch (statusFor.drive.gear) {
 				case "D":
 				case "R":
