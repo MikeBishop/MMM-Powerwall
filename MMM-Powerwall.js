@@ -242,7 +242,9 @@ Module.register("MMM-Powerwall", {
 				this.updateNode(
 					this.identifier + "-PowerwallSOE",
 					payload.soe,
-					"%");
+					"%",
+					"",
+					false);
 				let meterNode = document.getElementById(this.identifier + "-battery-meter");
 				if (meterNode) {
 					meterNode.style = "height: " + payload.soe + "%;";
@@ -636,7 +638,10 @@ Module.register("MMM-Powerwall", {
 		 * Self-Consumption *
 		 ********************/
 		if( this.selfConsumptionToday ) {
-			this.updateNode(this.identifier + "-SelfPoweredTotal", this.selfConsumptionToday[0] + this.selfConsumptionToday[1], "%");
+			this.updateNode(
+				this.identifier + "-SelfPoweredTotal",
+				Math.round(this.selfConsumptionToday[0]) + Math.round(this.selfConsumptionToday[1]),
+				"%");
 			let scChart = this.charts.selfConsumption
 			if( scChart ) {
 				scChart.data.datasets[0].data = this.selfConsumptionToday;
