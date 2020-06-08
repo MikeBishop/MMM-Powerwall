@@ -26,8 +26,7 @@ module.exports = NodeHelper.create({
 		this.selfConsumption = {};
 		this.siteIDs = {};
 		this.vehicles = {};
-		this.driveState = {};
-		this.chargeState = {};
+		this.vehicleData = {};
 		this.filenames = [];
 		this.lastUpdate = 0;
 	},
@@ -180,16 +179,15 @@ module.exports = NodeHelper.create({
 				});
 			}
 		}
-		else if (notification === "MMM-Powerwall-UpdateVehicleState") {
+		else if (notification === "MMM-Powerwall-UpdateVehicleData") {
 			let username = payload.username;
 			let vehicleID = payload.vehicleID;
 
-			this.initializeCache(this.driveState, username, vehicleID);
-			this.initializeCache(this.chargeState, username, vehicleID);
+			this.initializeCache(this.vehicleData, username, vehicleID);
 
-			let useCache = !(this.driveState[username][vehicleID].lastUpdate + payload.updateInterval
+			let useCache = !(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
 				<= Date.now() );
-			this.doTeslaApiGetVehicleState(username, vehicleID, useCache);
+			this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
 		}
 	},
 
@@ -555,11 +553,10 @@ module.exports = NodeHelper.create({
 		return state === "online";
 	},
 
-	doTeslaApiGetVehicleState: async function(username, vehicleID, useCached) {
+	doTeslaApiGetVehicleData: async function(username, vehicleID, useCached) {
 		// Slightly more complicated; involves calling multiple APIs
 		let state = "cached";
-		const forceWake = !(this.driveState[username][vehicleID].lastResult && 
-			this.chargeState[username][vehicleID].lastResult);
+		const forceWake = !(this.vehicleData[username][vehicleID].lastResult);
 		if( !useCached || forceWake ) {
 			let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
 			let response = await this.doTeslaApi(url, username);
@@ -570,36 +567,34 @@ module.exports = NodeHelper.create({
 			}
 		}
 
-		var drive_state, charge_state;
+		var data;
 		if( state !== "online" ) {
 			// Car is asleep and either can't wake or we aren't asking
-			drive_state = this.driveState[username][vehicleID].lastResult;
-			charge_state = this.chargeState[username][vehicleID].lastResult;
+			data = this.vehicleData[username][vehicleID].lastResult;
 		}
 		else {
 			// Get vehicle state
-			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/data_request/drive_state";
-			driveState = await this.doTeslaApi(url, username, "ID", vehicleID, this.driveState);
-			
-			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/data_request/charge_state";
-			chargeState = await this.doTeslaApi(url, username, "ID", vehicleID, this.chargeState);
+			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/vehicle_data";
+			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
 
-		this.sendSocketNotification("MMM-Powerwall-VehicleState", {
+		this.sendSocketNotification("MMM-Powerwall-VehicleData", {
 			username: username,
 			ID: vehicleID,
 			state: state,
+			sentry: data.vehicle_state.sentry_mode,
 			drive: {
-				speed: driveState.speed,
-				gear: driveState.shift_state,
-				location: [driveState.latitude, driveState.longitude]
+				speed: data.drive_state.speed,
+				units: data.gui_settings.gui_distance_units,
+				gear: data.drive_state.shift_state,
+				location: [data.drive_state.latitude, data.drive_state.longitude]
 			},
 			charge: {
-				state: chargeState.charging_state,
-				soc: chargeState.battery_level,
-				limit: chargeState.charge_limit_soc,
-				power: chargeState.charger_power,
-				time: chargeState.time_to_full_charge
+				state: data.charge_state.charging_state,
+				soc: data.charge_state.battery_level,
+				limit: data.charge_state.charge_limit_soc,
+				power: data.charge_state.charger_power,
+				time: data.charge_state.time_to_full_charge
 			}
 		});
 	}

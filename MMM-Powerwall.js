@@ -41,7 +41,7 @@ Module.register("MMM-Powerwall", {
 	teslaAggregates: null,
 	flows: null,
 	historySeries: null,
-	chargingState: null,
+	numCharging: 0,
 	yesterdaySolar: null,
 	dayStart: {
 		grid: null,
@@ -117,7 +117,7 @@ Module.register("MMM-Powerwall", {
 			sunrise: this.sunrise,
 			soe: this.soe,
 			historySeries: this.historySeries,
-			chargingState: this.chargingState,
+			numCharging: this.numCharging,
 		};
 
 		Log.log("Returning " + JSON.stringify(result));
@@ -174,8 +174,13 @@ Module.register("MMM-Powerwall", {
 				}
 				this.vehicles = payload.vehicles;
 				let updateVehicles = function() {
+					let now = Date.now();
 					for( let vehicle of self.vehicles) {
-						self.sendSocketNotification("MMM-Powerwall-UpdateVehicleState", {
+						if( vehicle.deferUntil && now < vehicle.deferUntil) {
+							continue;
+						}
+
+						self.sendSocketNotification("MMM-Powerwall-UpdateVehicleData", {
 							username: self.config.teslaAPIUsername,
 							vehicleID: vehicle.id,
 							updateInterval: self.config.cloudUpdateInterval
@@ -252,6 +257,7 @@ Module.register("MMM-Powerwall", {
 					this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
 					this.updateData();
 				}
+				this.numCharging = payload.status.carsCharging;
 
 				if( payload.status.carsCharging > 0 && this.vehicles ) {
 					// Charging at least one car
@@ -358,103 +364,147 @@ Module.register("MMM-Powerwall", {
 					];
 			}
 		}
-		else if( notification === "MMM-Powerwall-VehicleState" ) {
+		else if( notification === "MMM-Powerwall-VehicleData" ) {
 			// username: username,
 			// ID: vehicleID,
 			// state: state,
+			// sentry: data.vehicle_state.sentry_mode,
 			// drive: {
-			// 	speed: driveState.speed,
-			// 	gear: driveState.shift_state,
-			// 	location: [driveState.latitude, driveState.longitude]
+			// 	speed: data.drive_state.speed,
+			// 	units: data.gui_settings.gui_distance_units,
+			// 	gear: data.drive_state.shift_state,
+			// 	location: [data.drive_state.latitude, data.drive_state.longitude]
 			// },
 			// charge: {
-			// 	state: chargeState.charging_state,
-			// 	soc: chargeState.battery_level,
-			// 	limit: chargeState.charge_limit_soc,
-			// 	power: chargeState.charger_power,
-			// 	time: chargeState.time_to_full_charge
+			// 	state: data.charge_state.charging_state,
+			// 	soc: data.charge_state.battery_level,
+			// 	limit: data.charge_state.charge_limit_soc,
+			// 	power: data.charge_state.charger_power,
+			// 	time: data.charge_state.time_to_full_charge
 			// }
 
 			if( payload.username === this.config.teslaAPIUsername ) {
 				let statusFor = this.vehicles.find(vehicle => vehicle.id == payload.ID);
-				if( statusFor ) {
-					statusFor.drive = payload.drive;
-					statusFor.charge = payload.charge;
-
-					if( statusFor === this.vehicleInFocus ) {
-						let statusText = statusFor.display_name + " is ";
-						let number = 0;
-						let unit = "W";
-						switch (statusFor.drive.gear) {
-							case "D":
-							case "R":
-								statusText += "driving at";
-								
-								// TODO:  This really should handle imperial/metric
-								number =  statusFor.drive.speed;
-								unit = "mph";
-								break;
-
-							default:
-								if( statusFor.charge.power > 0 ) {
-									statusText += "charging at";
-									number = statusFor.charge.power;
-								}
-								else {
-									statusText += "parked";
-									number = null;
-									unit = "";
-									
-									if( this.isHome(statusFor.drive.location) ) {
-										statusText += " at home";
-									}
-									else {
-										let url = 
-											"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
-											"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
-											statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
-										try {
-											let result = await fetch(url);
-											if( result.ok ) {
-												let revGeo = await result.json();
-												statusText += " in " + revGeo.address.Match_addr;
-											}
-										}
-										catch {}
-									}
-								}
-								break;
-						}
-						this.updateText(this.identifier + "-CarStatus", statusText);
-
-						let timeText = "";
-						if( statusFor.charge.time > 60 ) {
-							let hours = Math.trunc(statusFor.charge.time / 60);
-							timeText = hours > 2 ? (hours + " hours ") : "1 hour ";
-						}
-						timeText += Math.trunc(statusFor.charge.time % 60);
-						this.updateText(this.identifier + "-CarCompletion", timeText);
-
-						this.updateNode(
-							this.identifier + "-car-meter-text",
-							statusFor.charge.soc,
-							"%"
-						);
-						let meterNode = document.getElementById(this.identifier + "-car-meter");
-						if( meterNode ) {
-							meterNode.style.width = statusFor.charge.soc + "%";
-						}
-					}
+				if( statusFor.drive ) {
+					statusFor.oldLocation = statusFor.drive.location;
 				}
+				if( payload.state === "online" && !payload.drive.gear && !payload.sentry) {
+					// If car is idle and not in Sentry mode, don't request data for half an hour;
+					// let it try to sleep.
+					statusFor.deferUntil = Date.now() + 30*60*1000;
+				}
+				statusFor.drive = payload.drive;
+				statusFor.charge = payload.charge;
+				await this.drawStatusForVehicle(statusFor, this.numCharging);
 			}
 		}
 	},
 
-	isHome: function(location) {
-		if( Array.isArray(this.config.home) && Array.isArray(location) ) {
-			return Math.abs(this.config[0] - location[0]) < 0.0289 &&
-				Math.abs(this.config[1] - location[1]) < 0.0289;
+	drawStatusForVehicle: async function(statusFor, numCharging) {
+		if( !statusFor ) {
+			return;
 		}
+
+		let statusText = statusFor.display_name;
+		let number = 0;
+		let unit = "W";
+		let addLocation = false;
+		if( numCharging > 0) {
+			// Cars are charging, including this one
+			if( numCharging > 1) {
+				statusText += " and " + (numCharging - 1) + " more are";
+			}
+			else {
+				statusText += " is";
+			}
+			statusText += " charging at";
+
+			let timeText = "";
+			if( statusFor.charge.time > 60 ) {
+				let hours = Math.trunc(statusFor.charge.time / 60);
+				timeText = hours > 2 ? (hours + " hours ") : "1 hour ";
+			}
+			timeText += Math.trunc(statusFor.charge.time % 60) + " minutes";
+			this.updateText(this.identifier + "-CarCompletion", timeText);
+			this.makeNodeVisible(this.identifier + "-CarConsumption");
+			this.makeNodeVisible(this.identifier + "-CarCompletionPara");
+		}
+		else {
+			// Cars not charging; show current instead
+			switch (statusFor.drive.gear) {
+				case "D":
+				case "R":
+					statusText += " driving";
+					addLocation = true;
+					
+					number =  statusFor.drive.speed;
+					unit = statusFor.drive.units;
+					this.makeNodeVisible(this.identifier + "-CarConsumption");
+
+					break;
+				
+				default:
+					statusText += " parked";
+					number = null;
+					unit = "";
+					
+					if( this.isHome(statusFor.drive.location) ) {
+						statusText += " at home";
+						addLocation = false;
+					}
+					else {
+						addLocation = true;
+					}
+
+					this.makeNodeInvisible(this.identifier + "-CarConsumption");
+					break;
+			}
+			
+			if( addLocation ) {
+				if (statusFor.oldLocation && this.isSameLocation(statusFor.oldLocation, statusFor.drive.location)) {
+					statusText += " in " + statusFor.locationText;
+				}
+				else {
+					let url = 
+					"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
+					"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
+					statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
+					try {
+						let result = await fetch(url);
+						if( result.ok ) {
+							let revGeo = await result.json();
+							statusText += " in " + revGeo.address.Match_addr;
+							statusFor.locationText = revGeo.address.Match_addr;
+						}
+					}
+					catch {}
+				}
+			}
+			this.makeNodeInvisible(this.identifier + "-CarCompletionPara");
+		}
+		
+		this.updateText(this.identifier + "-CarStatus", statusText);
+		let meterNode = document.getElementById(this.identifier + "-car-meter");
+		if( meterNode ) {
+			meterNode.style.width = statusFor.charge.soc + "%";
+		}
+		this.updateNode(
+			this.identifier + "-car-meter-text",
+			statusFor.charge.soc,
+			"%"
+		);
+},
+
+	isHome: function(location) {
+		return this.isSameLocation(this.config.home, location);
+	},
+
+	isSameLocation: function(l1, l2) {
+		if( Array.isArray(l1) && Array.isArray(l2) ) {
+			return Math.abs(l1[0] - l2[0]) < 0.0289 &&
+				Math.abs(l1[1] - l2[1]) < 0.0289;
+		}
+		return null;
 	},
 	
 	formatAsK: function(number, unit) {
@@ -492,6 +542,21 @@ Module.register("MMM-Powerwall", {
 			chart.data.datasets[0].data = display_array.map( (entry) => distribution[entry.key] );
 			chart.update();
 		}
+	},
+
+	makeNodeVisible: function(identifier) {
+		this.setNodeVisibility(identifier, "block");
+	},
+	
+	setNodeVisibility: function(identifier, value) {
+		let node = document.getElementById(identifier);
+		if( node ) {
+			node.style.display = value;
+		}
+	},
+
+	makeNodeInvisible: function(identifier) {
+		this.setNodeVisibility(identifier, "none");
 	},
 
 	updateData: function() {
