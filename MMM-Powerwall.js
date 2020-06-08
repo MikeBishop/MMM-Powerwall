@@ -653,7 +653,9 @@ Module.register("MMM-Powerwall", {
 		 * Car Charging *
 		 ****************/
 		let charging = this.flows.sinks.car.total;
-		this.updateNode(this.identifier + "-CarConsumption", charging, "W");
+		if( this.numCharging > 0 ) {
+			this.updateNode(this.identifier + "-CarConsumption", charging, "W");
+		}
 	},
 
 	notificationReceived: function(notification, payload, sender) {
