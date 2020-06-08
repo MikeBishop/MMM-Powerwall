@@ -17,6 +17,13 @@
     flex-wrap: wrap; 
 }
 
+.MMM-Powerwall.vflexbox {
+    display: flex;
+    flex-direction: column;
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
+}
+
 .MMM-Powerwall.flexitem {
     margin: 10px;
     height: 250px;

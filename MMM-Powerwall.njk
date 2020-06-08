@@ -93,17 +93,17 @@
                         </div>
                     </div>
                 </div>
-                <div class="MMM-Powerwall col2">
-                    <p class="small bright"><span id="{{id}}-CarStatus">Car is charging at</span></p>
-                    <p id="{{id}}-CarConsumption" class="big car text">
+                <div class="MMM-Powerwall col2 vflexbox">
+                    <div class="MMM-Powerwall small bright vsflexitem"><span id="{{id}}-CarStatus">Car is charging at</span></div>
+                    <div id="{{id}}-CarConsumption" class="MMM-Powerwall big car text vlflexitem">
                         {%- if flows.sinks.car.total > 950 -%}
                             {{ flows.sinks.car.total // 100 / 10 }} kW
                         {%- else -%}
                             {{ flows.sinks.car.total // 1 }} W
-                        {%- endif %}</p>
-                    <p class="small bright">Finishing in
+                        {%- endif %}</div>
+                    <div class="MMM-Powerwall small bright vsflexitem" id="{{id}}-CarCompletionPara">Finishing in
                         <span class="small bright text" id="{{id}}-CarCompletion"></span>
-                    </p>
+                    </div>
                 </div>
             </div>
         {%- elif graph == "PowerFlow" -%}
