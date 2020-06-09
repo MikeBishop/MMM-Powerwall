@@ -161,6 +161,24 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
+	updateVehicleData: function(timeout=null) {
+		let now = Date.now();
+		if( !timeout ) {
+			timeout = self.config.cloudUpdateInterval;
+		}
+		for( let vehicle of self.vehicles) {
+			if( vehicle.deferUntil && now < vehicle.deferUntil) {
+				continue;
+			}
+
+			self.sendSocketNotification("MMM-Powerwall-UpdateVehicleData", {
+				username: self.config.teslaAPIUsername,
+				vehicleID: vehicle.id,
+				updateInterval: timeout
+			});
+		}
+	},
+
 	// socketNotificationReceived from helper
 	socketNotificationReceived: async function (notification, payload) {
 		var self = this;
@@ -177,22 +195,10 @@ Module.register("MMM-Powerwall", {
 					setInterval(() => self.updateSelfConsumption(), this.config.cloudUpdateInterval);
 				}
 				this.vehicles = payload.vehicles;
-				let updateVehicles = function() {
-					let now = Date.now();
-					for( let vehicle of self.vehicles) {
-						if( vehicle.deferUntil && now < vehicle.deferUntil) {
-							continue;
-						}
-
-						self.sendSocketNotification("MMM-Powerwall-UpdateVehicleData", {
-							username: self.config.teslaAPIUsername,
-							vehicleID: vehicle.id,
-							updateInterval: self.config.cloudUpdateInterval
-						});
-					}
-				};
-				updateVehicles();
-				setInterval(updateVehicles, self.config.cloudUpdateInterval);
+				this.updateVehicleData();
+				setInterval(function() {
+					self.updateVehicleData();
+				}, self.config.cloudUpdateInterval);
 				await this.focusOnVehicles(this.vehicles, 0);
 			}
 		}
@@ -985,22 +991,28 @@ Module.register("MMM-Powerwall", {
 			focusSameVehicle = this.displayVehicles[indexToFocus] === this.vehicleInFocus;
 		}
 
-		let newTileSide;
-		let flipTile = !focusSameVehicle || numCharging !== this.numCharging;
-		if( flipTile ) {
-			newTileSide = (this.vehicleTileShown === "A" ? "B" : "A");
+		if( indexToFocus >= 0 ) {
+			let newTileSide;
+			if( focusSameVehicle ) {
+				newTileSide = this.vehicleTileShown;
+			}
+			else {
+				newTileSide = (this.vehicleTileShown === "A" ? "B" : "A");
+			}
+			let drew = await this.drawStatusForVehicle(this.displayVehicles[indexToFocus], this.numCharging, newTileSide);
+			if( flipTile && drew ) {
+				this.vehicleInFocus = this.displayVehicles[indexToFocus];
+				this.vehicleTileShown = newTileSide;
+				let carFlip = document.getElementById(this.identifier + "-CarFlip");
+				carFlip.style.transform = (this.vehicleTileShown === "A" ? "none" : "rotateX(180deg)");
+			}
 		}
 		else {
-			newTileSide = this.vehicleTileShown;
+			// Should only happen if TWCManager reports cars charging, but no cars are identified as charging
+			// Hopefully can resolve by polling for vehicle data more often, so we find the charging car.
+			// If it's a friend's car, this won't work.
+			this.updateVehicleData(30);
 		}
-		let drew = await this.drawStatusForVehicle(this.displayVehicles[indexToFocus], this.numCharging, newTileSide);
-		if( flipTile && drew ) {
-			this.vehicleInFocus = this.displayVehicles[indexToFocus];
-			this.vehicleTileShown = newTileSide;
-			let carFlip = document.getElementById(this.identifier + "-CarFlip");
-			carFlip.style.transform = (this.vehicleTileShown === "A" ? "none" : "rotateX(180deg)");
-		}
-
 	},
 
 	delay: function (ms) {
