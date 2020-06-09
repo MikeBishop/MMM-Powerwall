@@ -208,6 +208,7 @@
     transition: transform 0.8s;
     transform-style: preserve-3d;
     perspective: 1000px;
+    backface-visibility: hidden;
 }
 
 .MMM-Powerwall .flip-front,

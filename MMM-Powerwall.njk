@@ -81,30 +81,36 @@
                 </div>
             </div>
         {%- elif graph == "CarCharging" -%}
-            <div class="MMM-Powerwall grid-right">
-                <div class="MMM-Powerwall col1">
-                    <div class="MMM-Powerwall cbattery">
-                        <div class="battery meter-horizontal" style="width: 85%;" id="{{id}}-car-meter"></div>
-                        <div class="MMM-Powerwall overlay bright text" id="{{id}}-car-meter-text">85%</div>
-                    </div>
-                    <div id="{{id}}-PictureContainer" class="MMM-Powerwall no-overflow">
-                        <div class="MMM-Powerwall car-image">
-                            <img src="https://static-assets.tesla.com/v1/compositor/?model=m3&view=STUD_3QTR&size=300&options=DV4W,IN3PW,COL3-PPMR,W38B,MT303&bkba_opt=1">
+            <div class="MMM-Powerwall flip-outer" id="{{id}}-CarFlip">
+                {% for side in [{suffix: "A", name: "front"}, {suffix: "B", name: "back"}] -%}
+                <div class="MMM-Powerwall flip-{{side.name}}">
+                    <div class="MMM-Powerwall grid-right">
+                        <div class="MMM-Powerwall col1">
+                            <div class="MMM-Powerwall cbattery">
+                                <div class="battery meter-horizontal" style="width: 85%;" id="{{id}}-car-meter-{{side.suffix}}"></div>
+                                <div class="MMM-Powerwall overlay bright text" id="{{id}}-car-meter-text-{{side.suffix}}">85%</div>
+                            </div>
+                            <div id="{{id}}-PictureContainer-{{side.suffix}}" class="MMM-Powerwall no-overflow">
+                                <div class="MMM-Powerwall car-image">
+                                    <img src="https://static-assets.tesla.com/v1/compositor/?model=m3&view=STUD_3QTR&size=300&options=DV4W,IN3PW,COL3-PPMR,W38B,MT303&bkba_opt=1">
+                                </div>
+                            </div>
+                        </div>
+                        <div class="MMM-Powerwall col2 vflexbox">
+                            <div class="MMM-Powerwall small bright vsflexitem"><span id="{{id}}-CarStatus-{{side.suffix}}">Car is charging at</span></div>
+                            <div id="{{id}}-CarConsumption-{{side.suffix}}" class="MMM-Powerwall big car text vlflexitem">
+                                {%- if flows.sinks.car.total > 950 -%}
+                                    {{ flows.sinks.car.total // 100 / 10 }} kW
+                                {%- else -%}
+                                    {{ flows.sinks.car.total // 1 }} W
+                                {%- endif %}</div>
+                            <div class="MMM-Powerwall small bright vsflexitem" id="{{id}}-CarCompletionPara-{{side.suffix}}">Finishing in
+                                <span class="small bright text" id="{{id}}-CarCompletion-{{side.suffix}}"></span>
+                            </div>
                         </div>
                     </div>
                 </div>
-                <div class="MMM-Powerwall col2 vflexbox">
-                    <div class="MMM-Powerwall small bright vsflexitem"><span id="{{id}}-CarStatus">Car is charging at</span></div>
-                    <div id="{{id}}-CarConsumption" class="MMM-Powerwall big car text vlflexitem">
-                        {%- if flows.sinks.car.total > 950 -%}
-                            {{ flows.sinks.car.total // 100 / 10 }} kW
-                        {%- else -%}
-                            {{ flows.sinks.car.total // 1 }} W
-                        {%- endif %}</div>
-                    <div class="MMM-Powerwall small bright vsflexitem" id="{{id}}-CarCompletionPara">Finishing in
-                        <span class="small bright text" id="{{id}}-CarCompletion"></span>
-                    </div>
-                </div>
+                {%- endfor %}
             </div>
         {%- elif graph == "PowerFlow" -%}
         {%- else -%}

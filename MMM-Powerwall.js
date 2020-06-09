@@ -56,8 +56,9 @@ Module.register("MMM-Powerwall", {
 	selfConsumptionYesterday: null,
 	soe: 0,
 	vehicles: null,
-	chargingVehicles: [],
+	displayVehicles: [],
 	vehicleInFocus: null,
+	vehicleTileShown: "A",
 
 	start: function() {
 		var self = this;
@@ -97,6 +98,9 @@ Module.register("MMM-Powerwall", {
 		};
 
 		setInterval(updateLocal, self.config.localUpdateInterval);
+		setInterval(function() {
+			self.advanceToNextVehicle();
+		}, 20000);
 		updateLocal();
 	},
 
@@ -189,7 +193,7 @@ Module.register("MMM-Powerwall", {
 				};
 				updateVehicles();
 				setInterval(updateVehicles, self.config.cloudUpdateInterval);
-				this.focusOnVehicles(this.vehicles, 0);
+				await this.focusOnVehicles(this.vehicles, 0);
 			}
 		}
 		else if(notification === "MMM-Powerwall-Aggregates") {
@@ -259,7 +263,6 @@ Module.register("MMM-Powerwall", {
 					this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
 					this.updateData();
 				}
-				this.numCharging = payload.status.carsCharging;
 
 				if( payload.status.carsCharging > 0 && this.vehicles ) {
 					// Charging at least one car
@@ -291,11 +294,11 @@ Module.register("MMM-Powerwall", {
 								knownVehicle.charge.charging_state === "Charging"
 						);
 					}
-					this.focusOnVehicles(vehicles, payload.status.carsCharging)
+					await this.focusOnVehicles(vehicles, payload.status.carsCharging)
 				}
 				else {
 					// No cars are charging.
-					this.focusOnVehicles(this.vehicles, 0);
+					await this.focusOnVehicles(this.vehicles, 0);
 				}
 			}
 		}
@@ -397,17 +400,23 @@ Module.register("MMM-Powerwall", {
 				}
 				statusFor.drive = payload.drive;
 				statusFor.charge = payload.charge;
-				await this.drawStatusForVehicle(statusFor, this.numCharging);
+				if( !this.vehicleInFocus ) {
+					this.advanceToNextVehicle();
+				}
+				else if( statusFor === this.vehicleInFocus ) {
+					await this.drawStatusForVehicle(statusFor, this.numCharging, this.vehicleTileShown);
+				}
 			}
 		}
 	},
 
-	drawStatusForVehicle: async function(statusFor, numCharging) {
-		if( !statusFor ) {
-			return;
+	drawStatusForVehicle: async function(statusFor, numCharging, suffix) {
+		if( !statusFor || !statusFor.drive ) {
+			return false;
 		}
 
 		let statusText = statusFor.display_name;
+		let animate = suffix === this.vehicleTileShown;
 		let number = 0;
 		let unit = "W";
 		let addLocation = false;
@@ -427,9 +436,9 @@ Module.register("MMM-Powerwall", {
 				timeText = hours > 2 ? (hours + " hours ") : "1 hour ";
 			}
 			timeText += Math.trunc(statusFor.charge.time % 60) + " minutes";
-			this.updateText(this.identifier + "-CarCompletion", timeText);
-			this.makeNodeVisible(this.identifier + "-CarConsumption");
-			this.makeNodeVisible(this.identifier + "-CarCompletionPara");
+			this.updateText(this.identifier + "-CarCompletion-" + suffix, timeText, animate);
+			this.makeNodeVisible(this.identifier + "-CarConsumption-" + suffix);
+			this.makeNodeVisible(this.identifier + "-CarCompletionPara-" + suffix);
 		}
 		else {
 			// Cars not charging; show current instead
@@ -442,7 +451,7 @@ Module.register("MMM-Powerwall", {
 					
 					number =  statusFor.drive.speed;
 					unit = statusFor.drive.units;
-					this.makeNodeVisible(this.identifier + "-CarConsumption");
+					this.makeNodeVisible(this.identifier + "-CarConsumption-" + suffix);
 
 					break;
 				
@@ -459,7 +468,7 @@ Module.register("MMM-Powerwall", {
 						addLocation = true;
 					}
 
-					this.makeNodeInvisible(this.identifier + "-CarConsumption");
+					this.makeNodeInvisible(this.identifier + "-CarConsumption-" + suffix);
 					break;
 			}
 			
@@ -483,20 +492,23 @@ Module.register("MMM-Powerwall", {
 					catch {}
 				}
 			}
-			this.makeNodeInvisible(this.identifier + "-CarCompletionPara");
+			this.makeNodeInvisible(this.identifier + "-CarCompletionPara-" + suffix);
 		}
 		
-		this.updateText(this.identifier + "-CarStatus", statusText);
-		let meterNode = document.getElementById(this.identifier + "-car-meter");
+		this.updateText(this.identifier + "-CarStatus-" + suffix, statusText, animate);
+		let meterNode = document.getElementById(this.identifier + "-car-meter-" + suffix);
 		if( meterNode ) {
 			meterNode.style.width = statusFor.charge.soc + "%";
 		}
 		this.updateNode(
-			this.identifier + "-car-meter-text",
+			this.identifier + "-car-meter-text-" + suffix,
 			statusFor.charge.soc,
-			"%"
+			"%",
+			"",
+			animate
 		);
-},
+		return true;
+	},
 
 	isHome: function(location) {
 		return this.isSameLocation(this.config.home, location);
@@ -654,7 +666,9 @@ Module.register("MMM-Powerwall", {
 		 ****************/
 		let charging = this.flows.sinks.car.total;
 		if( this.numCharging > 0 ) {
-			this.updateNode(this.identifier + "-CarConsumption", charging, "W");
+			for( const suffix of ["A", "B"]) {
+				this.updateNode(this.identifier + "-CarConsumption" + suffix, charging, "W", this.vehicleTileShown == suffix);
+			}
 		}
 	},
 
@@ -703,7 +717,8 @@ Module.register("MMM-Powerwall", {
 			if( newMode != this.dayMode ) {
 				this.dayMode = newMode;
 				this.updateEnergy();
-				this.updateDom();
+				// I don't think this is needed any more; TEST.
+				//this.updateDom();
 			}
 		}
 	},
@@ -937,51 +952,58 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
-	focusOnVehicles: function(vehicles, numCharging) {
+	focusOnVehicles: async function(vehicles, numCharging) {
 		// Makes the "car status" tile focus on particular vehicles
-		// "vehicle" is a set, but might be empty
+		// "vehicles" is a set
 		// "numCharging" indicates how many cars are charging
 
 		if( !vehicles ) {
-			vehicles = [];
+			return;
 		}
 
 		// For the purposes of this function, it's sufficient to check length and equality of values
-		let areVehiclesSame =
-			vehicles.length === this.chargingVehicles.length &&
-			vehicles.every( (newVehicle, index) => newVehicle === this.chargingVehicles[index] );
+		let areVehiclesDifferent =
+			vehicles.length !== this.displayVehicles.length ||
+			vehicles.some( (newVehicle, index) => newVehicle !== this.displayVehicles[index] ) ||
+			this.numCharging !== numCharging;
 		
-		let indexToFocus = 0;
+		let indexToFocus;
+		if( areVehiclesDifferent ) {
+			this.displayVehicles = vehicles;
+			this.numCharging = numCharging;
+			await this.advanceToNextVehicle();
+		}
+	},
+
+	advanceToNextVehicle: async function() {
+		let indexToFocus = (this.displayVehicles.indexOf(this.vehicleInFocus) + 1) % this.displayVehicles.length;
 		let focusSameVehicle = false;
-		if( areVehiclesSame ) {
-			// Nothing has changed, so advance to the next car
-			indexToFocus = (this.chargingVehicles.indexOf(this.vehicleInFocus) + 1) % this.chargingVehicles.length;
-			focusSameVehicle = this.chargingVehicles[indexToFocus] === this.vehicleInFocus;
+		if( this.displayVehicles.length === 0 ) {
+			indexToFocus = -1;
 		}
 		else {
-			this.chargingVehicles = vehicles;
+			focusSameVehicle = this.displayVehicles[indexToFocus] === this.vehicleInFocus;
 		}
-		
-		if( numCharging > 0 ) {
-			// Cars are charging
-			if( vehicles && vehicles.length > 0 ) {
-				// Display info on the charging cars
-				// Note that other cars might be charging, too
 
-			}
-			else {
-				// Don't know which cars are charging
-				// Display generic info about power usage
-
-			}
+		let newTileSide;
+		let flipTile = !focusSameVehicle || numCharging !== this.numCharging;
+		if( flipTile ) {
+			newTileSide = (this.vehicleTileShown === "A" ? "B" : "A");
 		}
 		else {
-			// Not currently charging; show vehicle status
+			newTileSide = this.vehicleTileShown;
+		}
+		let drew = await this.drawStatusForVehicle(this.displayVehicles[indexToFocus], this.numCharging, newTileSide);
+		if( flipTile && drew ) {
+			this.vehicleInFocus = this.displayVehicles[indexToFocus];
+			this.vehicleTileShown = newTileSide;
+			let carFlip = document.getElementById(this.identifier + "-CarFlip");
+			carFlip.style.transform = (this.vehicleTileShown === "A" ? "none" : "rotateX(180deg)");
 		}
 
-		// TEMP:  Just to test display
-		if( this.vehicles ) {
-			this.vehicleInFocus = this.vehicles[0];
-		}
+	},
+
+	delay: function (ms) {
+		return new Promise(resolve => setTimeout(resolve, ms));
 	}
 });
