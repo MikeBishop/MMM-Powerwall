@@ -481,7 +481,8 @@ Module.register("MMM-Powerwall", {
 			}
 			
 			if( addLocation ) {
-				if (statusFor.oldLocation && this.isSameLocation(statusFor.oldLocation, statusFor.drive.location)) {
+				if (statusFor.oldLocation && statusFor.locationText &&
+					this.isSameLocation(statusFor.oldLocation, statusFor.drive.location)) {
 					statusText += " in " + statusFor.locationText;
 				}
 				else {
@@ -493,11 +494,15 @@ Module.register("MMM-Powerwall", {
 						let result = await fetch(url);
 						if( result.ok ) {
 							let revGeo = await result.json();
-							statusText += " in " + revGeo.address.Match_addr;
-							statusFor.locationText = revGeo.address.Match_addr;
+							if( revGeo.address.Match_addr ) {
+								statusText += " in " + revGeo.address.Match_addr;
+								statusFor.locationText = revGeo.address.Match_addr;
+							}
 						}
 					}
-					catch {}
+					catch {
+						statusFor.locationText = null;
+					}
 				}
 			}
 			this.makeNodeInvisible(this.identifier + "-CarCompletionPara-" + suffix);
