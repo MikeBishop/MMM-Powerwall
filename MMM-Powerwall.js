@@ -164,18 +164,20 @@ Module.register("MMM-Powerwall", {
 	updateVehicleData: function(timeout=null) {
 		let now = Date.now();
 		if( !timeout ) {
-			timeout = self.config.cloudUpdateInterval;
+			timeout = this.config.cloudUpdateInterval;
 		}
-		for( let vehicle of self.vehicles) {
-			if( vehicle.deferUntil && now < vehicle.deferUntil) {
-				continue;
+		if( Array.isArray(this.vehicles) ) {
+			for( let vehicle of this.vehicles) {
+				if( vehicle.deferUntil && now < vehicle.deferUntil) {
+					continue;
+				}
+				
+				this.sendSocketNotification("MMM-Powerwall-UpdateVehicleData", {
+					username: this.config.teslaAPIUsername,
+					vehicleID: vehicle.id,
+					updateInterval: timeout
+				});
 			}
-
-			self.sendSocketNotification("MMM-Powerwall-UpdateVehicleData", {
-				username: self.config.teslaAPIUsername,
-				vehicleID: vehicle.id,
-				updateInterval: timeout
-			});
 		}
 	},
 
@@ -1000,7 +1002,7 @@ Module.register("MMM-Powerwall", {
 				newTileSide = (this.vehicleTileShown === "A" ? "B" : "A");
 			}
 			let drew = await this.drawStatusForVehicle(this.displayVehicles[indexToFocus], this.numCharging, newTileSide);
-			if( flipTile && drew ) {
+			if( !focusSameVehicle && drew ) {
 				this.vehicleInFocus = this.displayVehicles[indexToFocus];
 				this.vehicleTileShown = newTileSide;
 				let carFlip = document.getElementById(this.identifier + "-CarFlip");
