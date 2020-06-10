@@ -680,7 +680,7 @@ Module.register("MMM-Powerwall", {
 		let charging = this.flows.sinks.car.total;
 		if( this.numCharging > 0 ) {
 			for( const suffix of ["A", "B"]) {
-				this.updateNode(this.identifier + "-CarConsumption" + suffix, charging, "W", this.vehicleTileShown == suffix);
+				this.updateNode(this.identifier + "-CarConsumption-" + suffix, charging, "W", "", this.vehicleTileShown == suffix);
 			}
 		}
 	},
