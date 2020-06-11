@@ -428,6 +428,8 @@ Module.register("MMM-Powerwall", {
 		let number = 0;
 		let unit = "W";
 		let addLocation = false;
+		let consumptionId = this.identifier + "-CarConsumption-" + suffix;
+		let completionParaId = this.identifier + "-CarCompletionPara-" + suffix;
 		if( numCharging > 0) {
 			// Cars are charging, including this one
 			if( numCharging > 1) {
@@ -438,15 +440,21 @@ Module.register("MMM-Powerwall", {
 			}
 			statusText += " charging at";
 
-			let timeText = "";
-			if( statusFor.charge.time > 60 ) {
-				let hours = Math.trunc(statusFor.charge.time / 60);
-				timeText = hours > 2 ? (hours + " hours ") : "1 hour ";
+			if( statusFor.charge.time > 0 ) {
+				let timeText = "";
+				if( statusFor.charge.time > 60 ) {
+					let hours = Math.trunc(statusFor.charge.time / 60);
+					timeText = hours > 2 ? (hours + " hours ") : "1 hour ";
+				}
+				timeText += Math.trunc(statusFor.charge.time % 60) + " minutes";
+				this.updateText(this.identifier + "-CarCompletion-" + suffix, timeText, animate);
+				this.makeNodeVisible(completionParaId);
 			}
-			timeText += Math.trunc(statusFor.charge.time % 60) + " minutes";
-			this.updateText(this.identifier + "-CarCompletion-" + suffix, timeText, animate);
-			this.makeNodeVisible(this.identifier + "-CarConsumption-" + suffix);
-			this.makeNodeVisible(this.identifier + "-CarCompletionPara-" + suffix);
+			else {
+				this.makeNodeInvisible(completionParaId)
+			}
+			this.makeNodeVisible(consumptionId);
+				
 		}
 		else {
 			// Cars not charging; show current instead
@@ -459,7 +467,7 @@ Module.register("MMM-Powerwall", {
 					
 					number =  statusFor.drive.speed;
 					unit = statusFor.drive.units;
-					this.makeNodeVisible(this.identifier + "-CarConsumption-" + suffix);
+					this.makeNodeVisible(consumptionId);
 
 					break;
 				
@@ -476,7 +484,7 @@ Module.register("MMM-Powerwall", {
 						addLocation = true;
 					}
 
-					this.makeNodeInvisible(this.identifier + "-CarConsumption-" + suffix);
+					this.makeNodeInvisible(consumptionId);
 					break;
 			}
 			
@@ -487,9 +495,9 @@ Module.register("MMM-Powerwall", {
 				}
 				else {
 					let url = 
-					"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
-					"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
-					statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
+						"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
+						"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
+						statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
 					try {
 						let result = await fetch(url);
 						if( result.ok ) {
@@ -505,7 +513,7 @@ Module.register("MMM-Powerwall", {
 					}
 				}
 			}
-			this.makeNodeInvisible(this.identifier + "-CarCompletionPara-" + suffix);
+			this.makeNodeInvisible(completionParaId);
 		}
 		
 		this.updateText(this.identifier + "-CarStatus-" + suffix, statusText, animate);

@@ -1,23 +1,21 @@
 <div class="MMM-Powerwall flexbox">
-{% set endDiv = joiner(["</div>"]) -%}
 {% for graph in config.graphs %}
-    {{ endDiv() | safe }}
     <div class="module MMM-Powerwall module-content flexitem">
         {% if graph == "SolarProduction" -%}
         <div class="MMM-Powerwall flip-outer" id="{{id}}-SolarFlip">
             <div class="MMM-Powerwall flip-front">
                 <div class="MMM-Powerwall grid-left">
-                    <div class="MMM-Powerwall col1">
-                        <p class="small bright">Solar is producing</p>
-                        <p id="{{id}}-SolarProduction" class="big solar text">
+                    <div class="MMM-Powerwall col1 vflexbox">
+                        <div class="small bright">Solar is producing</div>
+                        <div id="{{id}}-SolarProduction" class="big solar text">
                             {%- if flows.sources.solar.total > 950 -%}
                                 {{ flows.sources.solar.total // 100 / 10 }} kW
                             {%- else -%}
                                 {{ flows.sources.solar.total // 1 }} W
-                            {%- endif %}</p>
-                        <p class="small bright">
+                            {%- endif %}</div>
+                        <div class="small bright">
                             <span id="{{id}}-SolarTotalA" class="small bright text"></span> today
-                        </p>
+                        </div>
                     </div>
                     <div class="MMM-Powerwall col2 graph-container">
                         <canvas id="{{id}}-SolarDestinations">
@@ -26,13 +24,13 @@
                     </div>
                 </div>
             </div>
-            <div class="MMM-Powerwall flip-back">
-                <p class="small bright">Solar produced</p>
-                <p id="{{id}}-SolarTotalB" class="big solar text"></p>
-                <p class="small bright text" id="{{id}}-SolarTodayYesterday">
+            <div class="MMM-Powerwall flip-back vflexbox">
+                <div class="small bright">Solar produced</div>
+                <div id="{{id}}-SolarTotalB" class="big solar text"></div>
+                <div class="small bright text" id="{{id}}-SolarTodayYesterday">
                     {%- if dayMode === "night" %}today
                     {%- else %}yesterday
-                    {%- endif %}</p>
+                    {%- endif %}</div>
             </div>
         </div>
         {%- elif graph == "HouseConsumption" -%}
@@ -42,15 +40,15 @@
                     Graph goes here
                 </canvas>
                 </div>
-                <div class="MMM-Powerwall col2">
-                <p class="small bright">House is consuming</p>
-                <p id="{{id}}-HouseConsumption" class="big house text">
+                <div class="MMM-Powerwall col2 vflexbox">
+                <div class="small bright">House is consuming</div>
+                <div id="{{id}}-HouseConsumption" class="big house text">
                     {%- if flows.sinks.house.total > 950 -%}
                         {{ flows.sinks.house.total // 100 / 10 }} kW
                     {%- else -%}
                         {{ flows.sinks.house.total // 1 }} W
-                    {%- endif %}</p>
-                <p class="small bright text" id="{{id}}-UsageTotal"></p>
+                    {%- endif %}</div>
+                <div class="small bright text" id="{{id}}-UsageTotal"></div>
                 </div>
             </div>
         {%- elif graph == "PowerwallSelfPowered" -%}
@@ -97,14 +95,16 @@
                             </div>
                         </div>
                         <div class="MMM-Powerwall col2 vflexbox">
-                            <div class="MMM-Powerwall small bright vsflexitem"><span id="{{id}}-CarStatus-{{side.suffix}}">Car is charging at</span></div>
-                            <div id="{{id}}-CarConsumption-{{side.suffix}}" class="MMM-Powerwall big car text vlflexitem">
-                                {%- if flows.sinks.car.total > 950 -%}
-                                    {{ flows.sinks.car.total // 100 / 10 }} kW
-                                {%- else -%}
-                                    {{ flows.sinks.car.total // 1 }} W
-                                {%- endif %}</div>
-                            <div class="MMM-Powerwall small bright vsflexitem" id="{{id}}-CarCompletionPara-{{side.suffix}}">Finishing in
+                            <div class="MMM-Powerwall small bright"><span id="{{id}}-CarStatus-{{side.suffix}}">Car is charging at</span></div>
+                            <div id="{{id}}-CarConsumption-{{side.suffix}}" class="MMM-Powerwall big car text">
+                                {% if flows.sinks.car.total -%}
+                                    {%- if flows.sinks.car.total > 950 -%}
+                                        {{ flows.sinks.car.total // 100 / 10 }} kW
+                                    {%- else -%}
+                                        {{ flows.sinks.car.total // 1 }} W
+                                    {%- endif -%}
+                                {% endif %}</div>
+                            <div class="MMM-Powerwall small bright" id="{{id}}-CarCompletionPara-{{side.suffix}}" style="display:none">Finishing in
                                 <span class="small bright text" id="{{id}}-CarCompletion-{{side.suffix}}"></span>
                             </div>
                         </div>
@@ -116,6 +116,7 @@
         {%- else -%}
         Unknown graph type selected
         {%- endif -%}
+    </div>
 {%- endfor %}
     </div>
 </div>
