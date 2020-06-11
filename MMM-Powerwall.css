@@ -105,7 +105,7 @@
 }
 
 .meter-horizontal {
-    height:99%;
+    height:97%;
     margin: 1px;
     transition: height 1s;
 }
