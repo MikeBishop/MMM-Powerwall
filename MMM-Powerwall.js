@@ -432,6 +432,7 @@ Module.register("MMM-Powerwall", {
 		let animate = suffix === this.vehicleTileShown;
 		let number = 0;
 		let unit = "W";
+		let consumptionVisible;
 		let addLocation = false;
 		let consumptionId = this.identifier + "-CarConsumption-" + suffix;
 		let completionParaId = this.identifier + "-CarCompletionPara-" + suffix;
@@ -461,7 +462,7 @@ Module.register("MMM-Powerwall", {
 			else {
 				this.makeNodeInvisible(completionParaId)
 			}
-			this.makeNodeVisible(consumptionId);
+			consumptionVisible = true;
 				
 		}
 		else {
@@ -473,9 +474,15 @@ Module.register("MMM-Powerwall", {
 					statusText += " driving";
 					addLocation = true;
 					
-					number =  statusFor.drive.speed;
 					unit = statusFor.drive.units;
-					this.makeNodeVisible(consumptionId);
+					if( unit === "mi/hr" ) {
+						number =  statusFor.drive.speed;
+					}
+					else {
+						// Convert to kph, since API reports mph
+						number = statusFor.drive.speed * 1.609344;
+					}
+					consumptionVisible = true;
 
 					break;
 				
@@ -492,7 +499,7 @@ Module.register("MMM-Powerwall", {
 						addLocation = true;
 					}
 
-					this.makeNodeInvisible(consumptionId);
+					consumptionVisible = false;
 					break;
 			}
 			
@@ -536,6 +543,12 @@ Module.register("MMM-Powerwall", {
 			"",
 			animate
 		);
+		if( consumptionVisible ) {
+			this.makeNodeVisible(consumptionId);
+		}
+		else {
+			this.makeNodeInvisible(consumptionId);
+		}
 		return true;
 	},
 
