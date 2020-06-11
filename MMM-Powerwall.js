@@ -442,11 +442,14 @@ Module.register("MMM-Powerwall", {
 
 			if( statusFor.charge.time > 0 ) {
 				let timeText = "";
-				if( statusFor.charge.time > 60 ) {
-					let hours = Math.trunc(statusFor.charge.time / 60);
+				let minutes = Math.trunc(
+					(statusFor.charge.time - Math.trunc(statusFor.charge.time))
+					* 60);
+				if( statusFor.charge.time > 1 ) {
+					let hours = Math.trunc(statusFor.charge.time);
 					timeText = hours > 2 ? (hours + " hours ") : "1 hour ";
 				}
-				timeText += Math.trunc(statusFor.charge.time % 60) + " minutes";
+				timeText += minutes + " minutes";
 				this.updateText(this.identifier + "-CarCompletion-" + suffix, timeText, animate);
 				this.makeNodeVisible(completionParaId);
 			}
