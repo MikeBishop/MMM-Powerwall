@@ -163,12 +163,14 @@ Module.register("MMM-Powerwall", {
 
 	updateVehicleData: function(timeout=null) {
 		let now = Date.now();
+		let willingToDefer = false;
 		if( !timeout ) {
 			timeout = this.config.cloudUpdateInterval;
+			willingToDefer = true;
 		}
 		if( Array.isArray(this.vehicles) ) {
 			for( let vehicle of this.vehicles) {
-				if( vehicle.deferUntil && now < vehicle.deferUntil) {
+				if( willingToDefer && vehicle.deferUntil && now < vehicle.deferUntil) {
 					continue;
 				}
 				
@@ -401,10 +403,13 @@ Module.register("MMM-Powerwall", {
 				if( statusFor.drive ) {
 					statusFor.oldLocation = statusFor.drive.location;
 				}
-				if( payload.state === "online" && !payload.drive.gear && !payload.sentry) {
+				if( payload.state === "online" && !payload.drive.gear && !payload.sentry && payload.charge.power == 0 ) {
 					// If car is idle and not in Sentry mode, don't request data for half an hour;
 					// let it try to sleep.
 					statusFor.deferUntil = Date.now() + 30*60*1000;
+				}
+				else {
+					delete statusFor.deferUntil;
 				}
 				statusFor.drive = payload.drive;
 				statusFor.charge = payload.charge;
@@ -991,7 +996,10 @@ Module.register("MMM-Powerwall", {
 			vehicles.some( (newVehicle, index) => newVehicle !== this.displayVehicles[index] ) ||
 			this.numCharging !== numCharging;
 		
-		let indexToFocus;
+		if( this.numCharging !== numCharging ) {
+			this.updateVehicleData(30);
+		}
+
 		if( areVehiclesDifferent ) {
 			this.displayVehicles = vehicles;
 			this.numCharging = numCharging;
