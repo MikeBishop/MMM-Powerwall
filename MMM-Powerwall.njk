@@ -112,7 +112,14 @@
                 </div>
                 {%- endfor %}
             </div>
-        {%- elif graph == "PowerFlow" -%}
+        {%- elif graph == "EnergyBar" -%}
+            <div class="MMM-Powerwall big-graph-container">
+                <canvas id="{{id}}-EnergyBar"></canvas>
+            </div>
+        {%- elif graph == "EnergyLine" -%}
+            <div class="MMM-Powerwall big-graph-container">
+                <canvas id="{{id}}-EnergyLine"></canvas>
+            </div>
         {%- else -%}
         Unknown graph type selected
         {%- endif -%}

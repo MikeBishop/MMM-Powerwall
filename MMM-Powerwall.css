@@ -182,6 +182,13 @@
     max-height: 250px;
 }
 
+.MMM-Powerwall .big-graph-container {
+    max-height: 250px;
+    height: 250px;
+    position: relative;
+    max-width: 425px;
+}
+
 .MMM-Powerwall .no-overflow {
     overflow: hidden;
     white-space: nowrap;

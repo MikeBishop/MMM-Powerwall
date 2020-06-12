@@ -22,10 +22,23 @@ const DISPLAY_SINKS = [
 	HOUSE,
 	GRID
 ];
+const DISPLAY_ALL = [
+	GRID,
+	POWERWALL,
+	HOUSE,
+	CAR,
+	SOLAR
+];
 
 Module.register("MMM-Powerwall", {
 	defaults: {
-		graphs: ["CarCharging", "PowerwallSelfPowered", "SolarProduction", "HouseConsumption"],
+		graphs: [
+			"CarCharging", 
+			"PowerwallSelfPowered", 
+			"SolarProduction", 
+			"HouseConsumption",
+			"EnergyBar"
+		],
 		localUpdateInterval: 10000,
 		cloudUpdateInterval: 300000,
 		powerwallIP: null,
@@ -234,6 +247,10 @@ Module.register("MMM-Powerwall", {
 							export: this.teslaAggregates.site.energy_exported,
 							import: this.teslaAggregates.site.energy_imported
 						},
+						battery: {
+							export: this.teslaAggregates.battery.energy_exported,
+							import: this.teslaAggregates.battery.energy_imported
+						},
 						house: {
 							import: this.teslaAggregates.load.energy_imported
 						}
@@ -327,6 +344,13 @@ Module.register("MMM-Powerwall", {
 						payload.energy[1].grid_energy_exported_from_generator
 					);
 
+					let todayBatteryIn = payload.energy[1].battery_energy_exported;
+					let todayBatteryOut = (
+						payload.energy[1].battery_energy_imported_from_grid +
+						payload.energy[1].battery_energy_imported_from_solar +
+						payload.energy[1].battery_energy_imported_from_generator
+					);							
+
 					let todayUsage = (
 						payload.energy[1].consumer_energy_imported_from_grid +
 						payload.energy[1].consumer_energy_imported_from_solar +
@@ -354,6 +378,16 @@ Module.register("MMM-Powerwall", {
 							import: (
 								this.teslaAggregates.load.energy_imported -
 								todayUsage
+							)
+						},
+						battery: {
+							export: (
+								this.teslaAggregates.battery.energy_exported -
+								todayBatteryIn
+							),
+							import: (
+								this.teslaAggregates.battery.energy_imported -
+								todayBatteryOut
 							)
 						}
 					};
@@ -712,6 +746,49 @@ Module.register("MMM-Powerwall", {
 				this.updateNode(this.identifier + "-CarConsumption-" + suffix, charging, "W", "", this.vehicleTileShown == suffix);
 			}
 		}
+
+		/***************
+		 * Power Flows *
+		 ***************/
+		let pfChart = this.charts.energyBar;
+		if( pfChart ) {
+			pfChart.data.datasets[0].data = this.dataTotals();
+			pfChart.update();
+		}
+	},
+
+	dataTotals: function() {
+		return [
+			// Grid out/in
+			[
+				-1 * (
+					this.teslaAggregates.site.energy_exported -
+					this.dayStart.grid.export),
+				this.teslaAggregates.site.energy_imported - this.dayStart.grid.import
+			],
+			// Battery out/in
+			[
+				-1 * (
+					this.teslaAggregates.battery.energy_exported -
+					this.dayStart.battery.export),
+				this.teslaAggregates.battery.energy_imported - this.dayStart.battery.import
+			],
+			// House out (TODO:  Includes car)
+			[
+				-1 * (
+					this.teslaAggregates.load.energy_imported -
+					this.dayStart.house.import),
+				0
+			],
+			// Car out - TODO
+			[0,0],
+			// Solar in
+			[
+				0,
+				this.teslaAggregates.solar.energy_exported -
+				this.dayStart.solar.export
+			]
+		]
 	},
 
 	notificationReceived: function(notification, payload, sender) {
@@ -772,7 +849,9 @@ Module.register("MMM-Powerwall", {
 		Chart.helpers.merge(Chart.defaults.global, {
 			responsive: true,
 			maintainAspectRatio: true,
-			legend: false,
+			legend: {
+				display: false
+			},
 			aspectRatio: 1.1,
 			elements: {
 				arc: {
@@ -817,32 +896,33 @@ Module.register("MMM-Powerwall", {
 
 			
 			var myCanvas = document.getElementById(this.identifier + "-SolarDestinations");
-		if( myCanvas ) {
-			let distribution = this.flows.sources.solar.distribution;
-			
-			// Build the chart on the canvas
-			var solarProductionPie = new Chart(myCanvas, {
-				type: "pie",
-				data: {
-					datasets: [
-						{
-							data: DISPLAY_SINKS.map( (entry) => distribution[entry.key] ),
-							backgroundColor: DISPLAY_SINKS.map( (entry) => entry.color ),
-							weight: 2,
-							labels: DISPLAY_SINKS.map( (entry) => entry.displayAs )
-						},
-						{
-							data: [1],
-							backgroundColor: SOLAR.color,
-							weight: 1,
-							showLine: false,
-							datalabels: {
-								labels: {
-									title: null,
-									value: null
+			if( myCanvas ) {
+				let distribution = this.flows.sources.solar.distribution;
+				
+				// Build the chart on the canvas
+				var solarProductionPie = new Chart(myCanvas, {
+					type: "pie",
+					data: {
+						datasets: [
+							{
+								data: DISPLAY_SINKS.map( (entry) => distribution[entry.key] ),
+								backgroundColor: DISPLAY_SINKS.map( (entry) => entry.color ),
+								weight: 2,
+								labels: DISPLAY_SINKS.map( (entry) => entry.displayAs )
+							},
+							{
+								data: [1],
+								backgroundColor: SOLAR.color,
+								weight: 1,
+								showLine: false,
+								datalabels: {
+									labels: {
+										title: null,
+										value: null
+									}
 								}
 							}
-						}]
+						]
 					}
 				});
 				this.charts.solarProduction = solarProductionPie;
@@ -906,6 +986,63 @@ Module.register("MMM-Powerwall", {
 					});
 					this.charts.selfConsumption = selfConsumptionDoughnut;
 				}
+			}
+
+			myCanvas = document.getElementById(this.identifier + "-EnergyBar");
+			if( myCanvas && this.teslaAggregates && this.dayStart ) {
+				let data = this.dataTotals();
+				// Horizontal bar chart here
+				let energyBar = new Chart(myCanvas, {
+					type: 'horizontalBar',
+					data: {
+						labels: DISPLAY_ALL.map(entry => entry.displayAs),
+						datasets: [{
+							backgroundColor: DISPLAY_ALL.map(entry => entry.color),
+							borderColor: DISPLAY_ALL.map(entry => entry.color),
+							borderWidth: 1,
+							data: data
+						}]			
+					},
+					options: {
+						// Elements options apply to all of the options unless overridden in a dataset
+						// In this case, we are setting the border of each horizontal bar to be 2px wide
+						elements: {
+							rectangle: {
+								borderWidth: 2,
+							}
+						},
+						maintainAspectRatio: true,
+						aspectRatio: 1.7,
+						title: {
+							display: false
+						},
+						plugins: {
+							datalabels: false
+						},
+						scales: {
+							xAxes: [{
+								ticks: {
+									beginAtZero: true,
+									callback: function( value, index, values) {
+										return Math.round(Math.abs(value) / 1000);
+									},
+									fontColor: "white"
+								},
+								scaleLabel: {
+									display: true,
+									labelString: "Energy To / From (kWh)",
+									fontColor: "white"
+								}
+							}],
+							yAxes: [{
+								ticks: {
+									fontColor: "white"
+								}
+							}]
+						}
+					}
+				});
+				this.charts.energyBar = energyBar;
 			}
 	},
 	
@@ -1008,7 +1145,7 @@ Module.register("MMM-Powerwall", {
 			vehicles.length !== this.displayVehicles.length ||
 			vehicles.some( (newVehicle, index) => newVehicle !== this.displayVehicles[index] ) ||
 			this.numCharging !== numCharging;
-		
+
 		if( this.numCharging !== numCharging ) {
 			this.updateVehicleData(30);
 		}
