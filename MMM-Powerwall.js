@@ -46,7 +46,8 @@ Module.register("MMM-Powerwall", {
 		twcManagerIP: null,
 		twcManagerPort: 8080,
 		teslaAPIUsername: null,
-		teslaAPIPassword: null
+		teslaAPIPassword: null,
+		home: null
 	},
 	requiresVersion: "2.1.0", // Required version of MagicMirror
 	twcEnabled: null,
@@ -255,7 +256,6 @@ Module.register("MMM-Powerwall", {
 							import: this.teslaAggregates.load.energy_imported
 						}
 					};
-
 				}
 
 				if (needUpdate) {
@@ -293,11 +293,11 @@ Module.register("MMM-Powerwall", {
 
 				if( payload.status.carsCharging > 0 && this.vehicles ) {
 					// Charging at least one car
-					// How to pick which to show?
 					let vinsWeKnow = (payload.vins || []).filter(
 						chargingVIN => this.vehicles.some(
 							knownVehicle => knownVehicle.vin == chargingVIN
-						)) || [];
+						)
+					) || [];
 					let vehicles;
 
 					if (vinsWeKnow.length > 0) {
@@ -306,18 +306,20 @@ Module.register("MMM-Powerwall", {
 							vehicle => vehicle.vin == vin
 						));
 						vehicles.sort( (a,b) => (
-							a.charge && b.charge && 
+							a.charge && b.charge &&
 								a.charge.soc && b.charge.soc ?
 							(a.charge.soc - b.charge.soc) :
 							a.charge ? -1 : 1));
 					}
 					else {
 						// Charging cars are unknown; TWCs can't report VINs?
-						// Show any cars the API indicates are currently charging.
-						// This will have some false positives if charging off-site.
+						// Show any cars the API indicates are currently
+						// charging. This will have some false positives if
+						// charging off-site, and will be slow to detect
+						// vehicles.
 						vehicles = this.vehicles.filter(
 							knownVehicle =>
-								knownVehicle.charge && 
+								knownVehicle.charge &&
 								knownVehicle.charge.charging_state === "Charging"
 						);
 					}
