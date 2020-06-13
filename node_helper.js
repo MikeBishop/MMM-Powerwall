@@ -619,6 +619,12 @@ module.exports = NodeHelper.create({
 				limit: data.charge_state.charge_limit_soc,
 				power: data.charge_state.charger_power,
 				time: data.charge_state.time_to_full_charge
+			},
+			config: {
+				car_type: data.vehicle_config.car_type,
+				option_codes: data.option_codes,
+				exterior_color: data.vehicle_config.exterior_color,
+				wheel_type: data.vehicle_config.wheel_type
 			}
 		});
 	}

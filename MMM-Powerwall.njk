@@ -85,25 +85,18 @@
                     <div class="MMM-Powerwall grid-right">
                         <div class="MMM-Powerwall col1">
                             <div class="MMM-Powerwall cbattery">
-                                <div class="battery meter-horizontal" style="width: 85%;" id="{{id}}-car-meter-{{side.suffix}}"></div>
-                                <div class="MMM-Powerwall overlay bright text" id="{{id}}-car-meter-text-{{side.suffix}}">85%</div>
+                                <div class="battery meter-horizontal" id="{{id}}-car-meter-{{side.suffix}}"></div>
+                                <div class="MMM-Powerwall overlay bright text" id="{{id}}-car-meter-text-{{side.suffix}}"></div>
                             </div>
-                            <div id="{{id}}-PictureContainer-{{side.suffix}}" class="MMM-Powerwall no-overflow">
+                            <div class="MMM-Powerwall no-overflow">
                                 <div class="MMM-Powerwall car-image">
-                                    <img src="https://static-assets.tesla.com/v1/compositor/?model=m3&view=STUD_3QTR&size=300&options=DV4W,IN3PW,COL3-PPMR,W38B,MT303&bkba_opt=1">
+                                    <img id="{{id}}-Picture-{{side.suffix}}">
                                 </div>
                             </div>
                         </div>
                         <div class="MMM-Powerwall col2 vflexbox">
-                            <div class="MMM-Powerwall small bright"><span id="{{id}}-CarStatus-{{side.suffix}}">Car is charging at</span></div>
-                            <div id="{{id}}-CarConsumption-{{side.suffix}}" class="MMM-Powerwall big car text">
-                                {% if flows.sinks.car.total -%}
-                                    {%- if flows.sinks.car.total > 950 -%}
-                                        {{ flows.sinks.car.total // 100 / 10 }} kW
-                                    {%- else -%}
-                                        {{ flows.sinks.car.total // 1 }} W
-                                    {%- endif -%}
-                                {% endif %}</div>
+                            <div class="MMM-Powerwall small bright"><span id="{{id}}-CarStatus-{{side.suffix}}"></span></div>
+                            <div class="MMM-Powerwall big car text" id="{{id}}-CarConsumption-{{side.suffix}}"></div>
                             <div class="MMM-Powerwall small bright" id="{{id}}-CarCompletionPara-{{side.suffix}}" style="display:none">Finishing in
                                 <span class="small bright text" id="{{id}}-CarCompletion-{{side.suffix}}"></span>
                             </div>

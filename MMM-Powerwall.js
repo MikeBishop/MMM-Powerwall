@@ -469,6 +469,9 @@ Module.register("MMM-Powerwall", {
 					else {
 						delete statusFor.deferUntil;
 					}
+					if( !statusFor.imageUrl ) {
+						statusFor.imageUrl = this.createCompositorUrl(payload.config);
+					}
 					statusFor.drive = payload.drive;
 					statusFor.charge = payload.charge;
 					if( !this.vehicleInFocus ) {
@@ -497,6 +500,12 @@ Module.register("MMM-Powerwall", {
 		let addLocation = false;
 		let consumptionId = this.identifier + "-CarConsumption-" + suffix;
 		let completionParaId = this.identifier + "-CarCompletionPara-" + suffix;
+
+		let picture = document.getElementById(this.identifier + "-Picture-" + suffix);
+		if( picture && statusFor.imageUrl ) {
+			picture.src = statusFor.imageUrl;
+		}
+
 		if( numCharging > 0) {
 			// Cars are charging, including this one
 			if( numCharging > 1) {
@@ -1335,5 +1344,81 @@ Module.register("MMM-Powerwall", {
 
 	delay: function (ms) {
 		return new Promise(resolve => setTimeout(resolve, ms));
+	},
+
+	createCompositorUrl: function(config) {
+		let url = "https://static-assets.tesla.com/v1/compositor/?";
+		let params = [
+			"view=STUD_3QTR",
+			"size=300",
+			"bkba_opt=1"
+		];
+		let model_map = {
+			"models": "ms",
+			"modelx": "mx",
+			"model3": "m3",
+			"modely": "my"
+		};
+		params.push("model=" + model_map[config.car_type]);
+		let options = config.option_codes.split(",");
+
+		this.substituteOptions({
+			"Pinwheel18": "W38B",
+			"AeroTurbine20": "WT20",
+			"Sportwheel19": "W39B",
+			"Stiletto19": "W39B",
+			"AeroTurbine19": "WTAS",
+			"Turbine19": "WTTB",
+			"Arachnid21Grey": "WTAB",
+			"Performancewheel20": "W32P",
+			"Stiletto20": "W32P",
+			"AeroTurbine22": "WT22",
+			"Super21Gray": "WTSG"
+		}, config.wheel_type, options);
+
+		this.substituteOptions({
+			"ObsidianBlack": "PMBL",
+			"SolidBlack": "PMBL",
+			"MetallicBlack": "PMBL",
+			"DeepBlueMetallic": "PPSB",
+			"DeepBlue": "PPSB",
+			"RedMulticoat": "PPMR",
+			"Red": "PPMR",
+			"MidnightSilverMetallic": "PMNG",
+			"MidnightSilver": "PMNG",
+			"SteelGrey": "PMNG",
+			"SilverMetallic": "PMNG",
+			"MetallicBrown": "PMAB",
+			"Brown": "PMAB",
+            "Silver": "PMSS",
+            "TitaniumCopper": "PPTI",
+            "DolphinGrey": "PMTG",
+			"Green": "PMSG",
+			"MetallicGreen": "PMSG",
+			"PearlWhiteMulticoat":  "PPSW",
+			"PearlWhite":  "PPSW",
+			"Pearl": "PPSW",
+			"SolidWhite": "PBCW",
+			"White": "PBCW",
+			"SignatureBlue": "PMMB",
+			"MetallicBlue": "PMMB",
+            "SignatureRed": "PPSR",
+		}, config.exterior_color, options);
+
+		params.push("options=" + options.join(","));
+		url += params.join("&");
+		return url;
+	},
+
+	substituteOptions: function(map, value, options) {
+		if( map[value] ) {
+			for( const option of Object.values(map) ) {
+				let toRemove = options.indexOf(option);
+				if( toRemove >= 0 ) {
+					options.splice(toRemove, 1);
+				}
+			}
+			options.push(map[value]);
+		}
 	}
 });
