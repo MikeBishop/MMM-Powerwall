@@ -5,11 +5,11 @@
  * MIT Licensed.
  */
 
-const SOLAR = { key: "solar", displayAs: "Solar", color: "gold" };
-const POWERWALL = { key: "battery", displayAs: "Powerwall", color: "#0BC60B"};
-const GRID = { key: "grid", displayAs: "Grid", color: "#CACECF" };
-const HOUSE = { key: "house", displayAs: "Local Usage", color: "#09A9E6" };
-const CAR = { key: "car", displayAs: "Car Charging", color: "#B91413" };
+const SOLAR = { key: "solar", displayAs: "Solar", color: "gold", color_trans: "rgba(255, 215, 0, 0.7)" };
+const POWERWALL = { key: "battery", displayAs: "Powerwall", color: "#0BC60B", color_trans: "rgba(11, 198, 11, 0.7)"};
+const GRID = { key: "grid", displayAs: "Grid", color: "#CACECF", color_trans: "rgba(202, 206, 207, 0.7)" };
+const HOUSE = { key: "house", displayAs: "Local Usage", color: "#09A9E6", color_trans: "rgba(9, 169, 230, 0.7)" };
+const CAR = { key: "car", displayAs: "Car Charging", color: "#B91413", color_trans: "rgba(185, 20, 19, 0.7)" };
 
 const DISPLAY_SOURCES = [
 	POWERWALL,
@@ -799,23 +799,19 @@ Module.register("MMM-Powerwall", {
 		return [
 			// Grid out/in
 			[
-				-1 * (
-					this.teslaAggregates.site.energy_exported -
-					this.dayStart.grid.export),
+				this.dayStart.grid.export -
+					this.teslaAggregates.site.energy_exported,
 				this.teslaAggregates.site.energy_imported - this.dayStart.grid.import
 			],
 			// Battery out/in
 			[
-				-1 * (
-					this.teslaAggregates.battery.energy_exported -
-					this.dayStart.battery.export),
-				this.teslaAggregates.battery.energy_imported - this.dayStart.battery.import
+				this.dayStart.battery.import - this.teslaAggregates.battery.energy_imported,
+				this.teslaAggregates.battery.energy_exported -
+					this.dayStart.battery.export
 			],
 			// House out (TODO:  Includes car)
 			[
-				-1 * (
-					this.teslaAggregates.load.energy_imported -
-					this.dayStart.house.import),
+				this.dayStart.house.import - this.teslaAggregates.load.energy_imported,
 				0
 			],
 			// Car out - TODO
@@ -1108,12 +1104,14 @@ Module.register("MMM-Powerwall", {
 							xAxes: [{
 								type: "time",
 								ticks: {
-									min: new Date().setHours(0,0,0),
+									min: new Date().setHours(0,0,0,0),
+									max: new Date().setHours(24,0,0,0),
 									fontColor: "white",
 									autoSkipPadding: 10
 								}
 							}],
 							yAxes: [{
+								type: "linear",
 								ticks: {
 									callback: function( value, index, values) {
 										return Math.round(Math.abs(value) / 1000);
@@ -1147,15 +1145,18 @@ Module.register("MMM-Powerwall", {
 		// 	}]
 		// }
 		if( this.powerHistory ) {
+			let datapoints = this.powerHistory.filter(
+				entry => Date.parse(entry.timestamp) >= new Date().setHours(0,0,0,0)
+			);
 
 			return {
-				labels: this.powerHistory.map(entry => entry.timestamp),
+				labels: datapoints.map(entry => entry.timestamp),
 				datasets: DISPLAY_ALL.map(entry => {
 					return {
-						backgroundColor: entry.color,
+						backgroundColor: entry.color_trans,
 						borderColor: entry.color,
 						borderWidth: 1,
-						data: this.powerHistory.map(sample => {
+						data: datapoints.map(sample => {
 							switch(entry.key) {
 								case "solar":
 									case "battery":
