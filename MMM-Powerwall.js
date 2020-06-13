@@ -1420,5 +1420,8 @@ Module.register("MMM-Powerwall", {
 			}
 			options.push(map[value]);
 		}
+		else {
+			Log.log("Unknown vehicle trait encountered: " + value);
+		}
 	}
 });
