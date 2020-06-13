@@ -33,11 +33,12 @@ const DISPLAY_ALL = [
 Module.register("MMM-Powerwall", {
 	defaults: {
 		graphs: [
-			"CarCharging", 
-			"PowerwallSelfPowered", 
-			"SolarProduction", 
+			"CarCharging",
+			"PowerwallSelfPowered",
+			"SolarProduction",
 			"HouseConsumption",
-			"EnergyBar"
+			"EnergyBar",
+			"PowerLine"
 		],
 		localUpdateInterval: 10000,
 		cloudUpdateInterval: 300000,
@@ -165,14 +166,22 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
-	updateSelfConsumption: function() {
+	sendDataRequestNotification: function(notification) {
 		if( this.teslaAPIEnabled ) {
-			this.sendSocketNotification("MMM-Powerwall-UpdateSelfConsumption", {
+			this.sendSocketNotification(notification, {
 				username: this.config.teslaAPIUsername,
 				siteID: this.config.siteID,
 				updateInterval: this.config.cloudUpdateInterval
 			});
 		}
+	},
+
+	updatePowerHistory: function() {
+		this.sendDataRequestNotification("MMM-Powerwall-UpdatePowerHistory");
+	},
+
+	updateSelfConsumption: function() {
+		this.sendDataRequestNotification("MMM-Powerwall-UpdateSelfConsumption");
 	},
 
 	updateVehicleData: function(timeout=null) {
@@ -201,261 +210,277 @@ Module.register("MMM-Powerwall", {
 	socketNotificationReceived: async function (notification, payload) {
 		var self = this;
 		Log.log("Received " + notification + ": " + JSON.stringify(payload));
-		if(notification === "MMM-Powerwall-TeslaAPIConfigured") {
-			if( payload.username === self.config.teslaAPIUsername ) {
-				if( !self.config.siteID ) {
-					self.config.siteID = payload.siteID;
-				}
-				if( self.config.siteID === payload.siteID ) {
-					self.teslaAPIEnabled = true;					
-					this.updateEnergy();
-					this.updateSelfConsumption();
-					setInterval(() => self.updateSelfConsumption(), this.config.cloudUpdateInterval);
-				}
-				this.vehicles = payload.vehicles;
-				this.updateVehicleData();
-				setInterval(function() {
-					self.updateVehicleData();
-				}, self.config.cloudUpdateInterval);
-				await this.focusOnVehicles(this.vehicles, 0);
-			}
-		}
-		else if(notification === "MMM-Powerwall-Aggregates") {
-			if( payload.ip === this.config.powerwallIP ) {
-				let needUpdate = false;
-				if (!this.flows) {
-					needUpdate = true;
-				}
-
-				this.teslaAggregates = payload.aggregates;
-				this.flows = this.attributeFlows(payload.aggregates, self.twcConsumption);
-
-				let todayDate = new Date().getDate();
-				if( this.todayDate !== todayDate ) {
-					if( this.dayStart.solar ) {
-						this.yesterdaySolar = (
-							this.teslaAggregates.solar.energy_exported -
-							this.dayStart.solar.export
-						);
+		switch(notification) {
+			case "MMM-Powerwall-TeslaAPIConfigured":
+				if( payload.username === self.config.teslaAPIUsername ) {
+					if( !self.config.siteID ) {
+						self.config.siteID = payload.siteID;
 					}
-					this.updateEnergy();
-					this.todayDate = todayDate;
-					this.dayStart = {
-						solar: {
-							export: this.teslaAggregates.solar.energy_exported
-						},
-						grid: {
-							export: this.teslaAggregates.site.energy_exported,
-							import: this.teslaAggregates.site.energy_imported
-						},
-						battery: {
-							export: this.teslaAggregates.battery.energy_exported,
-							import: this.teslaAggregates.battery.energy_imported
-						},
-						house: {
-							import: this.teslaAggregates.load.energy_imported
-						}
-					};
-				}
-
-				if (needUpdate) {
-					// If we didn't have data before, we need to redraw
-					this.buildGraphs();
-				}
-
-				// We're updating the data in-place.
-				this.updateData();
-			}
-		}
-		else if (notification === "MMM-Powerwall-SOE") {
-			if( payload.ip === this.config.powerwallIP ) {
-				this.soe = payload.soe;
-				this.updateNode(
-					this.identifier + "-PowerwallSOE",
-					payload.soe,
-					"%",
-					"",
-					false);
-				let meterNode = document.getElementById(this.identifier + "-battery-meter");
-				if (meterNode) {
-					meterNode.style = "height: " + payload.soe + "%;";
-				}
-			}
-		}
-		else if (notification === "MMM-Powerwall-ChargeStatus") {
-			if( payload.ip === this.config.twcManagerIP ) {
-				let oldConsumption = self.twcConsumption;
-				self.twcConsumption = Math.round( parseFloat(payload.status.chargerLoadWatts) );
-				if( self.twcConsumption !== oldConsumption && this.teslaAggregates ) {
-					this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
-					this.updateData();
-				}
-
-				if( payload.status.carsCharging > 0 && this.vehicles ) {
-					// Charging at least one car
-					let vinsWeKnow = (payload.vins || []).filter(
-						chargingVIN => this.vehicles.some(
-							knownVehicle => knownVehicle.vin == chargingVIN
-						)
-					) || [];
-					let vehicles;
-
-					if (vinsWeKnow.length > 0) {
-						// We recognize some charging VINs!
-						vehicles = vinsWeKnow.map(vin => this.vehicles.find(
-							vehicle => vehicle.vin == vin
-						));
-						vehicles.sort( (a,b) => (
-							a.charge && b.charge &&
-								a.charge.soc && b.charge.soc ?
-							(a.charge.soc - b.charge.soc) :
-							a.charge ? -1 : 1));
+					if( self.config.siteID === payload.siteID ) {
+						self.teslaAPIEnabled = true;
+						this.updateEnergy();
+						this.updateSelfConsumption();
+						this.updatePowerHistory();
+						setInterval(function() {
+							self.updateSelfConsumption();
+							self.updatePowerHistory();
+						}, this.config.cloudUpdateInterval);
 					}
-					else {
-						// Charging cars are unknown; TWCs can't report VINs?
-						// Show any cars the API indicates are currently
-						// charging. This will have some false positives if
-						// charging off-site, and will be slow to detect
-						// vehicles.
-						vehicles = this.vehicles.filter(
-							knownVehicle =>
-								knownVehicle.charge &&
-								knownVehicle.charge.charging_state === "Charging"
-						);
-					}
-					await this.focusOnVehicles(vehicles, payload.status.carsCharging)
-				}
-				else {
-					// No cars are charging.
+					this.vehicles = payload.vehicles;
+					this.updateVehicleData();
+					setInterval(function() {
+						self.updateVehicleData();
+					}, self.config.cloudUpdateInterval);
 					await this.focusOnVehicles(this.vehicles, 0);
 				}
-			}
-		}
-		else if (notification === "MMM-Powerwall-EnergyData") {
-			if( payload.username === this.config.teslaAPIUsername && 
-				this.config.siteID == payload.siteID ) {
-					
-					this.yesterdaySolar = payload.energy[0].solar_energy_exported;
+				break;
 
-					let todaySolar = payload.energy[1].solar_energy_exported;
-					
-					let todayGridIn = payload.energy[1].grid_energy_imported;
-					let todayGridOut = (
-						payload.energy[1].grid_energy_exported_from_solar +
-						payload.energy[1].grid_energy_exported_from_battery +
-						payload.energy[1].grid_energy_exported_from_generator
-					);
+			case "MMM-Powerwall-Aggregates":
+				if( payload.ip === this.config.powerwallIP ) {
+					let needUpdate = false;
+					if (!this.flows) {
+						needUpdate = true;
+					}
 
-					let todayBatteryIn = payload.energy[1].battery_energy_exported;
-					let todayBatteryOut = (
-						payload.energy[1].battery_energy_imported_from_grid +
-						payload.energy[1].battery_energy_imported_from_solar +
-						payload.energy[1].battery_energy_imported_from_generator
-					);							
+					this.teslaAggregates = payload.aggregates;
+					this.flows = this.attributeFlows(payload.aggregates, self.twcConsumption);
 
-					let todayUsage = (
-						payload.energy[1].consumer_energy_imported_from_grid +
-						payload.energy[1].consumer_energy_imported_from_solar +
-						payload.energy[1].consumer_energy_imported_from_battery
-					);
-
-					this.dayStart = {
-						solar: {
-							export: (
+					let todayDate = new Date().getDate();
+					if( this.todayDate !== todayDate ) {
+						if( this.dayStart.solar ) {
+							this.yesterdaySolar = (
 								this.teslaAggregates.solar.energy_exported -
-								todaySolar
-							)
-						},
-						grid: {
-							export: (
-								this.teslaAggregates.site.energy_exported -
-								todayGridOut
-							),
-							import: (
-								this.teslaAggregates.site.energy_imported -
-								todayGridIn
-							)
-						},
-						house: {
-							import: (
-								this.teslaAggregates.load.energy_imported -
-								todayUsage
-							)
-						},
-						battery: {
-							export: (
-								this.teslaAggregates.battery.energy_exported -
-								todayBatteryIn
-							),
-							import: (
-								this.teslaAggregates.battery.energy_imported -
-								todayBatteryOut
-							)
+								this.dayStart.solar.export
+							);
 						}
-					};
-					Log.log(JSON.stringify(this.dayStart));
+						this.updateEnergy();
+						this.todayDate = todayDate;
+						this.dayStart = {
+							solar: {
+								export: this.teslaAggregates.solar.energy_exported
+							},
+							grid: {
+								export: this.teslaAggregates.site.energy_exported,
+								import: this.teslaAggregates.site.energy_imported
+							},
+							battery: {
+								export: this.teslaAggregates.battery.energy_exported,
+								import: this.teslaAggregates.battery.energy_imported
+							},
+							house: {
+								import: this.teslaAggregates.load.energy_imported
+							}
+						};
+					}
 
-					this.todayDate = new Date().getDate();
-			}
-		}
-		else if (notification === "MMM-Powerwall-SelfConsumption") {
-			if( payload.username === this.config.teslaAPIUsername && 
-				this.config.siteID == payload.siteID ) {
-					let yesterday = payload.selfConsumption[0];
-					let today = payload.selfConsumption[1];
-					this.selfConsumptionYesterday = [
-						yesterday.solar,
-						yesterday.battery,
-						100 - yesterday.solar - yesterday.battery
-					];
-					this.selfConsumptionToday = [
-						today.solar,
-						today.battery,
-						100 - today.solar - today.battery
-					];
-			}
-		}
-		else if( notification === "MMM-Powerwall-VehicleData" ) {
-			// username: username,
-			// ID: vehicleID,
-			// state: state,
-			// sentry: data.vehicle_state.sentry_mode,
-			// drive: {
-			// 	speed: data.drive_state.speed,
-			// 	units: data.gui_settings.gui_distance_units,
-			// 	gear: data.drive_state.shift_state,
-			// 	location: [data.drive_state.latitude, data.drive_state.longitude]
-			// },
-			// charge: {
-			// 	state: data.charge_state.charging_state,
-			// 	soc: data.charge_state.battery_level,
-			// 	limit: data.charge_state.charge_limit_soc,
-			// 	power: data.charge_state.charger_power,
-			// 	time: data.charge_state.time_to_full_charge
-			// }
+					if (needUpdate) {
+						// If we didn't have data before, we need to redraw
+						this.buildGraphs();
+					}
 
-			if( payload.username === this.config.teslaAPIUsername ) {
-				let statusFor = this.vehicles.find(vehicle => vehicle.id == payload.ID);
-				if( statusFor.drive ) {
-					statusFor.oldLocation = statusFor.drive.location;
+					// We're updating the data in-place.
+					this.updateData();
 				}
-				if( payload.state === "online" && !payload.drive.gear && !payload.sentry && payload.charge.power == 0 ) {
-					// If car is idle and not in Sentry mode, don't request data for half an hour;
-					// let it try to sleep.
-					statusFor.deferUntil = Date.now() + 30*60*1000;
+				break;
+			case "MMM-Powerwall-SOE":
+				if( payload.ip === this.config.powerwallIP ) {
+					this.soe = payload.soe;
+					this.updateNode(
+						this.identifier + "-PowerwallSOE",
+						payload.soe,
+						"%",
+						"",
+						false);
+					let meterNode = document.getElementById(this.identifier + "-battery-meter");
+					if (meterNode) {
+						meterNode.style = "height: " + payload.soe + "%;";
+					}
 				}
-				else {
-					delete statusFor.deferUntil;
+				break;
+			case "MMM-Powerwall-ChargeStatus":
+				if( payload.ip === this.config.twcManagerIP ) {
+					let oldConsumption = self.twcConsumption;
+					self.twcConsumption = Math.round( parseFloat(payload.status.chargerLoadWatts) );
+					if( self.twcConsumption !== oldConsumption && this.teslaAggregates ) {
+						this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
+						this.updateData();
+					}
+
+					if( payload.status.carsCharging > 0 && this.vehicles ) {
+						// Charging at least one car
+						let vinsWeKnow = (payload.vins || []).filter(
+							chargingVIN => this.vehicles.some(
+								knownVehicle => knownVehicle.vin == chargingVIN
+							)
+						) || [];
+						let vehicles;
+
+						if (vinsWeKnow.length > 0) {
+							// We recognize some charging VINs!
+							vehicles = vinsWeKnow.map(vin => this.vehicles.find(
+								vehicle => vehicle.vin == vin
+							));
+							vehicles.sort( (a,b) => (
+								a.charge && b.charge &&
+									a.charge.soc && b.charge.soc ?
+								(a.charge.soc - b.charge.soc) :
+								a.charge ? -1 : 1));
+						}
+						else {
+							// Charging cars are unknown; TWCs can't report VINs?
+							// Show any cars the API indicates are currently
+							// charging. This will have some false positives if
+							// charging off-site, and will be slow to detect
+							// vehicles.
+							vehicles = this.vehicles.filter(
+								knownVehicle =>
+									knownVehicle.charge &&
+									knownVehicle.charge.charging_state === "Charging"
+							);
+						}
+						await this.focusOnVehicles(vehicles, payload.status.carsCharging)
+					}
+					else {
+						// No cars are charging.
+						await this.focusOnVehicles(this.vehicles, 0);
+					}
 				}
-				statusFor.drive = payload.drive;
-				statusFor.charge = payload.charge;
-				if( !this.vehicleInFocus ) {
-					this.advanceToNextVehicle();
+				break;
+
+			case "MMM-Powerwall-EnergyData":
+				if( payload.username === this.config.teslaAPIUsername &&
+					this.config.siteID == payload.siteID ) {
+
+						this.yesterdaySolar = payload.energy[0].solar_energy_exported;
+
+						let todaySolar = payload.energy[1].solar_energy_exported;
+
+						let todayGridIn = payload.energy[1].grid_energy_imported;
+						let todayGridOut = (
+							payload.energy[1].grid_energy_exported_from_solar +
+							payload.energy[1].grid_energy_exported_from_battery +
+							payload.energy[1].grid_energy_exported_from_generator
+						);
+
+						let todayBatteryIn = payload.energy[1].battery_energy_exported;
+						let todayBatteryOut = (
+							payload.energy[1].battery_energy_imported_from_grid +
+							payload.energy[1].battery_energy_imported_from_solar +
+							payload.energy[1].battery_energy_imported_from_generator
+						);
+
+						let todayUsage = (
+							payload.energy[1].consumer_energy_imported_from_grid +
+							payload.energy[1].consumer_energy_imported_from_solar +
+							payload.energy[1].consumer_energy_imported_from_battery
+						);
+
+						this.dayStart = {
+							solar: {
+								export: (
+									this.teslaAggregates.solar.energy_exported -
+									todaySolar
+								)
+							},
+							grid: {
+								export: (
+									this.teslaAggregates.site.energy_exported -
+									todayGridOut
+								),
+								import: (
+									this.teslaAggregates.site.energy_imported -
+									todayGridIn
+								)
+							},
+							house: {
+								import: (
+									this.teslaAggregates.load.energy_imported -
+									todayUsage
+								)
+							},
+							battery: {
+								export: (
+									this.teslaAggregates.battery.energy_exported -
+									todayBatteryIn
+								),
+								import: (
+									this.teslaAggregates.battery.energy_imported -
+									todayBatteryOut
+								)
+							}
+						};
+						Log.log(JSON.stringify(this.dayStart));
+
+						this.todayDate = new Date().getDate();
 				}
-				else if( statusFor === this.vehicleInFocus ) {
-					await this.drawStatusForVehicle(statusFor, this.numCharging, this.vehicleTileShown);
+				break;
+			case "MMM-Powerwall-PowerHistory":
+				if( payload.username === this.config.teslaAPIUsername &&
+					this.config.siteID == payload.siteID ) {
+						this.powerHistory = payload.powerHistory;
+					}
+				break;
+			case "MMM-Powerwall-SelfConsumption":
+				if( payload.username === this.config.teslaAPIUsername &&
+					this.config.siteID == payload.siteID ) {
+						let yesterday = payload.selfConsumption[0];
+						let today = payload.selfConsumption[1];
+						this.selfConsumptionYesterday = [
+							yesterday.solar,
+							yesterday.battery,
+							100 - yesterday.solar - yesterday.battery
+						];
+						this.selfConsumptionToday = [
+							today.solar,
+							today.battery,
+							100 - today.solar - today.battery
+						];
 				}
-			}
+				break;
+			case "MMM-Powerwall-VehicleData":
+				// username: username,
+				// ID: vehicleID,
+				// state: state,
+				// sentry: data.vehicle_state.sentry_mode,
+				// drive: {
+				// 	speed: data.drive_state.speed,
+				// 	units: data.gui_settings.gui_distance_units,
+				// 	gear: data.drive_state.shift_state,
+				// 	location: [data.drive_state.latitude, data.drive_state.longitude]
+				// },
+				// charge: {
+				// 	state: data.charge_state.charging_state,
+				// 	soc: data.charge_state.battery_level,
+				// 	limit: data.charge_state.charge_limit_soc,
+				// 	power: data.charge_state.charger_power,
+				// 	time: data.charge_state.time_to_full_charge
+				// }
+
+				if( payload.username === this.config.teslaAPIUsername ) {
+					let statusFor = this.vehicles.find(vehicle => vehicle.id == payload.ID);
+					if( statusFor.drive ) {
+						statusFor.oldLocation = statusFor.drive.location;
+					}
+					if( payload.state === "online" && !payload.drive.gear && !payload.sentry && payload.charge.power == 0 ) {
+						// If car is idle and not in Sentry mode, don't request data for half an hour;
+						// let it try to sleep.
+						statusFor.deferUntil = Date.now() + 30*60*1000;
+					}
+					else {
+						delete statusFor.deferUntil;
+					}
+					statusFor.drive = payload.drive;
+					statusFor.charge = payload.charge;
+					if( !this.vehicleInFocus ) {
+						this.advanceToNextVehicle();
+					}
+					else if( statusFor === this.vehicleInFocus ) {
+						await this.drawStatusForVehicle(statusFor, this.numCharging, this.vehicleTileShown);
+					}
+				}
+				break;
+			default:
+				break;
 		}
 	},
 
@@ -682,17 +707,19 @@ Module.register("MMM-Powerwall", {
 		}
 		let solarFlip = document.getElementById(this.identifier + "-SolarFlip");
 		let solarCanvas = document.getElementById(this.identifier + "-SolarDestinations");
-		if( this.dayMode === "day" ) {
-			solarFlip.style.transform = "none";
-			solarCanvas.style.visibility = "visible"
-		}
-		else {
-			solarFlip.style.transform = "rotateX(180deg)";
-			solarCanvas.style.visibility = "hidden";
-			this.updateText(
-				this.identifier + "-SolarTodayYesterday",
-				this.dayMode === "morning" ? "yesterday" : "today"
-			);
+		if( solarFlip && solarCanvas ) {
+			if( this.dayMode === "day" ) {
+				solarFlip.style.transform = "none";
+				solarCanvas.style.visibility = "visible"
+			}
+			else {
+				solarFlip.style.transform = "rotateX(180deg)";
+				solarCanvas.style.visibility = "hidden";
+				this.updateText(
+					this.identifier + "-SolarTodayYesterday",
+					this.dayMode === "morning" ? "yesterday" : "today"
+				);
+			}
 		}
 
 		/********************
@@ -751,13 +778,20 @@ Module.register("MMM-Powerwall", {
 			}
 		}
 
-		/***************
-		 * Power Flows *
-		 ***************/
-		let pfChart = this.charts.energyBar;
-		if( pfChart ) {
-			pfChart.data.datasets[0].data = this.dataTotals();
-			pfChart.update();
+		/****************
+		 * Energy Flows *
+		 ****************/
+		let energyBar = this.charts.energyBar;
+		if( energyBar ) {
+			energyBar.data.datasets[0].data = this.dataTotals();
+			energyBar.update();
+		}
+
+		let powerLine = this.charts.powerLine;
+		if( powerLine && this.powerHistory ) {
+			powerLine.options.scales.xAxes[0].ticks.min = new Date().setHours(0,0,0);
+			powerLine.data = this.processPowerHistory();
+			powerLine.update();
 		}
 	},
 
@@ -890,19 +924,18 @@ Module.register("MMM-Powerwall", {
 				}
 			}
 		});
-		
+
 		for( const oldChart in this.charts ) {
 			this.charts[oldChart].destroy();
 		}
 		this.charts = {};
-		
+
 		if( this.flows ) {
 
-			
 			var myCanvas = document.getElementById(this.identifier + "-SolarDestinations");
 			if( myCanvas ) {
 				let distribution = this.flows.sources.solar.distribution;
-				
+
 				// Build the chart on the canvas
 				var solarProductionPie = new Chart(myCanvas, {
 					type: "pie",
@@ -931,11 +964,11 @@ Module.register("MMM-Powerwall", {
 				});
 				this.charts.solarProduction = solarProductionPie;
 			}
-			
+
 			myCanvas = document.getElementById(this.identifier + "-HouseSources");
 			if( myCanvas ) {
 				let distribution = this.flows.sinks.house.sources;
-				
+
 				// Build the chart on the canvas
 				var houseConsumptionPie = new Chart(myCanvas, {
 					type: "pie",
@@ -963,33 +996,33 @@ Module.register("MMM-Powerwall", {
 					});
 					this.charts.houseConsumption = houseConsumptionPie;
 				}
-				
-				myCanvas = document.getElementById(this.identifier + "-SelfPoweredDetails");
-				if( myCanvas ) {
-					let scSources = [SOLAR, POWERWALL, GRID];
-					var selfConsumptionDoughnut = new Chart(myCanvas, {
-						type: "doughnut",
-						data: {
-							datasets: [{
-								data: this.selfConsumptionToday,
-								backgroundColor: scSources.map( entry => entry.color),
-								labels: scSources.map( entry => entry.displayAs ),
-								datalabels: {
-									formatter: function(value, context) {
-										return [
-											context.dataset.labels[context.dataIndex],
-											Math.round(value) + "%"
-										];
-									}
+			}
+
+			myCanvas = document.getElementById(this.identifier + "-SelfPoweredDetails");
+			if( myCanvas ) {
+				let scSources = [SOLAR, POWERWALL, GRID];
+				var selfConsumptionDoughnut = new Chart(myCanvas, {
+					type: "doughnut",
+					data: {
+						datasets: [{
+							data: this.selfConsumptionToday,
+							backgroundColor: scSources.map( entry => entry.color),
+							labels: scSources.map( entry => entry.displayAs ),
+							datalabels: {
+								formatter: function(value, context) {
+									return [
+										context.dataset.labels[context.dataIndex],
+										Math.round(value) + "%"
+									];
 								}
-							}]
-						},
-						options: {
-							cutoutPercentage: 65
-						}
-					});
-					this.charts.selfConsumption = selfConsumptionDoughnut;
-				}
+							}
+						}]
+					},
+					options: {
+						cutoutPercentage: 65
+					}
+				});
+				this.charts.selfConsumption = selfConsumptionDoughnut;
 			}
 
 			myCanvas = document.getElementById(this.identifier + "-EnergyBar");
@@ -1005,7 +1038,7 @@ Module.register("MMM-Powerwall", {
 							borderColor: DISPLAY_ALL.map(entry => entry.color),
 							borderWidth: 1,
 							data: data
-						}]			
+						}]
 					},
 					options: {
 						// Elements options apply to all of the options unless overridden in a dataset
@@ -1048,8 +1081,110 @@ Module.register("MMM-Powerwall", {
 				});
 				this.charts.energyBar = energyBar;
 			}
+
+			myCanvas = document.getElementById(this.identifier + "-PowerLine");
+			if( myCanvas ) {
+				let data = this.processPowerHistory();
+				let powerLine = new Chart(myCanvas, {
+					type: 'line',
+					data: data,
+					options: {
+						// Elements options apply to all of the options unless overridden in a dataset
+						// In this case, we are setting the border of each horizontal bar to be 2px wide
+						elements: {
+							point: {
+								radius: 0
+							}
+						},
+						maintainAspectRatio: true,
+						aspectRatio: 1.7,
+						title: {
+							display: false
+						},
+						plugins: {
+							datalabels: false
+						},
+						scales: {
+							xAxes: [{
+								type: "time",
+								ticks: {
+									min: new Date().setHours(0,0,0),
+									fontColor: "white",
+									autoSkipPadding: 10
+								}
+							}],
+							yAxes: [{
+								ticks: {
+									callback: function( value, index, values) {
+										return Math.round(Math.abs(value) / 1000);
+									},
+									fontColor: "white"
+								},
+								scaleLabel: {
+									display: true,
+									labelString: "Power To / From (kW)",
+									fontColor: "white"
+								}
+							}]
+						},
+						animation: {
+							duration: 0
+						}
+					}
+				});
+				this.charts.powerLine = powerLine;
+			}
 	},
-	
+
+	processPowerHistory: function() {
+		// {
+		// 	labels: DISPLAY_ALL.map(entry => entry.displayAs),
+		// 	datasets: [{
+		// 		backgroundColor: DISPLAY_ALL.map(entry => entry.color),
+		// 		borderColor: DISPLAY_ALL.map(entry => entry.color),
+		// 		borderWidth: 1,
+		// 		data: data
+		// 	}]
+		// }
+		if( this.powerHistory ) {
+
+			return {
+				labels: this.powerHistory.map(entry => entry.timestamp),
+				datasets: DISPLAY_ALL.map(entry => {
+					return {
+						backgroundColor: entry.color,
+						borderColor: entry.color,
+						borderWidth: 1,
+						data: this.powerHistory.map(sample => {
+							switch(entry.key) {
+								case "solar":
+									case "battery":
+								case "grid":
+									return sample[entry.key + "_power"];
+									case "car":
+										return 0;
+								case "house":
+									return -1 * (
+										sample.solar_power +
+										sample.battery_power +
+										sample.grid_power
+										);
+								default:
+									return null;
+							}
+						})
+					};
+				})
+			};
+		}
+		else {
+			return {
+				labels: [],
+				datasets: []
+			}
+		}
+	},
+
 	attributeFlows: function(teslaAggregates, twcConsumption) {
 		if( teslaAggregates ) {
 			let solar = Math.trunc(teslaAggregates.solar.instant_power);
@@ -1184,7 +1319,9 @@ Module.register("MMM-Powerwall", {
 				this.vehicleInFocus = this.displayVehicles[indexToFocus];
 				this.vehicleTileShown = newTileSide;
 				let carFlip = document.getElementById(this.identifier + "-CarFlip");
-				carFlip.style.transform = (this.vehicleTileShown === "A" ? "none" : "rotateX(180deg)");
+				if( carFlip ) {
+					carFlip.style.transform = (this.vehicleTileShown === "A" ? "none" : "rotateX(180deg)");
+				}
 			}
 		}
 		else {

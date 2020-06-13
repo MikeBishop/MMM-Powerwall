@@ -50,6 +50,7 @@ This module implements several different graphs.  Currently, these are:
 - SolarProduction
 - HouseConsumption
 - EnergyBar
+- PowerLine
 
 By default, all are displayed.  However, as needed by your layout, you can
 instantiate multiple instances of this module, each displaying different graphs
