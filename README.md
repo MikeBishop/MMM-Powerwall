@@ -45,12 +45,12 @@ var config = {
 
 This module implements several different graphs.  Currently, these are:
 
-- CarCharging
-- PowerwallSelfPowered
-- SolarProduction
-- HouseConsumption
-- EnergyBar
-- PowerLine
+- CarCharging<br>![](images/CarCharging.png)
+- PowerwallSelfPowered<br>![](images/PowerwallSelfPowered.png)
+- SolarProduction<br>![](images/SolarProduction.png)
+- HouseConsumption<br>![](images/HouseConsumption.png)
+- EnergyBar<br>![](images/EnergyBar.png)
+- PowerLine<br>![](images/PowerLine.png)
 
 By default, all are displayed.  However, as needed by your layout, you can
 instantiate multiple instances of this module, each displaying different graphs
