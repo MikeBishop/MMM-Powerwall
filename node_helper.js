@@ -21,6 +21,7 @@ module.exports = NodeHelper.create({
 		this.powerwallSOE = {};
 		this.twcStatus = {};
 		this.twcVINs = {};
+		this.chargeHistory = {};
 		this.teslaApiAccounts = {};
 		this.energy = {};
 		this.selfConsumption = {};
@@ -198,6 +199,22 @@ module.exports = NodeHelper.create({
 			}
 
 		}
+		else if (notification === "MMM-Powerwall-UpdateChargeHistory") {
+			let twcManagerIP = payload.twcManagerIP;
+			let twcManagerPort = payload.twcManagerPort;
+
+			this.initializeCache(this.chargeHistory, twcManagerIP);
+
+			if( this.chargeHistory[twcManagerIP].lastUpdate + payload.updateInterval < Date.now()) {
+				await self.updateTWCHistory(twcManagerIP, twcManagerPort);
+			}
+			else {
+				this.sendSocketNotification("MMM-Powerwall-ChargeHistory", {
+					twcManagerIP: twcManagerIP,
+					chargeHistory: this.chargeHistory[twcManagerIP].lastResult
+				});
+			}
+		}
 		else if (notification === "MMM-Powerwall-UpdateVehicleData") {
 			let username = payload.username;
 			let vehicleID = payload.vehicleID;
@@ -237,7 +254,7 @@ module.exports = NodeHelper.create({
 		};
 	},
 
-	updatePowerwall: async function(powerwallIP, powerwallPassword) {
+	updatePowerwall: async function(powerwallIP) {
 		let url = "https://" + powerwallIP + "/api/meters/aggregates";
 		let result = await fetch(url, {agent: unauthenticated_agent});
 		
@@ -316,6 +333,27 @@ module.exports = NodeHelper.create({
 		}
 		else {
 			this.log("TWCManager fetch failed")
+		}
+	},
+
+	updateTWCHistory: async function(twcManagerIP, twcManagerPort) {
+		let url = "http://" + twcManagerIP + ":" + twcManagerPort + "/api/getHistory";
+		let success = true;
+
+		try {
+			var result = await fetch(url);
+		}
+		catch (e) {
+			success = false;
+		}
+
+		if( success && result.ok ) {
+			var history = await result.json();
+			this.updateCache(history, this.chargeHistory, twcManagerIP);
+			this.sendSocketNotification("MMM-Powerwall-ChargeHistory", {
+				twcManagerIP: twcManagerIP,
+				chargeHistory: history
+			});
 		}
 	},
 
