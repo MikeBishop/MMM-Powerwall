@@ -222,6 +222,7 @@ Module.register("MMM-Powerwall", {
 		switch(notification) {
 			case "MMM-Powerwall-TeslaAPIConfigured":
 				if( payload.username === self.config.teslaAPIUsername ) {
+					this.teslaAPIEnabled = true;
 					if( !self.config.siteID ) {
 						self.config.siteID = payload.siteID;
 					}
