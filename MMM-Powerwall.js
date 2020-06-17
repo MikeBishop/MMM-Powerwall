@@ -68,7 +68,6 @@ Module.register("MMM-Powerwall", {
 	todayDate: null,
 	charts: {},
 	powerHistoryChanged: false,
-	dataTotalsChanged: false,
 	selfConsumptionToday: [0, 0, 100],
 	selfConsumptionYesterday: null,
 	soe: 0,
@@ -318,6 +317,11 @@ Module.register("MMM-Powerwall", {
 
 					if( payload.status.carsCharging > 0 && this.vehicles ) {
 						// Charging at least one car
+						let charging = this.flows.sinks.car.total;
+						for( const suffix of ["A", "B"]) {
+							this.updateNode(this.identifier + "-CarConsumption-" + suffix, charging, "W", "", this.vehicleTileShown == suffix);
+						}
+
 						let vinsWeKnow = (payload.vins || []).filter(
 							chargingVIN => this.vehicles.some(
 								knownVehicle => knownVehicle.vin == chargingVIN
@@ -422,21 +426,20 @@ Module.register("MMM-Powerwall", {
 						Log.log(JSON.stringify(this.dayStart));
 
 						this.todayDate = new Date().getDate();
-						this.dataTotalsChanged = true;
 				}
 				break;
 			case "MMM-Powerwall-PowerHistory":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
 						this.powerHistory = payload.powerHistory;
-						this.powerHistoryChanged = true;
-					}
+						this.updatePowerLine();
+				}
 				break;
 			case "MMM-Powerwall-ChargeHistory":
 				if( payload.twcManagerIP === this.config.twcManagerIP ) {
-					this.chargeHistory = payload.chargeHistory
-					this.powerHistoryChanged = true;
-					this.dataTotalsChanged = true;
+					this.chargeHistory = payload.chargeHistory;
+					this.cachedCarTotal = null;
+					this.updatePowerLine();
 				}
 				break;
 			case "MMM-Powerwall-SelfConsumption":
@@ -454,6 +457,15 @@ Module.register("MMM-Powerwall", {
 							today.battery,
 							100 - today.solar - today.battery
 						];
+						this.updateNode(
+							this.identifier + "-SelfPoweredTotal",
+							Math.round(this.selfConsumptionToday[0]) + Math.round(this.selfConsumptionToday[1]),
+							"%");
+						let scChart = this.charts.selfConsumption
+						if( scChart ) {
+							scChart.data.datasets[0].data = this.selfConsumptionToday;
+							scChart.update();
+						}
 				}
 				break;
 			case "MMM-Powerwall-VehicleData":
@@ -503,6 +515,15 @@ Module.register("MMM-Powerwall", {
 				break;
 			default:
 				break;
+		}
+	},
+
+	updatePowerLine: function() {
+		let powerLine = this.charts.powerLine;
+		if( powerLine ) {
+			powerLine.options.scales.xAxes[0].ticks.min = new Date().setHours(0,0,0);
+			powerLine.data = this.processPowerHistory();
+			powerLine.update();
 		}
 	},
 
@@ -654,7 +675,7 @@ Module.register("MMM-Powerwall", {
 		}
 		return null;
 	},
-	
+
 	formatAsK: function(number, unit) {
 		let separator = (unit[0] === "%") ? "" : " "
 		if( number > 950 ) {
@@ -781,47 +802,13 @@ Module.register("MMM-Powerwall", {
 			this.updateText(targetId, "Standby");
 		}
 
-		/********************
-		 * Self-Consumption *
-		 ********************/
-		if( this.selfConsumptionToday ) {
-			this.updateNode(
-				this.identifier + "-SelfPoweredTotal",
-				Math.round(this.selfConsumptionToday[0]) + Math.round(this.selfConsumptionToday[1]),
-				"%");
-			let scChart = this.charts.selfConsumption
-			if( scChart ) {
-				scChart.data.datasets[0].data = this.selfConsumptionToday;
-				scChart.update();
-			}	
-		}
-
-		/****************
-		 * Car Charging *
-		 ****************/
-		let charging = this.flows.sinks.car.total;
-		if( this.numCharging > 0 ) {
-			for( const suffix of ["A", "B"]) {
-				this.updateNode(this.identifier + "-CarConsumption-" + suffix, charging, "W", "", this.vehicleTileShown == suffix);
-			}
-		}
-
 		/****************
 		 * Energy Flows *
 		 ****************/
 		let energyBar = this.charts.energyBar;
-		if( energyBar && this.dataTotalsChanged ) {
+		if( energyBar ) {
 			energyBar.data.datasets[0].data = this.dataTotals();
 			energyBar.update();
-			this.dataTotalsChanged = false;
-		}
-
-		let powerLine = this.charts.powerLine;
-		if( powerLine && this.powerHistory && this.powerHistoryChanged ) {
-			powerLine.options.scales.xAxes[0].ticks.min = new Date().setHours(0,0,0);
-			powerLine.data = this.processPowerHistory();
-			powerLine.update();
-			this.powerHistoryChanged = false;
 		}
 	},
 
@@ -859,9 +846,9 @@ Module.register("MMM-Powerwall", {
 		]
 	},
 
-	cachedCarTotal: 0,
+	cachedCarTotal: null,
 	carTotalToday: function() {
-		if( Array.isArray(this.chargeHistory) && this.powerHistoryChanged ) {
+		if( Array.isArray(this.chargeHistory) && !this.cachedCarTotal ) {
 			this.cachedCarTotal = this.chargeHistory.filter(
 				entry => Date.parse(entry.timestamp) >= new Date().setHours(0,0,0,0)
 			).reduce((total, next) => total + next.charger_power / 12, 0)
