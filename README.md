@@ -67,7 +67,7 @@ authenticate to the Tesla API, you have two options:
 
 - **Include your password in the module configuration.**
   Note that your password will be relayed from client to server at client
-  start-up and MagicMirror2 does not currently use TLS, so use this option only
+  start-up and MagicMirror2 does not use TLS by default, so use this option only
   if your only client is on the same device, or if you completely trust your
   local network.
 - **Generate Tesla API tokens yourself.**
