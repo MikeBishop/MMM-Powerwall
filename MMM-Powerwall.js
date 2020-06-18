@@ -88,12 +88,11 @@ Module.register("MMM-Powerwall", {
 		else {
 			self.twcEnabled = false;
 		}
-		
+
 		//Send settings to helper
 		if (self.config.teslaAPIUsername && self.config.teslaAPIPassword ) {
 			self.sendSocketNotification("MMM-Powerwall-Configure-TeslaAPI",
 			{
-				updateInterval: self.config.cloudUpdateInterval,
 				siteID: self.config.siteID,
 				teslaAPIUsername: self.config.teslaAPIUsername,
 				teslaAPIPassword: self.config.teslaAPIPassword,
@@ -105,11 +104,15 @@ Module.register("MMM-Powerwall", {
 			self.teslaAPIEnabled = false;
 		}
 		var updateLocal = function() {
+			let config = self.config;
 			self.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
-				powerwallIP: self.config.powerwallIP,
-				twcManagerIP: self.config.twcManagerIP,
-				twcManagerPort: self.config.twcManagerPort,
-				updateInterval: self.config.localUpdateInterval
+				powerwallIP: config.powerwallIP,
+				twcManagerIP: config.twcManagerIP,
+				twcManagerPort: config.twcManagerPort,
+				updateInterval: config.localUpdateInterval - 500,
+				username: config.teslaAPIUsername,
+				siteID: config.siteID,
+				resyncInterval: config.cloudUpdateInterval - 500
 			});
 		};
 
@@ -162,7 +165,7 @@ Module.register("MMM-Powerwall", {
 			this.sendSocketNotification("MMM-Powerwall-UpdateEnergy", {
 				username: this.config.teslaAPIUsername,
 				siteID: this.config.siteID,
-				updateInterval: this.config.cloudUpdateInterval
+				updateInterval: this.config.cloudUpdateInterval - 500
 			});
 		}
 	},
@@ -172,7 +175,7 @@ Module.register("MMM-Powerwall", {
 			this.sendSocketNotification(notification, {
 				username: this.config.teslaAPIUsername,
 				siteID: this.config.siteID,
-				updateInterval: this.config.cloudUpdateInterval
+				updateInterval: this.config.cloudUpdateInterval - 500
 			});
 		}
 	},
@@ -183,7 +186,7 @@ Module.register("MMM-Powerwall", {
 			this.sendSocketNotification("MMM-Powerwall-UpdateChargeHistory", {
 				twcManagerIP: this.config.twcManagerIP,
 				twcManagerPort: this.config.twcManagerPort,
-				updateInterval: this.config.localUpdateInterval
+				updateInterval: this.config.localUpdateInterval - 500
 			});
 		}
 	},
@@ -208,7 +211,7 @@ Module.register("MMM-Powerwall", {
 				this.sendSocketNotification("MMM-Powerwall-UpdateVehicleData", {
 					username: this.config.teslaAPIUsername,
 					vehicleID: vehicle.id,
-					updateInterval: timeout
+					updateInterval: timeout - 500
 				});
 			}
 		}

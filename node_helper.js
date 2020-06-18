@@ -19,6 +19,7 @@ module.exports = NodeHelper.create({
 	start: function() {
 		this.powerwallAggregates = {};
 		this.powerwallSOE = {};
+		this.powerwallCloudSOE = {};
 		this.twcStatus = {};
 		this.twcVINs = {};
 		this.chargeHistory = {};
@@ -82,7 +83,7 @@ module.exports = NodeHelper.create({
 				}
 				catch(e) {
 					if( password ) {
-						self.doTeslaApiLogin(username,password,filename);
+						await self.doTeslaApiLogin(username,password,filename);
 					}
 					else {
 						this.log("Missing both Tesla password and access tokens");
@@ -109,11 +110,14 @@ module.exports = NodeHelper.create({
 		}
 		else if (notification === "MMM-Powerwall-UpdateLocal") {
 			let ip = payload.powerwallIP;
+			let username = payload.username;
+			let siteID = payload.siteID;
 			this.initializeCache(this.powerwallAggregates, ip);
 			this.initializeCache(this.powerwallSOE, ip);
+			this.initializeCache(this.powerwallCloudSOE, username, siteID);
 
 			if( this.powerwallAggregates[ip].lastUpdate + payload.updateInterval < Date.now() ) {
-				self.updatePowerwall(ip);
+				await self.updatePowerwall(ip, username, siteID, payload.resyncInterval);
 			}
 			else {
 				if (this.powerwallAggregates[ip].lastResult) {
@@ -123,11 +127,14 @@ module.exports = NodeHelper.create({
 					});
 				}
 				if (this.powerwallSOE[ip].lastResult) {
+					let cache = (this.powerwallCloudSOE[username] || [])[siteID] || [];
+					let cloudSOE = cache.lastResult || 0;
+					let syncPoint = cache.syncPoint || 0;
 					this.sendSocketNotification("MMM-Powerwall-SOE", {
 						ip: ip,
-						soe: this.powerwallSOE[ip].lastResult
+						soe: cloudSOE + this.powerwallSOE[ip].lastResult - syncPoint
 					});
-				}	
+				}
 			}
 
 			ip = payload.twcManagerIP;
@@ -136,7 +143,7 @@ module.exports = NodeHelper.create({
 				this.initializeCache(this.twcStatus, ip);
 				this.initializeCache(this.twcVINs, ip);
 				if( this.twcStatus[ip].lastUpdate + (payload.updateInterval || 0) < Date.now() ) {
-					self.updateTWCManager(ip, port);
+					await self.updateTWCManager(ip, port);
 				}
 				else {
 					this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
@@ -243,28 +250,33 @@ module.exports = NodeHelper.create({
 		}
 	},
 	
-	updateCache: function(data, node, ...keys) {
+	updateCache: function(data, node, keys, time=null, target="lastResult") {
+		if( !time ) {
+			time = Date.now();
+		}
+		if( keys && !Array.isArray(keys) ) {
+			keys = [keys];
+		}
 		let lastKey = keys.pop();
 		for( let key of keys) {
 			node = node[key];
 		}
-		node[lastKey] = {
-			lastUpdate: Date.now(),
-			lastResult: data
-		};
+		node[lastKey].lastUpdate = time;
+		node[lastKey][target] = data;
 	},
 
-	updatePowerwall: async function(powerwallIP) {
+	updatePowerwall: async function(powerwallIP, username, siteID, resyncInterval) {
 		let url = "https://" + powerwallIP + "/api/meters/aggregates";
 		let result = await fetch(url, {agent: unauthenticated_agent});
-		
+		let now = Date.now();
+
 		if( !result.ok ) {
 			this.log("Powerwall fetch failed")
 			return
 		}
-		
+
 		var aggregates = await result.json();
-		this.updateCache(aggregates, this.powerwallAggregates, powerwallIP);
+		this.updateCache(aggregates, this.powerwallAggregates, powerwallIP, now);
 		// Send notification
 		this.sendSocketNotification("MMM-Powerwall-Aggregates", {
 			ip: powerwallIP,
@@ -279,17 +291,36 @@ module.exports = NodeHelper.create({
 			return;
 		}
 
-		var response = await result.json();
-		this.updateCache(response.percentage, this.powerwallSOE, powerwallIP);
+		let response = await result.json();
+		let localSOE = response.percentage;
+		let cache = this.powerwallCloudSOE[username][siteID];
+		this.updateCache(localSOE, this.powerwallSOE, powerwallIP, now);
+
+		let cloudSOE = 0, syncPoint = 0;
+		if( username && siteID && (cache.lastUpdate + resyncInterval < Date.now())) {
+				let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
+				cloudSOE = await this.doTeslaApi(url, username, null, siteID, this.powerwallCloudSOE, null, "percentage_charged");
+				if( cloudSOE != 0 ) {
+					syncPoint = localSOE;
+					this.updateCache(syncPoint, this.powerwallCloudSOE, [username, siteID], now, "syncPoint");
+				}
+		}
+		if( cloudSOE === 0 && cache.lastResult && cache.syncPoint ) {
+				cloudSOE = this.powerwallCloudSOE[username][siteID].lastResult;
+				syncPoint = this.powerwallCloudSOE[username][siteID].syncPoint;
+		}
+
 		this.sendSocketNotification("MMM-Powerwall-SOE", {
 			ip: powerwallIP,
-			soe: response.percentage
+			soe: cloudSOE + localSOE - syncPoint
 		});
 	},
 
 	updateTWCManager: async function(twcManagerIP, twcManagerPort) {
 		let url = "http://" + twcManagerIP + ":" + twcManagerPort + "/api/getStatus";
 		let success = true;
+		let now = Date.now();
+
 		try {
 			var result = await fetch(url);
 		}
@@ -320,9 +351,8 @@ module.exports = NodeHelper.create({
 			}
 
 			// Cache results
-			let now = Date.now();
-			this.updateCache(status, this.twcStatus, twcManagerIP);
-			this.updateCache(vins, this.twcVINs, twcManagerIP);
+			this.updateCache(status, this.twcStatus, twcManagerIP, now);
+			this.updateCache(vins, this.twcVINs, twcManagerIP, now);
 
 			// Send notification
 			this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
@@ -339,6 +369,7 @@ module.exports = NodeHelper.create({
 	updateTWCHistory: async function(twcManagerIP, twcManagerPort) {
 		let url = "http://" + twcManagerIP + ":" + twcManagerPort + "/api/getHistory";
 		let success = true;
+		let now = Date.now();
 
 		try {
 			var result = await fetch(url);
@@ -349,7 +380,7 @@ module.exports = NodeHelper.create({
 
 		if( success && result.ok ) {
 			var history = await result.json();
-			this.updateCache(history, this.chargeHistory, twcManagerIP);
+			this.updateCache(history, this.chargeHistory, twcManagerIP, now);
 			this.sendSocketNotification("MMM-Powerwall-ChargeHistory", {
 				twcManagerIP: twcManagerIP,
 				chargeHistory: history
@@ -468,6 +499,7 @@ module.exports = NodeHelper.create({
 			deviceID=null, cache_node=null, event_name=null,
 			response_key=null, event_key=null) {
 		let result = {};
+		let now = Date.now();
 
 		if( !this.teslaApiAccounts[username] ) {
 			this.log("Called doTeslaApi() without credentials!")
@@ -503,14 +535,14 @@ module.exports = NodeHelper.create({
 				this.sendSocketNotification(event_name, event);
 			}
 
-			if( cache_node && deviceID ) {
+			if( response && cache_node && deviceID ) {
 				if( !cache_node[username] ) {
 					cache_node[username] = {};
 				}
 				if( !cache_node[username][deviceID] ) {
 					cache_node[username][deviceID] = {};
 				}
-				this.updateCache(response, cache_node, username, deviceID);
+				this.updateCache(response, cache_node, [username, deviceID], now);
 			}
 
 			return response;
