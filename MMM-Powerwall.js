@@ -524,8 +524,21 @@ Module.register("MMM-Powerwall", {
 	updatePowerLine: function() {
 		let powerLine = this.charts.powerLine;
 		if( powerLine ) {
-			powerLine.options.scales.xAxes[0].ticks.min = new Date().setHours(0,0,0);
-			powerLine.data = this.processPowerHistory();
+			let lastMidnight = new Date().setHours(0,0,0,0);
+			let newData = this.processPowerHistory();
+
+			if( powerLine.options.scales.xAxes[0].ticks.min == lastMidnight
+				&& powerLine.data && powerLine.data.datasets.length == newData.datasets.length ) {
+
+					for( let i = 0; i < newData.datasets.length; i++ ) {
+						powerLine.data.datasets[i].data = newData.datasets[i].data;
+					}
+			}
+			else {
+				powerLine.options.scales.xAxes[0].ticks.min = lastMidnight;
+				powerLine.data = newData;
+			}
+
 			powerLine.update();
 		}
 	},
@@ -1091,9 +1104,12 @@ Module.register("MMM-Powerwall", {
 								ticks: {
 									beginAtZero: true,
 									callback: function( value, index, values) {
-										return Math.round(Math.abs(value) / 1000);
+										if( value % 1000 == 0 ) {
+											return Math.abs(value) / 1000;
+										}
 									},
-									fontColor: "white"
+									fontColor: "white",
+									precision: 0
 								},
 								scaleLabel: {
 									display: true,
@@ -1148,9 +1164,12 @@ Module.register("MMM-Powerwall", {
 								type: "linear",
 								ticks: {
 									callback: function( value, index, values) {
-										return Math.round(Math.abs(value) / 1000);
+										if( value % 1000 == 0 ) {
+											return Math.abs(value) / 1000;
+										}
 									},
-									fontColor: "white"
+									fontColor: "white",
+									precision: 0
 								},
 								scaleLabel: {
 									display: true,
@@ -1158,9 +1177,6 @@ Module.register("MMM-Powerwall", {
 									fontColor: "white"
 								}
 							}]
-						},
-						animation: {
-							duration: 0
 						}
 					}
 				});
@@ -1179,11 +1195,12 @@ Module.register("MMM-Powerwall", {
 		// 	}]
 		// }
 		if( this.powerHistory ) {
+			let lastMidnight = new Date().setHours(0,0,0,0);
 			let chargepoints = (this.chargeHistory || []).filter(
-				entry => Date.parse(entry.timestamp) >= new Date().setHours(0,0,0,0)
+				entry => Date.parse(entry.timestamp) >= lastMidnight
 			)
 			let datapoints = this.powerHistory.filter(
-				entry => Date.parse(entry.timestamp) >= new Date().setHours(0,0,0,0)
+				entry => Date.parse(entry.timestamp) >= lastMidnight
 			).map(function(entry, index) {
 				entry.charger_power = 0;
 				if( chargepoints[index] ) {
