@@ -1144,6 +1144,7 @@ Module.register("MMM-Powerwall", {
 						},
 						maintainAspectRatio: true,
 						aspectRatio: 1.7,
+						spanGaps: false,
 						title: {
 							display: false
 						},
@@ -1207,10 +1208,33 @@ Module.register("MMM-Powerwall", {
 					if( chargepoints[index].timestamp !== entry.timestamp ) {
 						Log.log("Date mismatch, " + chargepoints[index].timestamp + " vs. " + entry.timestamp);
 					}
-					entry.charger_power = -1 * chargepoints[index].charger_power
+					entry.car_power = -1 * chargepoints[index].charger_power
 				}
 				return entry
 			});
+			let entryVal = function(sample, entry) {
+				if(sample) {
+					switch(entry.key) {
+						case "solar":
+						case "battery":
+						case "grid":
+						case "car":
+							return sample[entry.key + "_power"];
+						case "house":
+							return -1 * (
+								sample.solar_power +
+								sample.battery_power +
+								sample.grid_power +
+								sample.car_power
+								);
+						default:
+							return 0;
+					}
+				}
+				else {
+					return 0;
+				}
+			}
 
 			return {
 				labels: datapoints.map(entry => entry.timestamp),
@@ -1219,24 +1243,19 @@ Module.register("MMM-Powerwall", {
 						backgroundColor: entry.color_trans,
 						borderColor: entry.color,
 						borderWidth: 1,
-						data: datapoints.map(sample => {
-							switch(entry.key) {
-								case "solar":
-								case "battery":
-								case "grid":
-									return sample[entry.key + "_power"];
-								case "car":
-										return sample.charger_power;
-								case "house":
-									return -1 * (
-										sample.solar_power +
-										sample.battery_power +
-										sample.grid_power +
-										sample.charger_power
-										);
-								default:
-									return null;
-							}
+						order: {
+							solar: 5,
+							battery: 4,
+							grid: 3,
+							house: 2,
+							car: 1
+						}[entry.key],
+						data: datapoints.map((sample, index, array) => {
+							let val = entryVal(sample, entry);
+							return (
+								val +
+								entryVal(array[index-1], entry) +
+								entryVal(array[index+1], entry)) != 0 ? val : null
 						})
 					};
 				})
