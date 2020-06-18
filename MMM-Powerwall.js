@@ -933,7 +933,7 @@ Module.register("MMM-Powerwall", {
 			legend: {
 				display: false
 			},
-			aspectRatio: 1.1,
+			aspectRatio: 1.12,
 			elements: {
 				arc: {
 					borderWidth: 0
@@ -945,8 +945,8 @@ Module.register("MMM-Powerwall", {
 			plugins: {
 				datalabels: {
 					color: "white",
-					anchor: "center",
-					textalign: "center",
+					textAlign: "center",
+					clip: false,
 					display: function(context) {
 						return context.dataset.data[context.dataIndex] >= 0.5 ? "auto" : false;
 					},

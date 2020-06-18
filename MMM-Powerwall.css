@@ -52,7 +52,7 @@
 .scene {
     margin: 0;
     position: relative;
-    width: 155px;
+    width: 150px;
     height: 240px;
     perspective: 600px;
 }
@@ -178,7 +178,7 @@
 .MMM-Powerwall .graph-container {
     position: relative;
     height: 250px;
-    max-width: 275px;
+    max-width: 280px;
     max-height: 250px;
 }
 
