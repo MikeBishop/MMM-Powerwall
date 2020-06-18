@@ -90,7 +90,7 @@ Module.register("MMM-Powerwall", {
 		}
 
 		//Send settings to helper
-		if (self.config.teslaAPIUsername && self.config.teslaAPIPassword ) {
+		if (self.config.teslaAPIUsername ) {
 			self.sendSocketNotification("MMM-Powerwall-Configure-TeslaAPI",
 			{
 				siteID: self.config.siteID,
