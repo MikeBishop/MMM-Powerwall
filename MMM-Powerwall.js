@@ -908,13 +908,14 @@ Module.register("MMM-Powerwall", {
 		let riseset = {};
 		if( (!this.sunrise || !this.sunset) && this.config.home ) {
 			let url = "https://api.sunrise-sunset.org/json?lat=" +
-				this.config.home[0] + "&lng=" + this.config.home[1];
+				this.config.home[0] + "&lng=" + this.config.home[1] +
+				"&formatted=0";
 			let result = await fetch(url);
 			if( result.ok ) {
 				let response = await result.json();
 				for( const tag of ["sunrise", "sunset"]) {
 					if( response.results[tag] ) {
-						riseset[tag] = Date.parse( new Date().toDateString() + " " + response.results[tag]);
+						riseset[tag] = Date.parse(response.results[tag]);
 					}
 				}
 			}
