@@ -58,14 +58,8 @@ Module.register("MMM-Powerwall", {
 	historySeries: null,
 	numCharging: 0,
 	yesterdaySolar: null,
-	dayStart: {
-		grid: null,
-		solar: null,
-		battery: null,
-		house: null,
-	},
+	dayStart: null,
 	dayMode: "day",
-	todayDate: null,
 	charts: {},
 	powerHistoryChanged: false,
 	selfConsumptionToday: [0, 0, 100],
@@ -76,7 +70,7 @@ Module.register("MMM-Powerwall", {
 	vehicleInFocus: null,
 	vehicleTileShown: "A",
 
-	start: function() {
+	start: async function() {
 		var self = this;
 
 		//Flag for check if module is loaded
@@ -121,6 +115,7 @@ Module.register("MMM-Powerwall", {
 			self.advanceToNextVehicle();
 		}, 20000);
 		updateLocal();
+		await this.advanceDayMode();
 	},
 
 	getTemplate: function() {
@@ -256,34 +251,6 @@ Module.register("MMM-Powerwall", {
 
 					this.teslaAggregates = payload.aggregates;
 					this.flows = this.attributeFlows(payload.aggregates, self.twcConsumption);
-
-					let todayDate = new Date().getDate();
-					if( this.todayDate !== todayDate ) {
-						if( this.dayStart.solar ) {
-							this.yesterdaySolar = (
-								this.teslaAggregates.solar.energy_exported -
-								this.dayStart.solar.export
-							);
-						}
-						this.updateEnergy();
-						this.todayDate = todayDate;
-						this.dayStart = {
-							solar: {
-								export: this.teslaAggregates.solar.energy_exported
-							},
-							grid: {
-								export: this.teslaAggregates.site.energy_exported,
-								import: this.teslaAggregates.site.energy_imported
-							},
-							battery: {
-								export: this.teslaAggregates.battery.energy_exported,
-								import: this.teslaAggregates.battery.energy_imported
-							},
-							house: {
-								import: this.teslaAggregates.load.energy_imported
-							}
-						};
-					}
 
 					if (needUpdate) {
 						// If we didn't have data before, we need to redraw
@@ -426,7 +393,6 @@ Module.register("MMM-Powerwall", {
 								)
 							}
 						};
-						Log.log(JSON.stringify(this.dayStart));
 
 						this.todayDate = new Date().getDate();
 				}
@@ -756,7 +722,7 @@ Module.register("MMM-Powerwall", {
 			this.dayMode === "day"
 		);
 		this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
-		if( this.dayStart.solar ) {
+		if( this.dayStart ) {
 			this.updateNode(
 				this.identifier + "-SolarTotalA",
 				this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
@@ -792,7 +758,7 @@ Module.register("MMM-Powerwall", {
 		 ********************/
 		this.updateNode(this.identifier + "-HouseConsumption", this.flows.sinks.house.total, "W");
 		this.updateChart(this.charts.houseConsumption, DISPLAY_SOURCES, this.flows.sinks.house.sources);
-		if( this.dayStart.house ) {
+		if( this.dayStart ) {
 			this.updateNode(
 				this.identifier + "-UsageTotal",
 				this.teslaAggregates.load.energy_imported - this.dayStart.house.import - this.carTotalToday(),
@@ -830,36 +796,41 @@ Module.register("MMM-Powerwall", {
 
 	dataTotals: function() {
 		let carTotal = this.carTotalToday();
-		return [
-			// Grid out/in
-			[
-				this.dayStart.grid.export -
-					this.teslaAggregates.site.energy_exported,
-				this.teslaAggregates.site.energy_imported - this.dayStart.grid.import
-			],
-			// Battery out/in
-			[
-				this.dayStart.battery.import - this.teslaAggregates.battery.energy_imported,
-				this.teslaAggregates.battery.energy_exported -
-					this.dayStart.battery.export
-			],
-			// House out (TODO:  Includes car)
-			[
-				carTotal + this.dayStart.house.import - this.teslaAggregates.load.energy_imported,
-				0
-			],
-			// Car out - TODO
-			[
-				-1 * carTotal,
-				0
-			],
-			// Solar in
-			[
-				0,
-				this.teslaAggregates.solar.energy_exported -
-				this.dayStart.solar.export
+		if( this.dayStart ) {
+			return [
+				// Grid out/in
+				[
+					this.dayStart.grid.export -
+						this.teslaAggregates.site.energy_exported,
+					this.teslaAggregates.site.energy_imported - this.dayStart.grid.import
+				],
+				// Battery out/in
+				[
+					this.dayStart.battery.import - this.teslaAggregates.battery.energy_imported,
+					this.teslaAggregates.battery.energy_exported -
+						this.dayStart.battery.export
+				],
+				// House out
+				[
+					carTotal + this.dayStart.house.import - this.teslaAggregates.load.energy_imported,
+					0
+				],
+				// Car out - TODO
+				[
+					-1 * carTotal,
+					0
+				],
+				// Solar in
+				[
+					0,
+					this.teslaAggregates.solar.energy_exported -
+					this.dayStart.solar.export
+				]
 			]
-		]
+		}
+		else {
+			return Array(5).fill(Array(2).fill(0));
+		}
 	},
 
 	cachedCarTotal: null,
@@ -896,31 +867,71 @@ Module.register("MMM-Powerwall", {
 				}
 			}
 		}
-		else if ( notification === "CURRENTWEATHER_DATA" ) {
-			let data = payload.data;
-			let sunrise = new Date(data.sys.sunrise * 1000);
-			let sunset = new Date(data.sys.sunset * 1000);
-			let now = new Date();
+	},
 
-			this.sunrise = sunrise.getHours() + ":" + sunrise.getMinutes();
+	advanceDayMode: async function() {
+		let now = new Date();
+		let self = this;
+		if( now.getHours() == 0 && now.getMinutes() == 0 ) {
+			// It's midnight
+			if( this.dayStart ) {
+				this.yesterdaySolar = (
+					this.teslaAggregates.solar.energy_exported -
+					this.dayStart.solar.export
+				);
+			}
+			this.dayStart = {
+				solar: {
+					export: this.teslaAggregates.solar.energy_exported
+				},
+				grid: {
+					export: this.teslaAggregates.site.energy_exported,
+					import: this.teslaAggregates.site.energy_imported
+				},
+				battery: {
+					export: this.teslaAggregates.battery.energy_exported,
+					import: this.teslaAggregates.battery.energy_imported
+				},
+				house: {
+					import: this.teslaAggregates.load.energy_imported
+				}
+			};
+			this.sunrise = null;
+			this.sunset = null;
+		}
 
-			let newMode = "";
-			if (now < sunrise) {
-				newMode = "morning";
-			}
-			else if (sunset < now) {
-				newMode = "night";
-			}
-			else {
-				newMode = "day";
-			}
-			if( newMode != this.dayMode ) {
-				this.dayMode = newMode;
-				this.updateEnergy();
-				// I don't think this is needed any more; TEST.
-				//this.updateDom();
+		let riseset = {};
+		if( (!this.sunrise || !this.sunset) && this.config.home ) {
+			let url = "https://api.sunrise-sunset.org/json?lat=" +
+				this.config.home[0] + "&lng=" + this.config.home[1];
+			let result = await fetch(url);
+			if( result.ok ) {
+				let response = await result.json();
+				for( const tag of ["sunrise", "sunset"]) {
+					if( response.results[tag] ) {
+						riseset[tag] = Date.parse( new Date().toDateString() + " " + response.results[tag]);
+					}
+				}
 			}
 		}
+		this.sunrise = this.sunrise || riseset.sunrise || new Date().setHours(6,0,0,0).getTime();
+		this.sunset = this.sunset || riseset.sunset || new Date().setHours(20,30,0).getTime();
+
+		now = now.getTime();
+		let nextRun;
+		if( now < this.sunrise ) {
+			this.dayMode = "morning";
+			nextRun = this.sunrise;
+		}
+		else if( now > this.sunset ) {
+			this.dayMode = "night";
+			nextRun = new Date().setHours(24,0);
+		}
+		else {
+			this.dayMode = "day";
+			nextRun = this.sunset;
+		}
+		setTimeout(() => self.advanceDayMode(), nextRun - now);
 	},
 
 	buildGraphs: function() {
@@ -1069,7 +1080,7 @@ Module.register("MMM-Powerwall", {
 			}
 
 			myCanvas = document.getElementById(this.identifier + "-EnergyBar");
-			if( myCanvas && this.teslaAggregates && this.dayStart ) {
+			if( myCanvas && this.teslaAggregates ) {
 				let data = this.dataTotals();
 				// Horizontal bar chart here
 				let energyBar = new Chart(myCanvas, {
