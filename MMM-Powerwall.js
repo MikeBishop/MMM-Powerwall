@@ -722,24 +722,11 @@ Module.register("MMM-Powerwall", {
 			this.dayMode === "day"
 		);
 		this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
-		if( this.dayStart ) {
-			this.updateNode(
-				this.identifier + "-SolarTotalA",
-				this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
-				"Wh"
-			);
-			this.updateNode(
-				this.identifier + "-SolarTotalB",
-				this.dayMode === "morning" ?
-				this.yesterdaySolar : 
-				(this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export),
-				"Wh"
-			);
-		}
 		let solarFlip = document.getElementById(this.identifier + "-SolarFlip");
 		let solarCanvas = document.getElementById(this.identifier + "-SolarDestinations");
+		let focusOnA = this.dayMode === "day";
 		if( solarFlip && solarCanvas ) {
-			if( this.dayMode === "day" ) {
+			if( focusOnA ) {
 				solarFlip.style.transform = "none";
 				solarCanvas.style.visibility = "visible"
 			}
@@ -752,6 +739,21 @@ Module.register("MMM-Powerwall", {
 				);
 			}
 		}
+		if( this.dayStart ) {
+			this.updateNode(
+				this.identifier + "-SolarTotalA",
+				this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
+				"Wh", "", focusOnA
+			);
+			this.updateNode(
+				this.identifier + "-SolarTotalB",
+				this.dayMode === "morning" ?
+				this.yesterdaySolar :
+				(this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export),
+				"Wh", "", !focusOnA
+			);
+		}
+
 
 		/********************
 		 * HouseConsumption *
