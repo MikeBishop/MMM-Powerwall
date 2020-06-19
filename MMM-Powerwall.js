@@ -156,7 +156,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	updateEnergy: function() {
-		if( this.teslaAPIEnabled ) {
+		if( this.teslaAPIEnabled && this.config.siteID ) {
 			this.sendSocketNotification("MMM-Powerwall-UpdateEnergy", {
 				username: this.config.teslaAPIUsername,
 				siteID: this.config.siteID,
@@ -898,6 +898,9 @@ Module.register("MMM-Powerwall", {
 			};
 			this.sunrise = null;
 			this.sunset = null;
+		}
+		else {
+			this.updateEnergy();
 		}
 
 		let riseset = {};
