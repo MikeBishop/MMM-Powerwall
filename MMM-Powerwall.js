@@ -495,7 +495,7 @@ Module.register("MMM-Powerwall", {
 
 			if( powerLine.options.scales.xAxes[0].ticks.min == lastMidnight
 				&& powerLine.data && powerLine.data.datasets.length == newData.datasets.length ) {
-
+					powerLine.data.labels = newData.labels;
 					for( let i = 0; i < newData.datasets.length; i++ ) {
 						powerLine.data.datasets[i].data = newData.datasets[i].data;
 					}
