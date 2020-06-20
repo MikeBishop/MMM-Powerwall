@@ -185,7 +185,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	anyGraphsEnabled: function(...graphs) {
-		return graphs.some(graph => this.config.graphs.includes(graph));
+		return this.config.graphs.some(graph => graphs.includes(graph));
 	},
 
 	sendDataRequestNotification: function(notification) {
