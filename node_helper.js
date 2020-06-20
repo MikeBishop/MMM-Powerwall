@@ -43,9 +43,6 @@ module.exports = NodeHelper.create({
 	 * argument payload mixed - The payload of the notification.
 	 */
 	socketNotificationReceived: async function(notification, payload) {
-		
-		let powerwallEndpoints = this.powerwallEndpoints;
-		let twcManagerEndpoints = this.twcManagerEndpoints;
 		var self = this;
 
 		this.log(notification + JSON.stringify(payload));
@@ -114,7 +111,17 @@ module.exports = NodeHelper.create({
 			let siteID = payload.siteID;
 			this.initializeCache(this.powerwallAggregates, ip);
 			this.initializeCache(this.powerwallSOE, ip);
-			this.initializeCache(this.powerwallCloudSOE, username, siteID);
+
+			if( username && !this.checkTeslaCredentials(username) ) {
+				return;
+			}
+
+			if( siteID ) {
+				this.initializeCache(this.powerwallCloudSOE, username, siteID);
+			}
+			else {
+				return;
+			}
 
 			if( this.powerwallAggregates[ip].lastUpdate + payload.updateInterval < Date.now() ) {
 				await self.updatePowerwall(ip, username, siteID, payload.resyncInterval);
@@ -158,7 +165,16 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			this.initializeCache(this.energy, username, siteID);
+			if( username && !this.checkTeslaCredentials(username) ) {
+				return;
+			}
+
+			if( siteID ) {
+				this.initializeCache(this.energy, username, siteID);
+			}
+			else {
+				return;
+			}
 
 			if( this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetEnergy(username, siteID);
@@ -175,7 +191,16 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			this.initializeCache(this.selfConsumption, username, siteID);
+			if( username && !this.checkTeslaCredentials(username) ) {
+				return;
+			}
+
+			if( siteID ) {
+				this.initializeCache(this.selfConsumption, username, siteID);
+			}
+			else {
+				return;
+			}
 
 			if( this.selfConsumption[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetSelfConsumption(username, siteID);
@@ -192,7 +217,16 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			this.initializeCache(this.powerHistory, username, siteID);
+			if( username && !this.checkTeslaCredentials(username) ) {
+				return;
+			}
+
+			if( siteID ) {
+				this.initializeCache(this.powerHistory, username, siteID);
+			}
+			else {
+				return;
+			}
 
 			if( this.powerHistory[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetPowerHistory(username, siteID);
@@ -226,11 +260,32 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let vehicleID = payload.vehicleID;
 
-			this.initializeCache(this.vehicleData, username, vehicleID);
+			if( username && !this.checkTeslaCredentials(username) ) {
+				return;
+			}
+
+			if( vehicleID ) {
+				this.initializeCache(this.vehicleData, username, vehicleID);
+			}
+			else {
+				return;
+			}
 
 			let useCache = !(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
 				<= Date.now() );
 			this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
+		}
+	},
+
+	checkTeslaCredentials: function(username) {
+		if( this.teslaApiAccounts[username] ) {
+			return true;
+		}
+		else {
+			this.sendSocketNotification("MMM-Powerwall-ReconfigureTeslaAPI", {
+				teslaAPIUsername: username
+			});
+			return false;
 		}
 	},
 
@@ -249,7 +304,7 @@ module.exports = NodeHelper.create({
 			};
 		}
 	},
-	
+
 	updateCache: function(data, node, keys, time=null, target="lastResult") {
 		if( !time ) {
 			time = Date.now();

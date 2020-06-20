@@ -69,6 +69,7 @@ Module.register("MMM-Powerwall", {
 	displayVehicles: [],
 	vehicleInFocus: null,
 	vehicleTileShown: "A",
+	cloudInterval: null,
 
 	start: async function() {
 		var self = this;
@@ -85,13 +86,7 @@ Module.register("MMM-Powerwall", {
 
 		//Send settings to helper
 		if (self.config.teslaAPIUsername ) {
-			self.sendSocketNotification("MMM-Powerwall-Configure-TeslaAPI",
-			{
-				siteID: self.config.siteID,
-				teslaAPIUsername: self.config.teslaAPIUsername,
-				teslaAPIPassword: self.config.teslaAPIPassword,
-				tokenFile: this.file("tokens.json")
-			});
+			this.configureTeslaApi();
 			Log.log("Enabled Tesla API");
 		}
 		else {
@@ -116,6 +111,19 @@ Module.register("MMM-Powerwall", {
 		}, 20000);
 		updateLocal();
 		await this.advanceDayMode();
+	},
+
+	configureTeslaApi: function() {
+		if (this.config.teslaAPIUsername ) {
+			this.sendSocketNotification("MMM-Powerwall-Configure-TeslaAPI",
+			{
+				siteID: this.config.siteID,
+				teslaAPIUsername: this.config.teslaAPIUsername,
+				teslaAPIPassword: this.config.teslaAPIPassword,
+				tokenFile: this.file("tokens.json")
+			});
+			Log.log("Enabled Tesla API");
+		}
 	},
 
 	getTemplate: function() {
@@ -217,6 +225,11 @@ Module.register("MMM-Powerwall", {
 		var self = this;
 		Log.log("Received " + notification + ": " + JSON.stringify(payload));
 		switch(notification) {
+			case "MMM-Powerwall-ReconfigureTeslaAPI":
+				if( payload.teslaAPIUsername == self.config.teslaAPIUsername ) {
+					this.configureTeslaApi();
+				}
+				break;
 			case "MMM-Powerwall-TeslaAPIConfigured":
 				if( payload.username === self.config.teslaAPIUsername ) {
 					this.teslaAPIEnabled = true;
@@ -228,7 +241,10 @@ Module.register("MMM-Powerwall", {
 						this.updateEnergy();
 						this.updateSelfConsumption();
 						this.updatePowerHistory();
-						setInterval(function() {
+						if( this.cloudInterval ) {
+							clearInterval(this.cloudInterval);
+						}
+						this.cloudInterval = setInterval(function() {
 							self.updateSelfConsumption();
 							self.updatePowerHistory();
 						}, this.config.cloudUpdateInterval);
