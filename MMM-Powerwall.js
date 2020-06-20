@@ -740,6 +740,7 @@ Module.register("MMM-Powerwall", {
 			}
 		}
 		if( this.dayStart ) {
+			this.makeNodeVisible(this.identifier + "-SolarTotalTextA");
 			this.updateNode(
 				this.identifier + "-SolarTotalA",
 				this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,

@@ -28,6 +28,7 @@
     margin: 10px;
     height: 250px;
     width: 430px;
+    backface-visibility: hidden;
 }
 
 .MMM-Powerwall[class*="grid-"] {

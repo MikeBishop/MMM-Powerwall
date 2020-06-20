@@ -13,7 +13,7 @@
                             {%- else -%}
                                 {{ flows.sources.solar.total // 1 }} W
                             {%- endif %}</div>
-                        <div class="small bright">
+                        <div class="small bright" style="display:none" id="{{id}}-SolarTotalTextA">
                             <span id="{{id}}-SolarTotalA" class="small bright text"></span> today
                         </div>
                     </div>
@@ -27,10 +27,7 @@
             <div class="MMM-Powerwall flip-back vflexbox">
                 <div class="small bright">Solar produced</div>
                 <div id="{{id}}-SolarTotalB" class="big solar text"></div>
-                <div class="small bright text" id="{{id}}-SolarTodayYesterday">
-                    {%- if dayMode === "night" %}today
-                    {%- else %}yesterday
-                    {%- endif %}</div>
+                <div class="small bright text" id="{{id}}-SolarTodayYesterday"></div>
             </div>
         </div>
         {%- elif graph == "HouseConsumption" -%}
@@ -60,7 +57,7 @@
                             {%- endif %}
                     </div>
                     <div class="MMM-Powerwall cube">
-                        <div class="cube__face cube__face--front" 
+                        <div class="cube__face cube__face--front"
                              id="{{id}}-PowerwallSOE">{{soe // 1}}%</div>
                         <div class="cube__face cube__face--right">
                             <div class="battery meter-vertical" style="height: {{soe // 1}}%;"
