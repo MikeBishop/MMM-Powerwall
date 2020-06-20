@@ -119,9 +119,6 @@ module.exports = NodeHelper.create({
 			if( siteID ) {
 				this.initializeCache(this.powerwallCloudSOE, username, siteID);
 			}
-			else {
-				return;
-			}
 
 			if( this.powerwallAggregates[ip].lastUpdate + payload.updateInterval < Date.now() ) {
 				await self.updatePowerwall(ip, username, siteID, payload.resyncInterval);

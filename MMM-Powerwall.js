@@ -11,6 +11,15 @@ const GRID = { key: "grid", displayAs: "Grid", color: "#CACECF", color_trans: "r
 const HOUSE = { key: "house", displayAs: "Local Usage", color: "#09A9E6", color_trans: "rgba(9, 169, 230, 0.7)" };
 const CAR = { key: "car", displayAs: "Car Charging", color: "#B91413", color_trans: "rgba(185, 20, 19, 0.7)" };
 
+const REQUIRED_CALLS = {
+	CarCharging: ["local", "vehicle"],
+	PowerwallSelfPowered: ["local", "selfConsumption"],
+	SolarProduction: ["local", "energy"],
+	HouseConsumption: ["local", "energy"],
+	EnergyBar: ["local", "energy"],
+	PowerLine: ["power"]
+}
+
 const DISPLAY_SOURCES = [
 	POWERWALL,
 	SOLAR,
@@ -56,6 +65,7 @@ Module.register("MMM-Powerwall", {
 	teslaAggregates: null,
 	flows: null,
 	historySeries: null,
+	callsToEnable: {},
 	numCharging: 0,
 	yesterdaySolar: null,
 	dayStart: null,
@@ -85,19 +95,23 @@ Module.register("MMM-Powerwall", {
 			self.twcEnabled = false;
 		}
 
+		let callsToEnable = new Set();
+		this.config.graphs.forEach(
+			graph => REQUIRED_CALLS[graph].forEach(
+				call => callsToEnable.add(call)
+			)
+		);
+		callsToEnable.forEach(call => {
+			self.callsToEnable[call] = true;
+		});
+
 		//Send settings to helper
 		if (self.config.teslaAPIUsername ) {
 			this.configureTeslaApi();
 			Log.log("Enabled Tesla API");
 		}
 		var updateLocal = function() {
-			if( self.anyGraphsEnabled(
-					"CarCharging",
-					"PowerwallSelfPowered",
-					"SolarProduction",
-					"HouseConsumption",
-					"EnergyBar"
-				) ) {
+			if( self.callsToEnable.local ) {
 				let config = self.config;
 				self.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
 					powerwallIP: config.powerwallIP,
@@ -170,9 +184,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	updateEnergy: function() {
-		if( this.anyGraphsEnabled(	"SolarProduction",
-									"HouseConsumption",
-									"EnergyBar") &&
+		if( this.callsToEnable.energy &&
 			this.teslaAPIEnabled && this.config.siteID ) {
 			this.sendSocketNotification("MMM-Powerwall-UpdateEnergy", {
 				username: this.config.teslaAPIUsername,
@@ -180,10 +192,6 @@ Module.register("MMM-Powerwall", {
 				updateInterval: this.config.cloudUpdateInterval - 500
 			});
 		}
-	},
-
-	anyGraphsEnabled: function(...graphs) {
-		return this.config.graphs.some(graph => graphs.includes(graph));
 	},
 
 	sendDataRequestNotification: function(notification) {
@@ -197,7 +205,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	updatePowerHistory: function() {
-		if( this.anyGraphsEnabled("PowerLine") ) {
+		if( this.callsToEnable.power ) {
 			this.sendDataRequestNotification("MMM-Powerwall-UpdatePowerHistory");
 			if( this.twcEnabled ) {
 				this.sendSocketNotification("MMM-Powerwall-UpdateChargeHistory", {
@@ -210,13 +218,13 @@ Module.register("MMM-Powerwall", {
 	},
 
 	updateSelfConsumption: function() {
-		if( this.anyGraphsEnabled("PowerwallSelfPowered") ) {
+		if( this.callsToEnable.selfConsumption ) {
 			this.sendDataRequestNotification("MMM-Powerwall-UpdateSelfConsumption");
 		}
 	},
 
 	updateVehicleData: function(timeout=null) {
-		if( this.anyGraphsEnabled("CarCharging") ) {
+		if( this.callsToEnable.vehicle ) {
 			let now = Date.now();
 			let willingToDefer = false;
 			if( !timeout ) {
