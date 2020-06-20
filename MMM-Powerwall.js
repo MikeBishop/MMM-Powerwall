@@ -52,7 +52,7 @@ Module.register("MMM-Powerwall", {
 	},
 	requiresVersion: "2.1.0", // Required version of MagicMirror
 	twcEnabled: null,
-	teslaAPIEnabled: null,
+	teslaAPIEnabled: false,
 	teslaAggregates: null,
 	flows: null,
 	historySeries: null,
@@ -60,6 +60,7 @@ Module.register("MMM-Powerwall", {
 	yesterdaySolar: null,
 	dayStart: null,
 	dayMode: "day",
+	energyData: null,
 	charts: {},
 	powerHistoryChanged: false,
 	selfConsumptionToday: [0, 0, 100],
@@ -89,11 +90,8 @@ Module.register("MMM-Powerwall", {
 			this.configureTeslaApi();
 			Log.log("Enabled Tesla API");
 		}
-		else {
-			self.teslaAPIEnabled = false;
-		}
 		var updateLocal = function() {
-			if( this.anyGraphsEnabled(
+			if( self.anyGraphsEnabled(
 					"CarCharging",
 					"PowerwallSelfPowered",
 					"SolarProduction",
@@ -289,6 +287,11 @@ Module.register("MMM-Powerwall", {
 					this.teslaAggregates = payload.aggregates;
 					this.flows = this.attributeFlows(payload.aggregates, self.twcConsumption);
 
+					if( this.energyData) {
+						this.generateDaystart(this.energyData);
+						this.energyData = null;
+					}
+
 					if (needUpdate) {
 						// If we didn't have data before, we need to redraw
 						this.buildGraphs();
@@ -372,66 +375,14 @@ Module.register("MMM-Powerwall", {
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
 
-						this.yesterdaySolar = payload.energy[0].solar_energy_exported;
+					this.yesterdaySolar = payload.energy[0].solar_energy_exported;
 
-						let todaySolar = payload.energy[1].solar_energy_exported;
-
-						let todayGridIn = payload.energy[1].grid_energy_imported;
-						let todayGridOut = (
-							payload.energy[1].grid_energy_exported_from_solar +
-							payload.energy[1].grid_energy_exported_from_battery +
-							payload.energy[1].grid_energy_exported_from_generator
-						);
-
-						let todayBatteryIn = payload.energy[1].battery_energy_exported;
-						let todayBatteryOut = (
-							payload.energy[1].battery_energy_imported_from_grid +
-							payload.energy[1].battery_energy_imported_from_solar +
-							payload.energy[1].battery_energy_imported_from_generator
-						);
-
-						let todayUsage = (
-							payload.energy[1].consumer_energy_imported_from_grid +
-							payload.energy[1].consumer_energy_imported_from_solar +
-							payload.energy[1].consumer_energy_imported_from_battery
-						);
-
-						this.dayStart = {
-							solar: {
-								export: (
-									this.teslaAggregates.solar.energy_exported -
-									todaySolar
-								)
-							},
-							grid: {
-								export: (
-									this.teslaAggregates.site.energy_exported -
-									todayGridOut
-								),
-								import: (
-									this.teslaAggregates.site.energy_imported -
-									todayGridIn
-								)
-							},
-							house: {
-								import: (
-									this.teslaAggregates.load.energy_imported -
-									todayUsage
-								)
-							},
-							battery: {
-								export: (
-									this.teslaAggregates.battery.energy_exported -
-									todayBatteryIn
-								),
-								import: (
-									this.teslaAggregates.battery.energy_imported -
-									todayBatteryOut
-								)
-							}
-						};
-
-						this.todayDate = new Date().getDate();
+					if( this.teslaAggregates ) {
+						this.generateDaystart(payload);
+					}
+					else {
+						this.energyData = payload
+					}
 				}
 				break;
 			case "MMM-Powerwall-PowerHistory":
@@ -522,6 +473,65 @@ Module.register("MMM-Powerwall", {
 			default:
 				break;
 		}
+	},
+
+	generateDaystart: function(payload) {
+		let todaySolar = payload.energy[1].solar_energy_exported;
+
+		let todayGridIn = payload.energy[1].grid_energy_imported;
+		let todayGridOut = (
+			payload.energy[1].grid_energy_exported_from_solar +
+			payload.energy[1].grid_energy_exported_from_battery +
+			payload.energy[1].grid_energy_exported_from_generator
+		);
+
+		let todayBatteryIn = payload.energy[1].battery_energy_exported;
+		let todayBatteryOut = (
+			payload.energy[1].battery_energy_imported_from_grid +
+			payload.energy[1].battery_energy_imported_from_solar +
+			payload.energy[1].battery_energy_imported_from_generator
+		);
+
+		let todayUsage = (
+			payload.energy[1].consumer_energy_imported_from_grid +
+			payload.energy[1].consumer_energy_imported_from_solar +
+			payload.energy[1].consumer_energy_imported_from_battery
+		);
+
+		this.dayStart = {
+			solar: {
+				export: (
+					this.teslaAggregates.solar.energy_exported -
+					todaySolar
+				)
+			},
+			grid: {
+				export: (
+					this.teslaAggregates.site.energy_exported -
+					todayGridOut
+				),
+				import: (
+					this.teslaAggregates.site.energy_imported -
+					todayGridIn
+				)
+			},
+			house: {
+				import: (
+					this.teslaAggregates.load.energy_imported -
+					todayUsage
+				)
+			},
+			battery: {
+				export: (
+					this.teslaAggregates.battery.energy_exported -
+					todayBatteryIn
+				),
+				import: (
+					this.teslaAggregates.battery.energy_imported -
+					todayBatteryOut
+				)
+			}
+		};
 	},
 
 	updatePowerLine: function() {
