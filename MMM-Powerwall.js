@@ -93,16 +93,24 @@ Module.register("MMM-Powerwall", {
 			self.teslaAPIEnabled = false;
 		}
 		var updateLocal = function() {
-			let config = self.config;
-			self.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
-				powerwallIP: config.powerwallIP,
-				twcManagerIP: config.twcManagerIP,
-				twcManagerPort: config.twcManagerPort,
-				updateInterval: config.localUpdateInterval - 500,
-				username: config.teslaAPIUsername,
-				siteID: config.siteID,
-				resyncInterval: config.cloudUpdateInterval - 500
-			});
+			if( this.anyGraphsEnabled(
+					"CarCharging",
+					"PowerwallSelfPowered",
+					"SolarProduction",
+					"HouseConsumption",
+					"EnergyBar"
+				) ) {
+				let config = self.config;
+				self.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
+					powerwallIP: config.powerwallIP,
+					twcManagerIP: config.twcManagerIP,
+					twcManagerPort: config.twcManagerPort,
+					updateInterval: config.localUpdateInterval - 500,
+					username: config.teslaAPIUsername,
+					siteID: config.siteID,
+					resyncInterval: config.cloudUpdateInterval - 500
+				});
+			}
 		};
 
 		setInterval(updateLocal, self.config.localUpdateInterval);
@@ -164,13 +172,20 @@ Module.register("MMM-Powerwall", {
 	},
 
 	updateEnergy: function() {
-		if( this.teslaAPIEnabled && this.config.siteID ) {
+		if( this.anyGraphsEnabled(	"SolarProduction",
+									"HouseConsumption",
+									"EnergyBar") &&
+			this.teslaAPIEnabled && this.config.siteID ) {
 			this.sendSocketNotification("MMM-Powerwall-UpdateEnergy", {
 				username: this.config.teslaAPIUsername,
 				siteID: this.config.siteID,
 				updateInterval: this.config.cloudUpdateInterval - 500
 			});
 		}
+	},
+
+	anyGraphsEnabled: function(...graphs) {
+		return graphs.some(graph => this.config.graphs.includes(graph));
 	},
 
 	sendDataRequestNotification: function(notification) {
@@ -184,38 +199,44 @@ Module.register("MMM-Powerwall", {
 	},
 
 	updatePowerHistory: function() {
-		this.sendDataRequestNotification("MMM-Powerwall-UpdatePowerHistory");
-		if( this.twcEnabled ) {
-			this.sendSocketNotification("MMM-Powerwall-UpdateChargeHistory", {
-				twcManagerIP: this.config.twcManagerIP,
-				twcManagerPort: this.config.twcManagerPort,
-				updateInterval: this.config.localUpdateInterval - 500
-			});
+		if( this.anyGraphsEnabled("PowerLine") ) {
+			this.sendDataRequestNotification("MMM-Powerwall-UpdatePowerHistory");
+			if( this.twcEnabled ) {
+				this.sendSocketNotification("MMM-Powerwall-UpdateChargeHistory", {
+					twcManagerIP: this.config.twcManagerIP,
+					twcManagerPort: this.config.twcManagerPort,
+					updateInterval: this.config.localUpdateInterval - 500
+				});
+			}
 		}
 	},
 
 	updateSelfConsumption: function() {
-		this.sendDataRequestNotification("MMM-Powerwall-UpdateSelfConsumption");
+		if( this.anyGraphsEnabled("PowerwallSelfPowered") ) {
+			this.sendDataRequestNotification("MMM-Powerwall-UpdateSelfConsumption");
+		}
 	},
 
 	updateVehicleData: function(timeout=null) {
-		let now = Date.now();
-		let willingToDefer = false;
-		if( !timeout ) {
-			timeout = this.config.cloudUpdateInterval;
-			willingToDefer = true;
-		}
-		if( Array.isArray(this.vehicles) ) {
-			for( let vehicle of this.vehicles) {
-				if( willingToDefer && vehicle.deferUntil && now < vehicle.deferUntil) {
-					continue;
+		if( this.anyGraphsEnabled("CarCharging") ) {
+			let now = Date.now();
+			let willingToDefer = false;
+			if( !timeout ) {
+				timeout = this.config.cloudUpdateInterval;
+				willingToDefer = true;
+			}
+			if( Array.isArray(this.vehicles) ) {
+				for( let vehicle of this.vehicles) {
+					if( willingToDefer && vehicle.deferUntil && now < vehicle.deferUntil) {
+						continue;
+					}
+
+					this.sendSocketNotification("MMM-Powerwall-UpdateVehicleData", {
+						username: this.config.teslaAPIUsername,
+						vehicleID: vehicle.id,
+						updateInterval: timeout - 500
+					});
 				}
-				
-				this.sendSocketNotification("MMM-Powerwall-UpdateVehicleData", {
-					username: this.config.teslaAPIUsername,
-					vehicleID: vehicle.id,
-					updateInterval: timeout - 500
-				});
 			}
 		}
 	},
