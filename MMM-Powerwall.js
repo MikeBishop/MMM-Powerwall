@@ -557,6 +557,7 @@ Module.register("MMM-Powerwall", {
 			}
 			else {
 				powerLine.options.scales.xAxes[0].ticks.min = lastMidnight;
+				powerLine.options.scales.xAxes[0].ticks.max = new Date().setHours(24,0,0,0);
 				powerLine.data = newData;
 			}
 
@@ -927,37 +928,46 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
+	dayNumber: -1,
 	advanceDayMode: async function() {
 		let now = new Date();
 		let self = this;
-		if( now.getHours() == 0 && now.getMinutes() == 0 ) {
-			// It's midnight
-			if( this.dayStart ) {
-				this.yesterdaySolar = (
-					this.teslaAggregates.solar.energy_exported -
-					this.dayStart.solar.export
-				);
-			}
-			this.dayStart = {
-				solar: {
-					export: this.teslaAggregates.solar.energy_exported
-				},
-				grid: {
-					export: this.teslaAggregates.site.energy_exported,
-					import: this.teslaAggregates.site.energy_imported
-				},
-				battery: {
-					export: this.teslaAggregates.battery.energy_exported,
-					import: this.teslaAggregates.battery.energy_imported
-				},
-				house: {
-					import: this.teslaAggregates.load.energy_imported
-				}
-			};
+		if( now.getDay() != this.dayNumber ) {
+			this.dayNumber = now.getDay();
 			this.sunrise = null;
 			this.sunset = null;
+
+			if( now.getHours() == 0 && now.getMinutes() == 0 ) {
+				// It's midnight
+				if( this.dayStart ) {
+					this.yesterdaySolar = (
+						this.teslaAggregates.solar.energy_exported -
+						this.dayStart.solar.export
+					);
+				}
+				this.dayStart = {
+					solar: {
+						export: this.teslaAggregates.solar.energy_exported
+					},
+					grid: {
+						export: this.teslaAggregates.site.energy_exported,
+						import: this.teslaAggregates.site.energy_imported
+					},
+					battery: {
+						export: this.teslaAggregates.battery.energy_exported,
+						import: this.teslaAggregates.battery.energy_imported
+					},
+					house: {
+						import: this.teslaAggregates.load.energy_imported
+					}
+				};
+			}
+			else {
+				this.dayStart = null;
+			}
 		}
-		else {
+
+		if( !this.dayStart ) {
 			this.updateEnergy();
 		}
 
