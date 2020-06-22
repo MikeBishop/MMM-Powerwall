@@ -306,7 +306,7 @@ Module.register("MMM-Powerwall", {
 					}
 
 					// We're updating the data in-place.
-					this.updateData();
+					await this.updateData();
 				}
 				break;
 			case "MMM-Powerwall-SOE":
@@ -330,7 +330,7 @@ Module.register("MMM-Powerwall", {
 					self.twcConsumption = Math.round( parseFloat(payload.status.chargerLoadWatts) );
 					if( self.twcConsumption !== oldConsumption && this.teslaAggregates ) {
 						this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
-						this.updateData();
+						await this.updateData();
 					}
 
 					if( payload.status.carsCharging > 0 && this.vehicles ) {
@@ -766,7 +766,16 @@ Module.register("MMM-Powerwall", {
 		this.setNodeVisibility(identifier, "none");
 	},
 
-	updateData: function() {
+	updateData: async function() {
+		// Check if we need to advance dayMode
+		let now = new Date();
+		if( this.dayNumber != now.getDay() ||
+			!this.sunrise || !this.sunset ||
+			(this.dayMode === "morning" && now.getTime() > this.sunrise) ||
+			(this.dayMode === "day" && now.getTime() > this.sunset) ) {
+				await this.advanceDayMode();
+		}
+
 		/*******************
 		 * SolarProduction *
 		 *******************/
@@ -990,20 +999,15 @@ Module.register("MMM-Powerwall", {
 		this.sunset = this.sunset || riseset.sunset || new Date().setHours(20,30,0).getTime();
 
 		now = now.getTime();
-		let nextRun;
 		if( now < this.sunrise ) {
 			this.dayMode = "morning";
-			nextRun = this.sunrise;
 		}
 		else if( now > this.sunset ) {
 			this.dayMode = "night";
-			nextRun = new Date().setHours(24,0);
 		}
 		else {
 			this.dayMode = "day";
-			nextRun = this.sunset;
 		}
-		setTimeout(() => self.advanceDayMode(), nextRun - now);
 	},
 
 	buildGraphs: function() {
@@ -1358,7 +1362,7 @@ Module.register("MMM-Powerwall", {
 			let battery = Math.trunc(teslaAggregates.battery.instant_power);
 			let house = Math.trunc(teslaAggregates.load.instant_power);
 			let car = 0;
-			if( twcConsumption ) {
+			if( twcConsumption && twcConsumption >= house ) {
 				car = twcConsumption;
 				house -= car;
 			}
@@ -1497,10 +1501,6 @@ Module.register("MMM-Powerwall", {
 			// If it's a friend's car, this won't work.
 			this.updateVehicleData(30);
 		}
-	},
-
-	delay: function (ms) {
-		return new Promise(resolve => setTimeout(resolve, ms));
 	},
 
 	createCompositorUrl: function(config) {
