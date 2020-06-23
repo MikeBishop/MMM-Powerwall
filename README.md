@@ -39,7 +39,7 @@ var config = {
 | `cloudUpdateInterval` | *Optional* How often (in milliseconds) to poll Tesla API<br>Default 300000 milliseconds (five minutes)
 | `teslaApiUsername`    | *Recommended* Username for your Tesla account
 | `teslaApiPassword`    | *Optional* Password for your Tesla account; see below for more options
-| `home`                | *Optional* Coordinates (`[lat, lon]`) of your home; used to indicate when car is at home
+| `home`                | *Optional* Coordinates (`[lat, lon]`) of your home; used to indicate when car is at home and to get sunrise/sunset times
 
 ### Graphs
 
