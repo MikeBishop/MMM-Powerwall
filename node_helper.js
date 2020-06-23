@@ -345,11 +345,12 @@ module.exports = NodeHelper.create({
 
 		let response = await result.json();
 		let localSOE = response.percentage;
-		let cache = this.powerwallCloudSOE[username][siteID];
 		this.updateCache(localSOE, this.powerwallSOE, powerwallIP, now);
 
 		let cloudSOE = 0, syncPoint = 0;
-		if( username && siteID && (cache.lastUpdate + resyncInterval < Date.now())) {
+		if( username && siteID ) {
+			let cache = this.powerwallCloudSOE[username][siteID];
+			if( cache.lastUpdate + resyncInterval < Date.now() ) {
 				let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
 				cloudSOE = await this.doTeslaApi(url, username, null, siteID, this.powerwallCloudSOE, null, "percentage_charged");
 				if( cloudSOE != 0 ) {
@@ -358,11 +359,12 @@ module.exports = NodeHelper.create({
 				}
 		}
 		if( cloudSOE === 0 && cache.lastResult && cache.syncPoint ) {
-				cloudSOE = this.powerwallCloudSOE[username][siteID].lastResult;
-				syncPoint = this.powerwallCloudSOE[username][siteID].syncPoint;
+				cloudSOE = cache.lastResult;
+				syncPoint = cache.syncPoint;
+		}
 		}
 
-		this.sendSocketNotification("MMM-Powerwall-SOE", {
+		this.sendSocketNotification("SOE", {
 			ip: powerwallIP,
 			soe: cloudSOE + localSOE - syncPoint
 		});
