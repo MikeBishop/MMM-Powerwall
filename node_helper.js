@@ -475,6 +475,10 @@ module.exports = NodeHelper.create({
 		url = "https://owner-api.teslamotors.com/api/1/products";
 
 		let response = await this.doTeslaApi(url, username);
+		if( !Array.isArray(response) ) {
+			return null;
+		}
+
 		let siteIDs = response.filter(
 			product =>(product.battery_type === "ac_powerwall")
 			).map(product => product.energy_site_id);
