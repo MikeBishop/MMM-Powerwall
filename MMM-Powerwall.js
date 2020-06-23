@@ -1394,7 +1394,7 @@ Module.register("MMM-Powerwall", {
 			let battery = Math.trunc(teslaAggregates.battery.instant_power);
 			let house = Math.trunc(teslaAggregates.load.instant_power);
 			let car = 0;
-			if( twcConsumption && twcConsumption >= house ) {
+			if( twcConsumption && twcConsumption <= house ) {
 				car = twcConsumption;
 				house -= car;
 			}
