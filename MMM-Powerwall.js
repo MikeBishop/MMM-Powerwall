@@ -57,7 +57,8 @@ Module.register("MMM-Powerwall", {
 		twcManagerPort: 8080,
 		teslaAPIUsername: null,
 		teslaAPIPassword: null,
-		home: null
+		home: null,
+		debug: false
 	},
 	requiresVersion: "2.1.0", // Required version of MagicMirror
 	twcEnabled: null,
@@ -83,6 +84,12 @@ Module.register("MMM-Powerwall", {
 	cloudInterval: null,
 	timeouts: {},
 
+	Log: function(string) {
+		if( this.config.debug ) {
+			Log.log(string);
+		}
+	},
+
 	start: async function() {
 		var self = this;
 
@@ -94,6 +101,10 @@ Module.register("MMM-Powerwall", {
 		}
 		else {
 			self.twcEnabled = false;
+		}
+
+		if( this.config.debug ) {
+			this.sendSocketNotification("Enable-Debug");
 		}
 
 		let callsToEnable = new Set();
@@ -109,7 +120,7 @@ Module.register("MMM-Powerwall", {
 		//Send settings to helper
 		if (self.config.teslaAPIUsername ) {
 			this.configureTeslaApi();
-			Log.log("Enabled Tesla API");
+			this.Log("Enabled Tesla API");
 		}
 
 		setInterval(function() {
@@ -123,7 +134,7 @@ Module.register("MMM-Powerwall", {
 		if( this.callsToEnable.local ) {
 			let self = this;
 			let config = this.config;
-			this.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
+			this.sendSocketNotification("UpdateLocal", {
 				powerwallIP: config.powerwallIP,
 				twcManagerIP: config.twcManagerIP,
 				twcManagerPort: config.twcManagerPort,
@@ -138,14 +149,14 @@ Module.register("MMM-Powerwall", {
 
 	configureTeslaApi: function() {
 		if (this.config.teslaAPIUsername ) {
-			this.sendSocketNotification("MMM-Powerwall-Configure-TeslaAPI",
+			this.sendSocketNotification("Configure-TeslaAPI",
 			{
 				siteID: this.config.siteID,
 				teslaAPIUsername: this.config.teslaAPIUsername,
 				teslaAPIPassword: this.config.teslaAPIPassword,
 				tokenFile: this.file("tokens.json")
 			});
-			Log.log("Enabled Tesla API");
+			this.Log("Enabled Tesla API");
 		}
 	},
 
@@ -169,7 +180,7 @@ Module.register("MMM-Powerwall", {
 			numCharging: this.numCharging,
 		};
 
-		Log.log("Returning " + JSON.stringify(result));
+		this.Log("Returning " + JSON.stringify(result));
 		return result;
 	},
 
@@ -189,7 +200,7 @@ Module.register("MMM-Powerwall", {
 	updateEnergy: function() {
 		if( this.callsToEnable.energy &&
 			this.teslaAPIEnabled && this.config.siteID ) {
-			this.sendSocketNotification("MMM-Powerwall-UpdateEnergy", {
+			this.sendSocketNotification("UpdateEnergy", {
 				username: this.config.teslaAPIUsername,
 				siteID: this.config.siteID,
 				updateInterval: this.config.cloudUpdateInterval - 500
@@ -209,9 +220,9 @@ Module.register("MMM-Powerwall", {
 
 	updatePowerHistory: function() {
 		if( this.callsToEnable.power ) {
-			this.sendDataRequestNotification("MMM-Powerwall-UpdatePowerHistory");
+			this.sendDataRequestNotification("UpdatePowerHistory");
 			if( this.twcEnabled ) {
-				this.sendSocketNotification("MMM-Powerwall-UpdateChargeHistory", {
+				this.sendSocketNotification("UpdateChargeHistory", {
 					twcManagerIP: this.config.twcManagerIP,
 					twcManagerPort: this.config.twcManagerPort,
 					updateInterval: this.config.localUpdateInterval - 500
@@ -222,7 +233,7 @@ Module.register("MMM-Powerwall", {
 
 	updateSelfConsumption: function() {
 		if( this.callsToEnable.selfConsumption ) {
-			this.sendDataRequestNotification("MMM-Powerwall-UpdateSelfConsumption");
+			this.sendDataRequestNotification("UpdateSelfConsumption");
 		}
 	},
 
@@ -240,7 +251,7 @@ Module.register("MMM-Powerwall", {
 						continue;
 					}
 
-					this.sendSocketNotification("MMM-Powerwall-UpdateVehicleData", {
+					this.sendSocketNotification("UpdateVehicleData", {
 						username: this.config.teslaAPIUsername,
 						vehicleID: vehicle.id,
 						updateInterval: timeout - 500
@@ -253,14 +264,14 @@ Module.register("MMM-Powerwall", {
 	// socketNotificationReceived from helper
 	socketNotificationReceived: async function (notification, payload) {
 		var self = this;
-		Log.log("Received " + notification + ": " + JSON.stringify(payload));
+		this.Log("Received " + notification + ": " + JSON.stringify(payload));
 		switch(notification) {
-			case "MMM-Powerwall-ReconfigureTeslaAPI":
+			case "ReconfigureTeslaAPI":
 				if( payload.teslaAPIUsername == self.config.teslaAPIUsername ) {
 					this.configureTeslaApi();
 				}
 				break;
-			case "MMM-Powerwall-TeslaAPIConfigured":
+			case "TeslaAPIConfigured":
 				if( payload.username === self.config.teslaAPIUsername ) {
 					this.teslaAPIEnabled = true;
 					if( !self.config.siteID ) {
@@ -282,7 +293,7 @@ Module.register("MMM-Powerwall", {
 				}
 				break;
 
-			case "MMM-Powerwall-Aggregates":
+			case "Aggregates":
 				if( payload.ip === this.config.powerwallIP ) {
 					this.doTimeout("local", () => self.updateLocal(), self.config.localUpdateInterval)
 
@@ -308,7 +319,7 @@ Module.register("MMM-Powerwall", {
 					await this.updateData();
 				}
 				break;
-			case "MMM-Powerwall-SOE":
+			case "SOE":
 				if( payload.ip === this.config.powerwallIP ) {
 					this.soe = payload.soe;
 					this.updateNode(
@@ -323,7 +334,7 @@ Module.register("MMM-Powerwall", {
 					}
 				}
 				break;
-			case "MMM-Powerwall-ChargeStatus":
+			case "ChargeStatus":
 				if( payload.ip === this.config.twcManagerIP ) {
 					let oldConsumption = self.twcConsumption;
 					self.twcConsumption = Math.round( parseFloat(payload.status.chargerLoadWatts) );
@@ -378,7 +389,7 @@ Module.register("MMM-Powerwall", {
 				}
 				break;
 
-			case "MMM-Powerwall-EnergyData":
+			case "EnergyData":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
 
@@ -392,21 +403,21 @@ Module.register("MMM-Powerwall", {
 					}
 				}
 				break;
-			case "MMM-Powerwall-PowerHistory":
+			case "PowerHistory":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
 						this.powerHistory = payload.powerHistory;
 						this.updatePowerLine();
 				}
 				break;
-			case "MMM-Powerwall-ChargeHistory":
+			case "ChargeHistory":
 				if( payload.twcManagerIP === this.config.twcManagerIP ) {
 					this.chargeHistory = payload.chargeHistory;
 					this.cachedCarTotal = null;
 					this.updatePowerLine();
 				}
 				break;
-			case "MMM-Powerwall-SelfConsumption":
+			case "SelfConsumption":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
 						this.doTimeout("cloud", () => {
@@ -437,7 +448,7 @@ Module.register("MMM-Powerwall", {
 						}
 				}
 				break;
-			case "MMM-Powerwall-VehicleData":
+			case "VehicleData":
 				// username: username,
 				// ID: vehicleID,
 				// state: state,
@@ -947,7 +958,7 @@ Module.register("MMM-Powerwall", {
 						break;
 					}
 					else {
-						Log.log("Found a non-match")
+						this.Log("Found a non-match")
 					}
 				}
 			}
@@ -1028,7 +1039,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	buildGraphs: function() {
-		Log.log("Rebuilding graphs");
+		this.Log("Rebuilding graphs");
 		var self = this;
 
 		Chart.helpers.merge(Chart.defaults.global, {
@@ -1310,7 +1321,7 @@ Module.register("MMM-Powerwall", {
 				entry.charger_power = 0;
 				if( chargepoints[index] ) {
 					if( chargepoints[index].timestamp !== entry.timestamp ) {
-						Log.log("Date mismatch, " + chargepoints[index].timestamp + " vs. " + entry.timestamp);
+						this.Log("Date mismatch, " + chargepoints[index].timestamp + " vs. " + entry.timestamp);
 					}
 					entry.car_power = -1 * chargepoints[index].charger_power
 				}
@@ -1595,7 +1606,7 @@ Module.register("MMM-Powerwall", {
 			options.push(map[value]);
 		}
 		else {
-			Log.log("Unknown vehicle trait encountered: " + value);
+			this.Log("Unknown vehicle trait encountered: " + value);
 		}
 	}
 });

@@ -32,6 +32,7 @@ module.exports = NodeHelper.create({
 		this.powerHistory = {};
 		this.filenames = [];
 		this.lastUpdate = 0;
+		this.debug = false;
 	},
 
 	// Override socketNotificationReceived method.
@@ -47,7 +48,7 @@ module.exports = NodeHelper.create({
 
 		this.log(notification + JSON.stringify(payload));
 
-		if (notification === "MMM-Powerwall-Configure-TeslaAPI") {
+		if (notification === "Configure-TeslaAPI") {
 			let username = payload.teslaAPIUsername;
 			let password = payload.teslaAPIPassword;
 			let filename = payload.tokenFile;
@@ -99,13 +100,13 @@ module.exports = NodeHelper.create({
 			}
 			this.log("Found siteID " + siteID);
 
-			this.sendSocketNotification("MMM-Powerwall-TeslaAPIConfigured", {
+			this.sendSocketNotification("TeslaAPIConfigured", {
 				username: username,
 				siteID: siteID,
 				vehicles: this.vehicles[username]
 			});
 		}
-		else if (notification === "MMM-Powerwall-UpdateLocal") {
+		else if (notification === "UpdateLocal") {
 			let ip = payload.powerwallIP;
 			let username = payload.username;
 			let siteID = payload.siteID;
@@ -125,7 +126,7 @@ module.exports = NodeHelper.create({
 			}
 			else {
 				if (this.powerwallAggregates[ip].lastResult) {
-					this.sendSocketNotification("MMM-Powerwall-Aggregates", {
+					this.sendSocketNotification("Aggregates", {
 						ip: ip,
 						aggregates: this.powerwallAggregates[ip].lastResult
 					});
@@ -134,7 +135,7 @@ module.exports = NodeHelper.create({
 					let cache = (this.powerwallCloudSOE[username] || [])[siteID] || [];
 					let cloudSOE = cache.lastResult || 0;
 					let syncPoint = cache.syncPoint || 0;
-					this.sendSocketNotification("MMM-Powerwall-SOE", {
+					this.sendSocketNotification("SOE", {
 						ip: ip,
 						soe: cloudSOE + this.powerwallSOE[ip].lastResult - syncPoint
 					});
@@ -150,7 +151,7 @@ module.exports = NodeHelper.create({
 					await self.updateTWCManager(ip, port);
 				}
 				else {
-					this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
+					this.sendSocketNotification("ChargeStatus", {
 						ip: ip,
 						status: this.twcStatus[ip].lastResult,
 						vins: this.twcVINs[ip].lastResult
@@ -158,7 +159,7 @@ module.exports = NodeHelper.create({
 				}
 			}
 		}
-		else if (notification === "MMM-Powerwall-UpdateEnergy") {
+		else if (notification === "UpdateEnergy") {
 			let username = payload.username;
 			let siteID = payload.siteID;
 
@@ -177,14 +178,14 @@ module.exports = NodeHelper.create({
 				await self.doTeslaApiGetEnergy(username, siteID);
 			}
 			else {
-				this.sendSocketNotification("MMM-Powerwall-EnergyData", {
+				this.sendSocketNotification("EnergyData", {
 					username: username,
 					siteID: siteID,
 					energy: this.energy[username][siteID].lastResult
 				});
 			}
 		}
-		else if (notification === "MMM-Powerwall-UpdateSelfConsumption") {
+		else if (notification === "UpdateSelfConsumption") {
 			let username = payload.username;
 			let siteID = payload.siteID;
 
@@ -203,14 +204,14 @@ module.exports = NodeHelper.create({
 				await self.doTeslaApiGetSelfConsumption(username, siteID);
 			}
 			else {
-				this.sendSocketNotification("MMM-Powerwall-SelfConsumption", {
+				this.sendSocketNotification("SelfConsumption", {
 					username: username,
 					siteID: siteID,
 					selfConsumption: this.selfConsumption[username][siteID].lastResult
 				});
 			}
 		}
-		else if (notification === "MMM-Powerwall-UpdatePowerHistory") {
+		else if (notification === "UpdatePowerHistory") {
 			let username = payload.username;
 			let siteID = payload.siteID;
 
@@ -229,7 +230,7 @@ module.exports = NodeHelper.create({
 				await self.doTeslaApiGetPowerHistory(username, siteID);
 			}
 			else {
-				this.sendSocketNotification("MMM-Powerwall-PowerHistory", {
+				this.sendSocketNotification("PowerHistory", {
 					username: username,
 					siteID: siteID,
 					powerHistory: this.powerHistory[username][siteID].lastResult
@@ -237,7 +238,7 @@ module.exports = NodeHelper.create({
 			}
 
 		}
-		else if (notification === "MMM-Powerwall-UpdateChargeHistory") {
+		else if (notification === "UpdateChargeHistory") {
 			let twcManagerIP = payload.twcManagerIP;
 			let twcManagerPort = payload.twcManagerPort;
 
@@ -247,13 +248,13 @@ module.exports = NodeHelper.create({
 				await self.updateTWCHistory(twcManagerIP, twcManagerPort);
 			}
 			else {
-				this.sendSocketNotification("MMM-Powerwall-ChargeHistory", {
+				this.sendSocketNotification("ChargeHistory", {
 					twcManagerIP: twcManagerIP,
 					chargeHistory: this.chargeHistory[twcManagerIP].lastResult
 				});
 			}
 		}
-		else if (notification === "MMM-Powerwall-UpdateVehicleData") {
+		else if (notification === "UpdateVehicleData") {
 			let username = payload.username;
 			let vehicleID = payload.vehicleID;
 
@@ -272,6 +273,9 @@ module.exports = NodeHelper.create({
 				<= Date.now() );
 			this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
 		}
+		else if (notification === "Enable-Debug") {
+			this.debug = true;
+		}
 	},
 
 	checkTeslaCredentials: function(username) {
@@ -279,7 +283,7 @@ module.exports = NodeHelper.create({
 			return true;
 		}
 		else {
-			this.sendSocketNotification("MMM-Powerwall-ReconfigureTeslaAPI", {
+			this.sendSocketNotification("ReconfigureTeslaAPI", {
 				teslaAPIUsername: username
 			});
 			return false;
@@ -330,7 +334,7 @@ module.exports = NodeHelper.create({
 		var aggregates = await result.json();
 		this.updateCache(aggregates, this.powerwallAggregates, powerwallIP, now);
 		// Send notification
-		this.sendSocketNotification("MMM-Powerwall-Aggregates", {
+		this.sendSocketNotification("Aggregates", {
 			ip: powerwallIP,
 			aggregates: aggregates
 		});
@@ -357,11 +361,11 @@ module.exports = NodeHelper.create({
 					syncPoint = localSOE;
 					this.updateCache(syncPoint, this.powerwallCloudSOE, [username, siteID], now, "syncPoint");
 				}
-		}
-		if( cloudSOE === 0 && cache.lastResult && cache.syncPoint ) {
+			}
+			if( cloudSOE === 0 && cache.lastResult && cache.syncPoint ) {
 				cloudSOE = cache.lastResult;
 				syncPoint = cache.syncPoint;
-		}
+			}
 		}
 
 		this.sendSocketNotification("SOE", {
@@ -409,7 +413,7 @@ module.exports = NodeHelper.create({
 			this.updateCache(vins, this.twcVINs, twcManagerIP, now);
 
 			// Send notification
-			this.sendSocketNotification("MMM-Powerwall-ChargeStatus", {
+			this.sendSocketNotification("ChargeStatus", {
 				ip: twcManagerIP,
 				status: status,
 				vins: vins
@@ -435,7 +439,7 @@ module.exports = NodeHelper.create({
 		if( success && result.ok ) {
 			var history = await result.json();
 			this.updateCache(history, this.chargeHistory, twcManagerIP, now);
-			this.sendSocketNotification("MMM-Powerwall-ChargeHistory", {
+			this.sendSocketNotification("ChargeHistory", {
 				twcManagerIP: twcManagerIP,
 				chargeHistory: history
 			});
@@ -502,7 +506,9 @@ module.exports = NodeHelper.create({
 	},
 
 	log: function(message) {
-		console.log("MMM-Powerwall: " + message);
+		if( this.debug ) {
+			console.log("MMM-Powerwall: " + message);
+		}
 	},
 
 	doTeslaApiTokenUpdate: async function() {
@@ -610,17 +616,17 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiGetEnergy: async function(username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=energy";
-		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "MMM-Powerwall-EnergyData", "time_series", "energy");
+		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy");
 	},
 
 	doTeslaApiGetPowerHistory: async function(username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=power";
-		await this.doTeslaApi(url, username, "siteID", siteID, this.powerHistory, "MMM-Powerwall-PowerHistory", "time_series", "powerHistory");
+		await this.doTeslaApi(url, username, "siteID", siteID, this.powerHistory, "PowerHistory", "time_series", "powerHistory");
 	},
 
 	doTeslaApiGetSelfConsumption: async function(username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=self_consumption&period=day";
-		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "MMM-Powerwall-SelfConsumption", "time_series", "selfConsumption");
+		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption");
 	},
 
 	doTeslaApiGetVehicleList: async function(username) {
@@ -726,7 +732,7 @@ module.exports = NodeHelper.create({
 			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
 
-		this.sendSocketNotification("MMM-Powerwall-VehicleData", {
+		this.sendSocketNotification("VehicleData", {
 			username: username,
 			ID: vehicleID,
 			state: state,
