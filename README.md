@@ -6,8 +6,9 @@ your [Tesla Powerwall](https://www.tesla.com/powerwall) on your Magic Mirror,
 optionally including car charging data pulled from your
 [TWCManager](https://github.com/ngardiner/TWCManager/) (v1.20 or later).
 
-If using all the graphs, this works best in `position: "middle-center"`; individual
-graphs can work nicely in other positions.
+If using all the graphs, this works best in one of the full-width positions
+(`upper_third`, `middle_center`, `lower_third`); individual graphs can work
+nicely in other positions.
 
 ## Using the module
 
@@ -19,7 +20,7 @@ var config = {
     modules: [
         {
             module: 'MMM-Powerwall',
-            position: 'middle-center',
+            position: 'lower_third',
             config: {
                 // See below for configurable options
             }
