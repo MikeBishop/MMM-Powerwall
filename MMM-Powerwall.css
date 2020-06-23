@@ -15,6 +15,7 @@
 .MMM-Powerwall.flexbox {
     display: flex;
     flex-wrap: wrap; 
+    justify-content: space-evenly;
 }
 
 .MMM-Powerwall.vflexbox {
