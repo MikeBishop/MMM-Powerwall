@@ -38,11 +38,11 @@
 }
 
 .MMM-Powerwall.grid-left {
-    grid-template-columns: minmax(min-content,33%) auto;
+    grid-template-columns: minmax(min-content,40%) auto;
 }
 
 .MMM-Powerwall.grid-right {
-    grid-template-columns: auto minmax(min-content,33%);
+    grid-template-columns: auto minmax(min-content,40%);
 }
 
 .MMM-Powerwall.grid-equal {

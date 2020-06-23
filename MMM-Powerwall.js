@@ -654,12 +654,15 @@ Module.register("MMM-Powerwall", {
 					
 					unit = statusFor.drive.units;
 					if( unit === "mi/hr" ) {
-						number =  statusFor.drive.speed;
+						number = statusFor.drive.speed;
 					}
 					else {
 						// Convert to kph, since API reports mph
 						number = statusFor.drive.speed * 1.609344;
 					}
+
+					this.updateNode(consumptionId, number, unit, "", animate);
+
 					consumptionVisible = true;
 
 					break;

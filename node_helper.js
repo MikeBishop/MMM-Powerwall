@@ -487,16 +487,16 @@ module.exports = NodeHelper.create({
 				return siteIDs[0];
 			}
 			else if (siteIDs.length === 0) {
-				this.log("Could not find Powerwall in your Tesla account");
+				console.log("Could not find Powerwall in your Tesla account");
 			}
 			else {
-				this.log("Found multiple Powerwalls on your Tesla account:" + siteIDs);
-				this.log("Add 'siteID' to your config.js to specify which to target");
+				console.log("Found multiple Powerwalls on your Tesla account:" + siteIDs);
+				console.log("Add 'siteID' to your config.js to specify which to target");
 			}
 		}
 		else {
 			if( !this.siteIDs[username].every(id => siteIDs.includes(id)) ) {
-				this.log("Unknown site ID specified; found: " + siteIDs);
+				console.log("Unknown site ID specified; found: " + siteIDs);
 			}
 			else {
 				return this.siteIDs[username][0];
