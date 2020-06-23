@@ -457,9 +457,13 @@ Module.register("MMM-Powerwall", {
 				// }
 
 				if( payload.username === this.config.teslaAPIUsername ) {
-					this.doTimeout("vehicle", this.updateVehicleData, this.config.cloudUpdateInterval);
+					this.doTimeout("vehicle", () => self.updateVehicleData, this.config.cloudUpdateInterval);
 
-					let statusFor = this.vehicles.find(vehicle => vehicle.id == payload.ID);
+					let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
+					if( !statusFor ) {
+						break;
+					}
+
 					if( statusFor.drive ) {
 						statusFor.oldLocation = statusFor.drive.location;
 					}
