@@ -81,6 +81,7 @@ Module.register("MMM-Powerwall", {
 	vehicleInFocus: null,
 	vehicleTileShown: "A",
 	cloudInterval: null,
+	timeouts: {},
 
 	start: async function() {
 		var self = this;
@@ -110,27 +111,29 @@ Module.register("MMM-Powerwall", {
 			this.configureTeslaApi();
 			Log.log("Enabled Tesla API");
 		}
-		var updateLocal = function() {
-			if( self.callsToEnable.local ) {
-				let config = self.config;
-				self.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
-					powerwallIP: config.powerwallIP,
-					twcManagerIP: config.twcManagerIP,
-					twcManagerPort: config.twcManagerPort,
-					updateInterval: config.localUpdateInterval - 500,
-					username: config.teslaAPIUsername,
-					siteID: config.siteID,
-					resyncInterval: config.cloudUpdateInterval - 500
-				});
-			}
-		};
 
-		setInterval(updateLocal, self.config.localUpdateInterval);
 		setInterval(function() {
 			self.advanceToNextVehicle();
 		}, 20000);
-		updateLocal();
+		this.updateLocal();
 		await this.advanceDayMode();
+	},
+
+	updateLocal: function() {
+		if( this.callsToEnable.local ) {
+			let self = this;
+			let config = this.config;
+			this.sendSocketNotification("MMM-Powerwall-UpdateLocal", {
+				powerwallIP: config.powerwallIP,
+				twcManagerIP: config.twcManagerIP,
+				twcManagerPort: config.twcManagerPort,
+				updateInterval: config.localUpdateInterval - 500,
+				username: config.teslaAPIUsername,
+				siteID: config.siteID,
+				resyncInterval: config.cloudUpdateInterval - 500
+			});
+			this.doTimeout("local", () => self.updateLocal(), this.config.localUpdateInterval);
+		}
 	},
 
 	configureTeslaApi: function() {
@@ -268,25 +271,21 @@ Module.register("MMM-Powerwall", {
 						this.updateEnergy();
 						this.updateSelfConsumption();
 						this.updatePowerHistory();
-						if( this.cloudInterval ) {
-							clearInterval(this.cloudInterval);
-						}
-						this.cloudInterval = setInterval(function() {
+						this.doTimeout("cloud", () => {
 							self.updateSelfConsumption();
 							self.updatePowerHistory();
 						}, this.config.cloudUpdateInterval);
 					}
 					this.vehicles = payload.vehicles;
 					this.updateVehicleData();
-					setInterval(function() {
-						self.updateVehicleData();
-					}, self.config.cloudUpdateInterval);
 					await this.focusOnVehicles(this.vehicles, 0);
 				}
 				break;
 
 			case "MMM-Powerwall-Aggregates":
 				if( payload.ip === this.config.powerwallIP ) {
+					this.doTimeout("local", () => self.updateLocal(), self.config.localUpdateInterval)
+
 					let needUpdate = false;
 					if (!this.flows) {
 						needUpdate = true;
@@ -410,6 +409,11 @@ Module.register("MMM-Powerwall", {
 			case "MMM-Powerwall-SelfConsumption":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
+						this.doTimeout("cloud", () => {
+							self.updateSelfConsumption();
+							self.updatePowerHistory();
+						}, this.config.cloudUpdateInterval);
+
 						let yesterday = payload.selfConsumption[0];
 						let today = payload.selfConsumption[1];
 						this.selfConsumptionYesterday = [
@@ -453,6 +457,8 @@ Module.register("MMM-Powerwall", {
 				// }
 
 				if( payload.username === this.config.teslaAPIUsername ) {
+					this.doTimeout("vehicle", this.updateVehicleData, this.config.cloudUpdateInterval);
+
 					let statusFor = this.vehicles.find(vehicle => vehicle.id == payload.ID);
 					if( statusFor.drive ) {
 						statusFor.oldLocation = statusFor.drive.location;
@@ -481,6 +487,13 @@ Module.register("MMM-Powerwall", {
 			default:
 				break;
 		}
+	},
+
+	doTimeout: function(name, func, timeout) {
+		if( this.timeouts[name] ) {
+			clearTimeout(this.timeouts[name]);
+		}
+		this.timeouts[name] = setTimeout(() => func(), timeout + (Math.random() * 3000) - 500);
 	},
 
 	generateDaystart: function(payload) {
