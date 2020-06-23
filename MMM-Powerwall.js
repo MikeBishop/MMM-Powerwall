@@ -31,7 +31,7 @@ const DISPLAY_SINKS = [
 	HOUSE,
 	GRID
 ];
-const DISPLAY_ALL = [
+var DISPLAY_ALL = [
 	GRID,
 	POWERWALL,
 	HOUSE,
@@ -101,6 +101,7 @@ Module.register("MMM-Powerwall", {
 		}
 		else {
 			self.twcEnabled = false;
+			DISPLAY_ALL.splice(CAR, 1);
 		}
 
 		if( this.config.debug ) {
