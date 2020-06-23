@@ -89,3 +89,19 @@ providing the password to any instance enables all instances to use it.
 
 Neither the password nor the tokens are sent anywhere except from your client to
 the node_helper, and thence to the Tesla API.
+
+## Dependencies and Acknowledgements
+
+This module relies on the following APIs:
+
+- The Tesla Owner's API, documented at https://www.teslaapi.io/
+- The Tesla Compositor API, picked apart at https://teslaownersonline.com/threads/teslas-image-compositor.7089/
+- The Powerwall local API, picked apart at https://github.com/vloschiavo/powerwall2
+- The TWCManager local API, documented at https://github.com/ngardiner/TWCManager/blob/v1.2.0/docs/modules/Control_HTTP.md
+- The Sunrise Sunset API, documented at https://sunrise-sunset.org/api
+- The ArcGIS Reverse Geocode API, documented at https://developers.arcgis.com/rest/geocode/api-reference/geocoding-reverse-geocode.htm
+
+In addition to any commiters to the repo, the following have helped figure certain pieces out:
+
+- @ngardiner's work on TWCManager is amazing, and the car charging could not be tracked without it
+- @Kemmey provided initial code for interacting with the compositor
