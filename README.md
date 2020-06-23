@@ -11,7 +11,9 @@ graphs can work nicely in other positions.
 
 ## Using the module
 
-To use this module, add the following configuration block to the modules array in the `config/config.js` file:
+To use this module, clone this repo into ~/MagicMirror/modules, run `npm
+install` to get dependencies, and add the following configuration block to the
+modules array in the `config/config.js` file:
 ```js
 var config = {
     modules: [
