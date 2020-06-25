@@ -381,6 +381,16 @@ Module.register("MMM-Powerwall", {
 									knownVehicle.charge.charging_state === "Charging"
 							);
 						}
+
+						if (vehicles.map(
+								vehicle => vehicle.charge ?
+									(vehicle.charge.power != 0 ?
+										this.flows.sinks.car.total / (1000 * vehicle.charge.power * payload.status.carsCharging) :
+										2) :
+									1
+							).some(ratio => ratio > 1.25 || ratio < 0.75 )) {
+								this.updateVehicleData(30);
+						}
 						await this.focusOnVehicles(vehicles, payload.status.carsCharging)
 					}
 					else {
