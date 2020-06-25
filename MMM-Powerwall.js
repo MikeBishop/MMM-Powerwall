@@ -1325,12 +1325,17 @@ Module.register("MMM-Powerwall", {
 						case "car":
 							return sample[entry.key + "_power"];
 						case "house":
-							return -1 * (
+							// Positive
+							let housePlusCar =
 								sample.solar_power +
 								sample.battery_power +
-								sample.grid_power +
-								sample.car_power
-								);
+								sample.grid_power;
+							if( Math.abs(sample.car_power) > housePlusCar ) {
+								return -1 * housePlusCar;
+							}
+							else {
+								return -1 * (housePlusCar + sample.car_power);
+							}
 						default:
 							return 0;
 					}
