@@ -959,9 +959,9 @@ Module.register("MMM-Powerwall", {
 			// Received from core system
 			if( notification === "MODULE_DOM_CREATED" ) {
 				// DOM has been created, so hook up the graph objects
-						self.buildGraphs()
-					}
-					}
+				self.buildGraphs()
+			}
+		}
 	},
 
 	dayNumber: -1,
@@ -1011,7 +1011,8 @@ Module.register("MMM-Powerwall", {
 		if( (!this.sunrise || !this.sunset) && this.config.home ) {
 			let url = "https://api.sunrise-sunset.org/json?lat=" +
 				this.config.home[0] + "&lng=" + this.config.home[1] +
-				"&formatted=0";
+				"&formatted=0&date=" +
+				[now.getFullYear(), now.getMonth() + 1, now.getDate()].join("-");
 			let result = await fetch(url);
 			if( result.ok ) {
 				let response = await result.json();
@@ -1023,7 +1024,7 @@ Module.register("MMM-Powerwall", {
 			}
 		}
 		this.sunrise = this.sunrise || riseset.sunrise || new Date().setHours(6,0,0,0).getTime();
-		this.sunset = this.sunset || riseset.sunset || new Date().setHours(20,30,0).getTime();
+		this.sunset = this.sunset || riseset.sunset || new Date().setHours(20,30,0,0).getTime();
 
 		now = now.getTime();
 		if( now < this.sunrise ) {
