@@ -948,25 +948,10 @@ Module.register("MMM-Powerwall", {
 		if( !sender ) {
 			// Received from core system
 			if( notification === "MODULE_DOM_CREATED" ) {
-				// DOM has been created -- container will be consistent, but children may be recreated
-				var myDiv = document.getElementById(this.identifier);
-				for( const node of myDiv.children ) {
-					if( node.classList.contains("module-content") ) {
-						// Here's the content div, which we need to observe
-						const config = {attributes: false, childList: true, subtree: false };
-						this.observer = new MutationObserver(function(mutationsList, observer) {self.buildGraphs(); });
-						this.observer.observe(node, config);
-						
-						// Need to trigger it the first time
+				// DOM has been created, so hook up the graph objects
 						self.buildGraphs()
-						break;
 					}
-					else {
-						this.Log("Found a non-match")
 					}
-				}
-			}
-		}
 	},
 
 	dayNumber: -1,
