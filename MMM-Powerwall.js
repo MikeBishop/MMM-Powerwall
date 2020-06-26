@@ -972,6 +972,7 @@ Module.register("MMM-Powerwall", {
 			this.dayNumber = now.getDay();
 			this.sunrise = null;
 			this.sunset = null;
+			this.cachedCarTotal = null;
 
 			if( now.getHours() == 0 && now.getMinutes() == 0 ) {
 				// It's midnight
