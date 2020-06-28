@@ -378,7 +378,7 @@ Module.register("MMM-Powerwall", {
 							vehicles = this.vehicles.filter(
 								knownVehicle =>
 									knownVehicle.charge &&
-									knownVehicle.charge.charging_state === "Charging"
+									knownVehicle.charge.state === "Charging"
 							);
 						}
 
@@ -662,7 +662,7 @@ Module.register("MMM-Powerwall", {
 				case "R":
 					statusText += " driving";
 					addLocation = true;
-					
+
 					unit = statusFor.drive.units;
 					if( unit === "mi/hr" ) {
 						number = statusFor.drive.speed;
@@ -677,12 +677,24 @@ Module.register("MMM-Powerwall", {
 					consumptionVisible = true;
 
 					break;
-				
+
 				default:
-					statusText += " parked";
+					switch( statusFor.charge.state ) {
+						case "Disconnected":
+							statusText += " parked";
+							break;
+						case "Charging":
+							// Car charging away from home, or no TWCManager
+							statusText += " charging";
+							break;
+						default:
+							statusText += " connected to power";
+							break;
+					}
+
 					number = null;
 					unit = "";
-					
+
 					if( this.isHome(statusFor.drive.location) ) {
 						statusText += " at home";
 						addLocation = false;
@@ -694,7 +706,7 @@ Module.register("MMM-Powerwall", {
 					consumptionVisible = false;
 					break;
 			}
-			
+
 			if( addLocation ) {
 				if (statusFor.oldLocation && statusFor.locationText &&
 					this.isSameLocation(statusFor.oldLocation, statusFor.drive.location)) {
