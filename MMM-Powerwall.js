@@ -893,12 +893,12 @@ Module.register("MMM-Powerwall", {
 		 *******************/
 		let battery = this.teslaAggregates.battery.instant_power;
 		let targetId = this.identifier + "-PowerwallStatus";
-		if( battery != 0) {
+		if( Math.abs(battery) > 20 ) {
 			this.updateNode(
 				targetId,
-				Math.abs(this.teslaAggregates.battery.instant_power),
+				Math.abs(battery),
 				"W",
-				this.teslaAggregates.battery.instant_power > 0 ? "Supplying " : "Charging at ",
+				battery > 0 ? "Supplying " : "Charging at ",
 				false
 			);
 		}
@@ -1405,7 +1405,13 @@ Module.register("MMM-Powerwall", {
 	attributeFlows: function(teslaAggregates, twcConsumption) {
 		if( teslaAggregates ) {
 			let solar = Math.trunc(teslaAggregates.solar.instant_power);
+			if( solar < 5 ) {
+				solar = 0;
+			}
 			let battery = Math.trunc(teslaAggregates.battery.instant_power);
+			if( Math.abs(battery) <= 20 ) {
+				battery = 0;
+			}
 			let house = Math.trunc(teslaAggregates.load.instant_power);
 			let car = 0;
 			if( twcConsumption && twcConsumption <= house ) {
