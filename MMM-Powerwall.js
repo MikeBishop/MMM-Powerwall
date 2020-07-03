@@ -412,6 +412,7 @@ Module.register("MMM-Powerwall", {
 					else {
 						this.energyData = payload
 					}
+					this.updateData();
 				}
 				break;
 			case "PowerHistory":
