@@ -695,7 +695,7 @@ Module.register("MMM-Powerwall", {
 							statusText += " charging";
 							break;
 						default:
-							statusText += " connected to power";
+							statusText += " not charging";
 							break;
 					}
 
