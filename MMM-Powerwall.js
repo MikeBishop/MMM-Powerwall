@@ -451,7 +451,13 @@ Module.register("MMM-Powerwall", {
 						this.updateNode(
 							this.identifier + "-SelfPoweredTotal",
 							Math.round(this.selfConsumptionToday[0]) + Math.round(this.selfConsumptionToday[1]),
-							"%");
+							"%"
+						);
+						this.updateNode(
+							this.identifier + "-SelfPoweredYesterday",
+							Math.round(this.selfConsumptionYesterday[0]) + Math.round(this.selfConsumptionYesterday[1]),
+							"% Yesterday"
+						);
 						let scChart = this.charts.selfConsumption
 						if( scChart ) {
 							scChart.data.datasets[0].data = this.selfConsumptionToday;
