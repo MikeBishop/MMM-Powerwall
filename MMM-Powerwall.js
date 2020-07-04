@@ -622,6 +622,7 @@ Module.register("MMM-Powerwall", {
 		let unit = "W";
 		let consumptionVisible;
 		let addLocation = false;
+		let postLocation = "";
 		let consumptionId = this.identifier + "-CarConsumption-" + suffix;
 		let completionParaId = this.identifier + "-CarCompletionPara-" + suffix;
 
@@ -695,7 +696,7 @@ Module.register("MMM-Powerwall", {
 							statusText += " charging";
 							break;
 						default:
-							statusText += " not charging";
+							postLocation = " and not charging";
 							break;
 					}
 
@@ -739,6 +740,7 @@ Module.register("MMM-Powerwall", {
 					}
 				}
 			}
+			statusText += postLocation;
 			this.makeNodeInvisible(completionParaId);
 		}
 		
