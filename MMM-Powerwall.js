@@ -486,7 +486,7 @@ Module.register("MMM-Powerwall", {
 				// }
 
 				if( payload.username === this.config.teslaAPIUsername ) {
-					this.doTimeout("vehicle", () => self.updateVehicleData, this.config.cloudUpdateInterval);
+					this.doTimeout("vehicle", () => self.updateVehicleData(), this.config.cloudUpdateInterval);
 
 					let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
 					if( !statusFor ) {
@@ -524,9 +524,23 @@ Module.register("MMM-Powerwall", {
 
 	doTimeout: function(name, func, timeout) {
 		if( this.timeouts[name] ) {
-			clearTimeout(this.timeouts[name]);
+			clearTimeout(this.timeouts[name].handle);
 		}
-		this.timeouts[name] = setTimeout(() => func(), timeout + (Math.random() * 3000) - 500);
+		let delay = timeout + (Math.random() * 3000) - 500;
+		this.timeouts[name] = {
+			func: func,
+			target: Date.now() + delay
+		};
+		this.timeouts[name].handle = setTimeout(() => func(), delay);
+	},
+
+	checkTimeouts: function() {
+		for( let name in this.timeouts ) {
+			if( Date.now() - this.timeouts[name].target > 5000 ) {
+				this.timeouts[name].func();
+				this.timeouts[name].target = Date.now();
+			}
+		}
 	},
 
 	generateDaystart: function(payload) {
@@ -838,6 +852,9 @@ Module.register("MMM-Powerwall", {
 			(this.dayMode === "day" && now.getTime() > this.sunset) ) {
 				await this.advanceDayMode();
 		}
+
+		// Check for any overdue timeouts
+		this.checkTimeouts();
 
 		/*******************
 		 * SolarProduction *
