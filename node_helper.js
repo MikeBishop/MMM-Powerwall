@@ -121,10 +121,12 @@ module.exports = NodeHelper.create({
 				this.initializeCache(this.powerwallCloudSOE, username, siteID);
 			}
 
+			let pwPromise;
 			if( this.powerwallAggregates[ip].lastUpdate + payload.updateInterval < Date.now() ) {
-				await self.updatePowerwall(ip, username, siteID, payload.resyncInterval);
+				pwPromise = self.updatePowerwall(ip, username, siteID, payload.resyncInterval);
 			}
 			else {
+				pwPromise = Promise.resolve();
 				if (this.powerwallAggregates[ip].lastResult) {
 					this.sendSocketNotification("Aggregates", {
 						ip: ip,
@@ -158,6 +160,7 @@ module.exports = NodeHelper.create({
 					});
 				}
 			}
+			await pwPromise;
 		}
 		else if (notification === "UpdateEnergy") {
 			let username = payload.username;
@@ -322,34 +325,37 @@ module.exports = NodeHelper.create({
 	},
 
 	updatePowerwall: async function(powerwallIP, username, siteID, resyncInterval) {
-		let url = "https://" + powerwallIP + "/api/meters/aggregates";
-		let result = await fetch(url, {agent: unauthenticated_agent});
 		let now = Date.now();
+		let url = "https://" + powerwallIP + "/api/meters/aggregates";
+		let aggregatePromise = fetch(url, {agent: unauthenticated_agent}).then(
+			async result => {
+				if( !result.ok ) {
+					this.log("Powerwall fetch failed")
+					return
+				}
 
-		if( !result.ok ) {
-			this.log("Powerwall fetch failed")
-			return
-		}
+				var aggregates = await result.json();
+				this.updateCache(aggregates, this.powerwallAggregates, powerwallIP, now);
+				// Send notification
+				this.sendSocketNotification("Aggregates", {
+					ip: powerwallIP,
+					aggregates: aggregates
+				});
+			}
+		);
 
-		var aggregates = await result.json();
-		this.updateCache(aggregates, this.powerwallAggregates, powerwallIP, now);
-		// Send notification
-		this.sendSocketNotification("Aggregates", {
-			ip: powerwallIP,
-			aggregates: aggregates
-		});
+		url = "https://" + powerwallIP + "/api/system_status/soe";
+		let localPromise = fetch(url, {agent: unauthenticated_agent}).then(
+			async result => {
+				if( !result.ok ) {
+					this.log("Powerwall SOE fetch failed");
+					return null;
+				}
 
-		url = "https://192.168.200.41/api/system_status/soe";
-		result = await fetch(url, {agent: unauthenticated_agent});
-
-		if( !result.ok ) {
-			this.log("Powerwall SOE fetch failed");
-			return;
-		}
-
-		let response = await result.json();
-		let localSOE = response.percentage;
-		this.updateCache(localSOE, this.powerwallSOE, powerwallIP, now);
+				let response = await result.json();
+				return response.percentage;
+			}
+		);
 
 		let cloudSOE = 0, syncPoint = 0;
 		if( username && siteID ) {
@@ -358,7 +364,7 @@ module.exports = NodeHelper.create({
 				let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
 				cloudSOE = await this.doTeslaApi(url, username, null, siteID, this.powerwallCloudSOE, null, "percentage_charged");
 				if( cloudSOE != 0 ) {
-					syncPoint = localSOE;
+					syncPoint = await localPromise;
 					this.updateCache(syncPoint, this.powerwallCloudSOE, [username, siteID], now, "syncPoint");
 				}
 			}
@@ -368,10 +374,15 @@ module.exports = NodeHelper.create({
 			}
 		}
 
+		let localSOE = await localPromise;
+		this.updateCache(localSOE, this.powerwallSOE, powerwallIP, now);
+
 		this.sendSocketNotification("SOE", {
 			ip: powerwallIP,
 			soe: cloudSOE + localSOE - syncPoint
 		});
+
+		await aggregatePromise;
 	},
 
 	updateTWCManager: async function(twcManagerIP, twcManagerPort) {
