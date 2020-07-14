@@ -77,31 +77,25 @@
                 </div>
             </div>
         {%- elif graph == "CarCharging" -%}
-            <div class="MMM-Powerwall flip-outer" id="{{id}}-CarFlip">
-                {% for side in [{suffix: "A", name: "front"}, {suffix: "B", name: "back"}] -%}
-                <div class="MMM-Powerwall flip-{{side.name}}">
-                    <div class="MMM-Powerwall grid-right">
-                        <div class="MMM-Powerwall col1">
-                            <div class="MMM-Powerwall cbattery">
-                                <div class="battery meter-horizontal" id="{{id}}-car-meter-{{side.suffix}}"></div>
-                                <div class="MMM-Powerwall overlay bright text" id="{{id}}-car-meter-text-{{side.suffix}}"></div>
-                            </div>
-                            <div class="MMM-Powerwall no-overflow">
-                                <div class="MMM-Powerwall car-image">
-                                    <img id="{{id}}-Picture-{{side.suffix}}">
-                                </div>
-                            </div>
-                        </div>
-                        <div class="MMM-Powerwall col2 vflexbox">
-                            <div class="MMM-Powerwall small bright"><span id="{{id}}-CarStatus-{{side.suffix}}"></span></div>
-                            <div class="MMM-Powerwall big car text" id="{{id}}-CarConsumption-{{side.suffix}}"></div>
-                            <div class="MMM-Powerwall small bright" id="{{id}}-CarCompletionPara-{{side.suffix}}" style="display:none">Finishing in
-                                <span class="small bright text" id="{{id}}-CarCompletion-{{side.suffix}}"></span>
-                            </div>
+            <div class="MMM-Powerwall grid-right text" id="{{id}}-CarTile" style="opacity: 0">
+                <div class="MMM-Powerwall col1">
+                    <div class="MMM-Powerwall cbattery">
+                        <div class="battery meter-horizontal" id="{{id}}-car-meter"></div>
+                        <div class="MMM-Powerwall overlay bright text" id="{{id}}-car-meter-text"></div>
+                    </div>
+                    <div class="MMM-Powerwall no-overflow">
+                        <div class="MMM-Powerwall car-image">
+                            <img id="{{id}}-Picture">
                         </div>
                     </div>
                 </div>
-                {%- endfor %}
+                <div class="MMM-Powerwall col2 vflexbox">
+                    <div class="MMM-Powerwall small bright"><span id="{{id}}-CarStatus"></span></div>
+                    <div class="MMM-Powerwall big car text" id="{{id}}-CarConsumption"></div>
+                    <div class="MMM-Powerwall small bright" id="{{id}}-CarCompletionPara" style="display:none">Finishing in
+                        <span class="small bright text" id="{{id}}-CarCompletion"></span>
+                    </div>
+                </div>
             </div>
         {%- elif graph == "EnergyBar" -%}
             <div class="MMM-Powerwall big-graph-container">

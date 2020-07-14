@@ -81,7 +81,6 @@ Module.register("MMM-Powerwall", {
 	vehicles: null,
 	displayVehicles: [],
 	vehicleInFocus: null,
-	vehicleTileShown: "A",
 	cloudInterval: null,
 	timeouts: {},
 
@@ -348,9 +347,7 @@ Module.register("MMM-Powerwall", {
 					if( payload.status.carsCharging > 0 && this.vehicles ) {
 						// Charging at least one car
 						let charging = this.flows.sinks.car.total;
-						for( const suffix of ["A", "B"]) {
-							this.updateNode(this.identifier + "-CarConsumption-" + suffix, charging, "W", "", this.vehicleTileShown == suffix);
-						}
+						this.updateNode(this.identifier + "-CarConsumption", charging, "W");
 
 						let vinsWeKnow = (payload.vins || []).filter(
 							chargingVIN => this.vehicles.some(
@@ -514,7 +511,7 @@ Module.register("MMM-Powerwall", {
 						this.advanceToNextVehicle();
 					}
 					else if( statusFor === this.vehicleInFocus ) {
-						await this.drawStatusForVehicle(statusFor, this.numCharging, this.vehicleTileShown);
+						await this.drawStatusForVehicle(statusFor, this.numCharging, false);
 					}
 				}
 				break;
@@ -640,22 +637,22 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
-	drawStatusForVehicle: async function(statusFor, numCharging, suffix) {
+	drawStatusForVehicle: async function(statusFor, numCharging, hidden) {
 		if( !statusFor || !statusFor.drive ) {
 			return false;
 		}
 
 		let statusText = statusFor.display_name;
-		let animate = suffix === this.vehicleTileShown;
+		let animate = !hidden;
 		let number = 0;
 		let unit = "W";
 		let consumptionVisible;
 		let addLocation = false;
 		let postLocation = "";
-		let consumptionId = this.identifier + "-CarConsumption-" + suffix;
-		let completionParaId = this.identifier + "-CarCompletionPara-" + suffix;
+		let consumptionId = this.identifier + "-CarConsumption";
+		let completionParaId = this.identifier + "-CarCompletionPara";
 
-		let picture = document.getElementById(this.identifier + "-Picture-" + suffix);
+		let picture = document.getElementById(this.identifier + "-Picture");
 		if( picture && statusFor.imageUrl ) {
 			picture.src = statusFor.imageUrl;
 		}
@@ -682,14 +679,14 @@ Module.register("MMM-Powerwall", {
 				if( minutes > 0 ) {
 					timeText += minutes + " minutes";
 				}
-				this.updateText(this.identifier + "-CarCompletion-" + suffix, timeText, animate);
+				this.updateText(this.identifier + "-CarCompletion", timeText, animate);
 				this.makeNodeVisible(completionParaId);
 			}
 			else {
 				this.makeNodeInvisible(completionParaId)
 			}
 			consumptionVisible = true;
-				
+
 		}
 		else {
 			// Cars not charging; show current instead
@@ -750,7 +747,7 @@ Module.register("MMM-Powerwall", {
 					statusText += " in " + statusFor.locationText;
 				}
 				else {
-					let url = 
+					let url =
 						"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
 						"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
 						statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
@@ -772,14 +769,14 @@ Module.register("MMM-Powerwall", {
 			statusText += postLocation;
 			this.makeNodeInvisible(completionParaId);
 		}
-		
-		this.updateText(this.identifier + "-CarStatus-" + suffix, statusText, animate);
-		let meterNode = document.getElementById(this.identifier + "-car-meter-" + suffix);
+
+		this.updateText(this.identifier + "-CarStatus", statusText, animate);
+		let meterNode = document.getElementById(this.identifier + "-car-meter");
 		if( meterNode ) {
 			meterNode.style.width = statusFor.charge.soc + "%";
 		}
 		this.updateNode(
-			this.identifier + "-car-meter-text-" + suffix,
+			this.identifier + "-car-meter-text",
 			statusFor.charge.soc,
 			"%",
 			"",
@@ -1571,21 +1568,15 @@ Module.register("MMM-Powerwall", {
 		}
 
 		if( indexToFocus >= 0 ) {
-			let newTileSide;
-			if( focusSameVehicle ) {
-				newTileSide = this.vehicleTileShown;
+			let carTile = document.getElementById(this.identifier + "-CarTile");
+			if( !focusSameVehicle ) {
+				carTile.style.opacity = 0;
+				await this.delay(500);
 			}
-			else {
-				newTileSide = (this.vehicleTileShown === "A" ? "B" : "A");
-			}
-			let drew = await this.drawStatusForVehicle(this.displayVehicles[indexToFocus], this.numCharging, newTileSide);
-			if( !focusSameVehicle && drew ) {
-				this.vehicleInFocus = this.displayVehicles[indexToFocus];
-				this.vehicleTileShown = newTileSide;
-				let carFlip = document.getElementById(this.identifier + "-CarFlip");
-				if( carFlip ) {
-					carFlip.style.transform = (this.vehicleTileShown === "A" ? "none" : "rotateX(180deg)");
-				}
+			this.vehicleInFocus = this.displayVehicles[indexToFocus];
+			await this.drawStatusForVehicle(this.vehicleInFocus, this.numCharging, !focusSameVehicle);
+			if( !focusSameVehicle ) {
+				carTile.style.opacity = 1;
 			}
 		}
 		else {
@@ -1594,6 +1585,10 @@ Module.register("MMM-Powerwall", {
 			// If it's a friend's car, this won't work.
 			this.updateVehicleData(30);
 		}
+	},
+
+	delay: function (ms) {
+			return new Promise(resolve => setTimeout(resolve, ms));
 	},
 
 	createCompositorUrl: function(config) {
