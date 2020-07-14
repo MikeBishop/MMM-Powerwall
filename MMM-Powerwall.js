@@ -1011,6 +1011,14 @@ Module.register("MMM-Powerwall", {
 				self.buildGraphs()
 			}
 		}
+		if( notification === "USER_PRESENCE" ) {
+			if( payload ) {
+				this.resume();
+			}
+			else {
+				this.suspend();
+			}
+		}
 	},
 
 	dayNumber: -1,
