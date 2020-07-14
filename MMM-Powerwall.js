@@ -879,36 +879,35 @@ Module.register("MMM-Powerwall", {
 			this.dayMode === "day"
 		);
 		this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
-		let solarFlip = document.getElementById(this.identifier + "-SolarFlip");
-		let solarCanvas = document.getElementById(this.identifier + "-SolarDestinations");
-		let focusOnA = this.dayMode === "day";
-		if( solarFlip && solarCanvas ) {
-			if( focusOnA ) {
-				solarFlip.style.transform = "none";
-				solarCanvas.style.visibility = "visible"
-			}
-			else {
-				solarFlip.style.transform = "rotateX(180deg)";
-				solarCanvas.style.visibility = "hidden";
-				this.updateText(
-					this.identifier + "-SolarTodayYesterday",
-					this.dayMode === "morning" ? "yesterday" : "today"
-				);
-			}
+		let dayContent = document.getElementById(this.identifier + "-SolarDay");
+		let nightContent = document.getElementById(this.identifier + "-SolarNight");
+		let isDay = this.dayMode === "day";
+		if( isDay ) {
+			this.makeNodeVisible(dayContent);
+			this.makeNodeInvisible(nightContent);
 		}
+		else {
+			this.makeNodeInvisible(dayContent);
+			this.makeNodeVisible(nightContent);
+			this.updateText(
+				this.identifier + "-SolarTodayYesterday",
+				this.dayMode === "morning" ? "yesterday" : "today"
+			);
+		}
+
 		if( this.dayStart ) {
 			this.makeNodeVisible(this.identifier + "-SolarTotalTextA");
 			this.updateNode(
 				this.identifier + "-SolarTotalA",
 				this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
-				"Wh", "", focusOnA
+				"Wh", "", isDay
 			);
 			this.updateNode(
 				this.identifier + "-SolarTotalB",
 				this.dayMode === "morning" ?
 				this.yesterdaySolar :
 				(this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export),
-				"Wh", "", !focusOnA
+				"Wh", "", !isDay
 			);
 		}
 
