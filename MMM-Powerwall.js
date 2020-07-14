@@ -76,6 +76,7 @@ Module.register("MMM-Powerwall", {
 	powerHistoryChanged: false,
 	selfConsumptionToday: [0, 0, 100],
 	selfConsumptionYesterday: null,
+	suspended: false,
 	soe: 0,
 	vehicles: null,
 	displayVehicles: [],
@@ -531,16 +532,30 @@ Module.register("MMM-Powerwall", {
 			func: func,
 			target: Date.now() + delay
 		};
-		this.timeouts[name].handle = setTimeout(() => func(), delay);
+		if( !this.suspended ) {
+			this.timeouts[name].handle = setTimeout(() => func(), delay);
+		}
 	},
 
 	checkTimeouts: function() {
 		for( let name in this.timeouts ) {
-			if( Date.now() - this.timeouts[name].target > 5000 ) {
+			if( !this.suspended && Date.now() - this.timeouts[name].target > 5000 ) {
 				this.timeouts[name].func();
 				this.timeouts[name].target = Date.now();
 			}
 		}
+	},
+
+	suspend: function() {
+		this.suspended = true;
+		for( let name in this.timeouts ) {
+			clearTimeout(this.timeouts[name].handle)
+		}
+	},
+
+	resume: function() {
+		this.suspended = false;
+		this.checkTimeouts();
 	},
 
 	generateDaystart: function(payload) {
