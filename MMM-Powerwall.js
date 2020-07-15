@@ -199,12 +199,14 @@ Module.register("MMM-Powerwall", {
 	},
 
 	updateEnergy: function() {
+		// Energy gets updated with the local timeout, because it's not
+		// requested on a recurring basis.  Recency affects the accuracy.
 		if( this.callsToEnable.energy &&
 			this.teslaAPIEnabled && this.config.siteID ) {
 			this.sendSocketNotification("UpdateEnergy", {
 				username: this.config.teslaAPIUsername,
 				siteID: this.config.siteID,
-				updateInterval: this.config.cloudUpdateInterval - 500
+				updateInterval: this.config.localUpdateInterval - 500
 			});
 		}
 	},
@@ -879,8 +881,8 @@ Module.register("MMM-Powerwall", {
 			this.dayMode === "day"
 		);
 		this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
-		let dayContent = document.getElementById(this.identifier + "-SolarDay");
-		let nightContent = document.getElementById(this.identifier + "-SolarNight");
+		let dayContent = this.identifier + "-SolarDay";
+		let nightContent = this.identifier + "-SolarNight";
 		let isDay = this.dayMode === "day";
 		if( isDay ) {
 			this.makeNodeVisible(dayContent);

@@ -2,7 +2,7 @@
 {% for graph in config.graphs %}
     <div class="module MMM-Powerwall module-content flexitem">
         {% if graph == "SolarProduction" -%}
-        <div class="MMM-Powerwall">
+        <div class="MMM-Powerwall" style="height: 100%">
             <div class="MMM-Powerwall" id="{{id}}-SolarDay">
                 <div class="MMM-Powerwall grid-left">
                     <div class="MMM-Powerwall col1 vflexbox">
@@ -24,10 +24,12 @@
                     </div>
                 </div>
             </div>
-            <div class="MMM-Powerwall vflexbox" style="display:none" id="{{id}}-SolarNight">
-                <div class="small bright">Solar produced</div>
-                <div id="{{id}}-SolarTotalB" class="big solar text"></div>
-                <div class="small bright text" id="{{id}}-SolarTodayYesterday"></div>
+            <div style="display:none; height: 100%" id="{{id}}-SolarNight">
+                <div class="MMM-Powerwall vflexbox">
+                    <div class="small bright">Solar produced</div>
+                    <div id="{{id}}-SolarTotalB" class="big solar text"></div>
+                    <div class="small bright text" id="{{id}}-SolarTodayYesterday"></div>
+                </div>
             </div>
         </div>
         {%- elif graph == "HouseConsumption" -%}
