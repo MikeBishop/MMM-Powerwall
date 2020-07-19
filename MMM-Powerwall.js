@@ -527,6 +527,9 @@ Module.register("MMM-Powerwall", {
 			clearTimeout(this.timeouts[name].handle);
 		}
 		let delay = timeout + (Math.random() * 3000) - 500;
+		if( delay < 500 ) {
+			delay = 500;
+		}
 		this.timeouts[name] = {
 			func: func,
 			target: Date.now() + delay
