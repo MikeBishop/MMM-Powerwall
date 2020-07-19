@@ -40,8 +40,8 @@ var config = {
 | `graphs`              | *Optional* Array of tiles to show. Possible values are described below; default is all
 | `localUpdateInterval` | *Optional* How often (in milliseconds) to poll local endpoints (Powerwall and TWCManager)<br>Default 10000 milliseconds (10 seconds)
 | `cloudUpdateInterval` | *Optional* How often (in milliseconds) to poll Tesla API<br>Default 300000 milliseconds (five minutes)
-| `teslaApiUsername`    | *Recommended* Username for your Tesla account
-| `teslaApiPassword`    | *Optional* Password for your Tesla account; see below for more options
+| `teslaAPIUsername`    | *Recommended* Username for your Tesla account
+| `teslaAPIPassword`    | *Optional* Password for your Tesla account; see below for more options
 | `home`                | *Optional* Coordinates (`[lat, lon]`) of your home; used to indicate when car is at home and to get sunrise/sunset times
 
 ### Graphs
