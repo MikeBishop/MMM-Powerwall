@@ -1083,8 +1083,8 @@ Module.register("MMM-Powerwall", {
 				}
 			}
 		}
-		this.sunrise = this.sunrise || riseset.sunrise || new Date().setHours(6,0,0,0).getTime();
-		this.sunset = this.sunset || riseset.sunset || new Date().setHours(20,30,0,0).getTime();
+		this.sunrise = this.sunrise || riseset.sunrise || new Date().setHours(6,0,0,0);
+		this.sunset = this.sunset || riseset.sunset || new Date().setHours(20,30,0,0);
 
 		now = now.getTime();
 		if( now < this.sunrise ) {
@@ -1578,14 +1578,16 @@ Module.register("MMM-Powerwall", {
 
 		if( indexToFocus >= 0 ) {
 			let carTile = document.getElementById(this.identifier + "-CarTile");
-			if( !focusSameVehicle ) {
-				carTile.style.opacity = 0;
-				await this.delay(500);
-			}
-			this.vehicleInFocus = this.displayVehicles[indexToFocus];
-			await this.drawStatusForVehicle(this.vehicleInFocus, this.numCharging, !focusSameVehicle);
-			if( !focusSameVehicle ) {
-				carTile.style.opacity = 1;
+			if( carTile ) {
+				if( !focusSameVehicle ) {
+					carTile.style.opacity = 0;
+					await this.delay(500);
+				}
+				this.vehicleInFocus = this.displayVehicles[indexToFocus];
+				await this.drawStatusForVehicle(this.vehicleInFocus, this.numCharging, !focusSameVehicle);
+				if( !focusSameVehicle ) {
+					carTile.style.opacity = 1;
+				}
 			}
 		}
 		else {
