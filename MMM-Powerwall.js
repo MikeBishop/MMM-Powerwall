@@ -872,35 +872,37 @@ Module.register("MMM-Powerwall", {
 
 		// Check for any overdue timeouts
 		this.checkTimeouts();
+		let isDay = this.dayMode === "day";
 
 		/*******************
 		 * SolarProduction *
 		 *******************/
-		this.updateNode(
-			this.identifier + "-SolarProduction",
-			this.flows.sources.solar.total,
-			"W",
-			"",
-			this.dayMode === "day"
-		);
-		this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
-		let dayContent = this.identifier + "-SolarDay";
-		let nightContent = this.identifier + "-SolarNight";
-		let isDay = this.dayMode === "day";
-		if( isDay ) {
-			this.makeNodeVisible(dayContent);
-			this.makeNodeInvisible(nightContent);
-		}
-		else {
-			this.makeNodeInvisible(dayContent);
-			this.makeNodeVisible(nightContent);
-			this.updateText(
-				this.identifier + "-SolarTodayYesterday",
-				this.dayMode === "morning" ? "yesterday" : "today"
+		if( this.flows ) {
+			this.updateNode(
+				this.identifier + "-SolarProduction",
+				this.flows.sources.solar.total,
+				"W",
+				"",
+				this.dayMode === "day"
 			);
+			this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
+			let dayContent = this.identifier + "-SolarDay";
+			let nightContent = this.identifier + "-SolarNight";
+			if( isDay ) {
+				this.makeNodeVisible(dayContent);
+				this.makeNodeInvisible(nightContent);
+			}
+			else {
+				this.makeNodeInvisible(dayContent);
+				this.makeNodeVisible(nightContent);
+				this.updateText(
+					this.identifier + "-SolarTodayYesterday",
+					this.dayMode === "morning" ? "yesterday" : "today"
+				);
+			}
 		}
 
-		if( this.dayStart ) {
+		if( this.teslaAggregates && this.dayStart ) {
 			this.makeNodeVisible(this.identifier + "-SolarTotalTextA");
 			this.updateNode(
 				this.identifier + "-SolarTotalA",
@@ -920,32 +922,36 @@ Module.register("MMM-Powerwall", {
 		/********************
 		 * HouseConsumption *
 		 ********************/
-		this.updateNode(this.identifier + "-HouseConsumption", this.flows.sinks.house.total, "W");
-		this.updateChart(this.charts.houseConsumption, DISPLAY_SOURCES, this.flows.sinks.house.sources);
-		if( this.dayStart ) {
-			this.updateNode(
-				this.identifier + "-UsageTotal",
-				this.teslaAggregates.load.energy_imported - this.dayStart.house.import - this.carTotalToday(),
-				"Wh today"
-			);
+		if( this.flows ) {
+			this.updateNode(this.identifier + "-HouseConsumption", this.flows.sinks.house.total, "W");
+			this.updateChart(this.charts.houseConsumption, DISPLAY_SOURCES, this.flows.sinks.house.sources);
+			if( this.dayStart ) {
+				this.updateNode(
+					this.identifier + "-UsageTotal",
+					this.teslaAggregates.load.energy_imported - this.dayStart.house.import - this.carTotalToday(),
+					"Wh today"
+				);
+			}
 		}
 
 		/*******************
 		 * Powerwall Meter *
 		 *******************/
-		let battery = this.teslaAggregates.battery.instant_power;
-		let targetId = this.identifier + "-PowerwallStatus";
-		if( Math.abs(battery) > 20 ) {
-			this.updateNode(
-				targetId,
-				Math.abs(battery),
-				"W",
-				battery > 0 ? "Supplying " : "Charging at ",
-				false
-			);
-		}
-		else {
-			this.updateText(targetId, "Standby");
+		if( this.teslaAggregates ) {
+			let battery = this.teslaAggregates.battery.instant_power;
+			let targetId = this.identifier + "-PowerwallStatus";
+			if( Math.abs(battery) > 20 ) {
+				this.updateNode(
+					targetId,
+					Math.abs(battery),
+					"W",
+					battery > 0 ? "Supplying " : "Charging at ",
+					false
+				);
+			}
+			else {
+				this.updateText(targetId, "Standby");
+			}
 		}
 
 		/****************
