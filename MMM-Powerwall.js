@@ -101,7 +101,7 @@ Module.register("MMM-Powerwall", {
 		}
 		else {
 			self.twcEnabled = false;
-			DISPLAY_ALL.splice(CAR, 1);
+			DISPLAY_ALL.splice(3, 1);
 		}
 
 		if( this.config.debug ) {
@@ -958,7 +958,7 @@ Module.register("MMM-Powerwall", {
 	dataTotals: function() {
 		let carTotal = this.carTotalToday();
 		if( this.dayStart ) {
-			return [
+			let result = [
 				// Grid out/in
 				[
 					this.dayStart.grid.export -
@@ -987,7 +987,11 @@ Module.register("MMM-Powerwall", {
 					this.teslaAggregates.solar.energy_exported -
 					this.dayStart.solar.export
 				]
-			]
+			];
+			if( !this.twcEnabled ) {
+				result.splice(3,1);
+			}
+			return result;
 		}
 		else {
 			return Array(5).fill(Array(2).fill(0));
@@ -1001,7 +1005,7 @@ Module.register("MMM-Powerwall", {
 				entry => Date.parse(entry.timestamp) >= new Date().setHours(0,0,0,0)
 			).reduce((total, next) => total + next.charger_power / 12, 0)
 		}
-		return this.cachedCarTotal
+		return this.cachedCarTotal || 0;
 	},
 
 	notificationReceived: function(notification, payload, sender) {
