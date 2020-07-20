@@ -114,6 +114,7 @@ module.exports = NodeHelper.create({
 			this.initializeCache(this.powerwallSOE, ip);
 
 			if( username && !this.checkTeslaCredentials(username) ) {
+				this.log("Local: Aborting because credentials aren't ready");
 				return;
 			}
 
