@@ -489,6 +489,7 @@ module.exports = NodeHelper.create({
 	inferSiteID: async function(username) {
 		url = "https://owner-api.teslamotors.com/api/1/products";
 
+		this.log("Fetching products list");
 		let response = await this.doTeslaApi(url, username);
 		if( !Array.isArray(response) ) {
 			return null;
@@ -499,7 +500,7 @@ module.exports = NodeHelper.create({
 			).map(product => product.energy_site_id);
 
 		this.log(JSON.stringify(this.siteIDs));
-		if( this.siteIDs[username].length === 0 ) {	
+		if( this.siteIDs[username].length === 0 ) {
 			if (siteIDs.length === 1) {
 				this.log("Inferred site ID " + siteIDs[0]);
 				this.siteIDs[username].push(siteIDs[0]);
@@ -599,7 +600,7 @@ module.exports = NodeHelper.create({
 
 		if( result.ok ) {
 			let json = await result.json();
-			this.log(JSON.stringify(json));
+			this.log(url + " returned " + JSON.stringify(json));
 			let response = json.response;
 			if (response_key) {
 				response = response[response_key];
