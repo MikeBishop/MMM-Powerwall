@@ -134,6 +134,7 @@ Module.register("MMM-Powerwall", {
 
 	updateLocal: function() {
 		if( this.callsToEnable.local ) {
+			this.Log("Requesting local data");
 			let self = this;
 			let config = this.config;
 			this.sendSocketNotification("UpdateLocal", {

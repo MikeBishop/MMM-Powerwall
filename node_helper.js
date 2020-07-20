@@ -127,6 +127,8 @@ module.exports = NodeHelper.create({
 			}
 			else {
 				pwPromise = Promise.resolve();
+				let age = Date.now() - this.powerwallAggregates[ip].lastUpdate
+				this.log("Returning cached local data retrieved " + age + "ms ago:" + this.powerwallAggregates[ip].lastResult);
 				if (this.powerwallAggregates[ip].lastResult) {
 					this.sendSocketNotification("Aggregates", {
 						ip: ip,
@@ -327,6 +329,7 @@ module.exports = NodeHelper.create({
 	updatePowerwall: async function(powerwallIP, username, siteID, resyncInterval) {
 		let now = Date.now();
 		let url = "https://" + powerwallIP + "/api/meters/aggregates";
+		this.log("Calling " + url);
 		let aggregatePromise = fetch(url, {agent: unauthenticated_agent}).then(
 			async result => {
 				if( !result.ok ) {
@@ -335,6 +338,7 @@ module.exports = NodeHelper.create({
 				}
 
 				var aggregates = await result.json();
+				this.log("Powerwall returned: " + JSON.stringify(aggregates));
 				this.updateCache(aggregates, this.powerwallAggregates, powerwallIP, now);
 				// Send notification
 				this.sendSocketNotification("Aggregates", {
