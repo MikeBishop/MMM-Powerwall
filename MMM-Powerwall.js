@@ -289,6 +289,7 @@ Module.register("MMM-Powerwall", {
 							self.updatePowerHistory();
 						}, this.config.cloudUpdateInterval);
 					}
+					this.updateLocal();
 					this.vehicles = payload.vehicles;
 					this.updateVehicleData();
 					await this.focusOnVehicles(this.vehicles, 0);
