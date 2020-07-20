@@ -1297,7 +1297,9 @@ Module.register("MMM-Powerwall", {
 										}
 									},
 									fontColor: "white",
-									precision: 0
+									precision: 0,
+									suggestedMax: 1000,
+									suggestedMin: -1000
 								},
 								scaleLabel: {
 									display: true,
