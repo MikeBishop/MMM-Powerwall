@@ -752,6 +752,7 @@ module.exports = NodeHelper.create({
 				key => key in data
 			) )
 		{
+			let power = data.charge_state.charger_actual_current * data.charge_state.charger_voltage;
 			this.sendSocketNotification("VehicleData", {
 				username: username,
 				ID: vehicleID,
@@ -767,7 +768,7 @@ module.exports = NodeHelper.create({
 					state: data.charge_state.charging_state,
 					soc: data.charge_state.battery_level,
 					limit: data.charge_state.charge_limit_soc,
-					power: data.charge_state.charger_power,
+					power: power,
 					time: data.charge_state.time_to_full_charge
 				},
 				config: {

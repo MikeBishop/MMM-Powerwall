@@ -385,11 +385,11 @@ Module.register("MMM-Powerwall", {
 						if (vehicles.map(
 								vehicle => vehicle.charge ?
 									(vehicle.charge.power != 0 ?
-										this.flows.sinks.car.total / (1000 * vehicle.charge.power * payload.status.carsCharging) :
+										this.flows.sinks.car.total / (vehicle.charge.power * payload.status.carsCharging) :
 										2) :
 									1
 							).some(ratio => ratio > 1.25 || ratio < 0.75 )) {
-								this.updateVehicleData(30);
+								this.updateVehicleData(30000);
 						}
 						await this.focusOnVehicles(vehicles, payload.status.carsCharging)
 					}
@@ -1571,7 +1571,7 @@ Module.register("MMM-Powerwall", {
 			this.numCharging !== numCharging;
 
 		if( this.numCharging !== numCharging ) {
-			this.updateVehicleData(30);
+			this.updateVehicleData(30000);
 		}
 
 		if( areVehiclesDifferent ) {
@@ -1609,7 +1609,7 @@ Module.register("MMM-Powerwall", {
 			// Should only happen if TWCManager reports cars charging, but no cars are identified as charging
 			// Hopefully can resolve by polling for vehicle data more often, so we find the charging car.
 			// If it's a friend's car, this won't work.
-			this.updateVehicleData(30);
+			this.updateVehicleData(30000);
 		}
 	},
 
