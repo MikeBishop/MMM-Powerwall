@@ -204,11 +204,7 @@ Module.register("MMM-Powerwall", {
 		// requested on a recurring basis.  Recency affects the accuracy.
 		if( this.callsToEnable.energy &&
 			this.teslaAPIEnabled && this.config.siteID ) {
-			this.sendSocketNotification("UpdateEnergy", {
-				username: this.config.teslaAPIUsername,
-				siteID: this.config.siteID,
-				updateInterval: this.config.localUpdateInterval - 500
-			});
+				this.sendDataRequestNotification("UpdateEnergy");
 		}
 	},
 
