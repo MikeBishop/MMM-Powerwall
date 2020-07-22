@@ -126,6 +126,7 @@ Module.register("MMM-Powerwall", {
 		}
 
 		setInterval(function() {
+			self.checkTimeouts();
 			self.advanceToNextVehicle();
 		}, 20000);
 		this.updateLocal();
@@ -152,6 +153,7 @@ Module.register("MMM-Powerwall", {
 
 	configureTeslaApi: function() {
 		if (this.config.teslaAPIUsername ) {
+			this.Log("Configuring Tesla API");
 			this.sendSocketNotification("Configure-TeslaAPI",
 			{
 				siteID: this.config.siteID,
@@ -206,6 +208,7 @@ Module.register("MMM-Powerwall", {
 		// requested on a recurring basis.  Recency affects the accuracy.
 		if( this.callsToEnable.energy &&
 			this.teslaAPIEnabled && this.config.siteID ) {
+				this.Log("Requesting energy data");
 				this.sendDataRequestNotification("UpdateEnergy");
 		}
 	},
@@ -224,6 +227,7 @@ Module.register("MMM-Powerwall", {
 		if( this.callsToEnable.power ) {
 			this.sendDataRequestNotification("UpdatePowerHistory");
 			if( this.twcEnabled ) {
+				this.Log("Requesting power history data");
 				this.sendSocketNotification("UpdateChargeHistory", {
 					twcManagerIP: this.config.twcManagerIP,
 					twcManagerPort: this.config.twcManagerPort,
@@ -235,6 +239,7 @@ Module.register("MMM-Powerwall", {
 
 	updateSelfConsumption: function() {
 		if( this.callsToEnable.selfConsumption ) {
+			this.Log("Requesting self-consumption data");
 			this.sendDataRequestNotification("UpdateSelfConsumption");
 		}
 	},
@@ -253,6 +258,7 @@ Module.register("MMM-Powerwall", {
 						continue;
 					}
 
+					this.Log("Requesting vehicle data");
 					this.sendSocketNotification("UpdateVehicleData", {
 						username: this.config.teslaAPIUsername,
 						vehicleID: vehicle.id,
