@@ -13,9 +13,8 @@
                             {%- else -%}
                                 {{ flows.sources.solar.total // 1 }} W
                             {%- endif %}</div>
-                        <div class="small bright" style="display:none" id="{{id}}-SolarTotalTextA">
-                            <span id="{{id}}-SolarTotalA" class="small bright text"></span> today
-                        </div>
+                        <div class="small bright" style="display:none" id="{{id}}-SolarTotalTextA"></div>
+                        <div class="xsmall text" style="display:none" id="{{id}}-SolarYesterdayTotal"></div>
                     </div>
                     <div class="MMM-Powerwall col2 graph-container">
                         <canvas id="{{id}}-SolarDestinations">
@@ -47,7 +46,8 @@
                     {%- else -%}
                         {{ flows.sinks.house.total // 1 }} W
                     {%- endif %}</div>
-                <div class="small bright text" id="{{id}}-UsageTotal"></div>
+                <div class="small bright text" id="{{id}}-UsageTotal" style="display:none"></div>
+                <div class="xsmall text" style="display:none" id="{{id}}-UsageTotalYesterday"></div>
                 </div>
             </div>
         {%- elif graph == "PowerwallSelfPowered" -%}
@@ -71,9 +71,9 @@
                     <canvas id="{{id}}-SelfPoweredDetails">
                         Graph goes here
                     </canvas>
-                    <div class="MMM-Powerwall overlay bright small">
-                        <span class="MMM-Powerwall bright big text" id="{{id}}-SelfPoweredTotal"></span><br>
-                        Self-Powered<br>
+                    <div class="MMM-Powerwall overlay small">
+                        <span class="bright"><span class="MMM-Powerwall bright big text" id="{{id}}-SelfPoweredTotal"></span><br>
+                        Self-Powered</span><br>
                         <span class="MMM-Powerwall text xsmall" id="{{id}}-SelfPoweredYesterday"></span>
                     </div>
                 </div>

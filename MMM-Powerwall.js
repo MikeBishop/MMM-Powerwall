@@ -69,6 +69,7 @@ Module.register("MMM-Powerwall", {
 	callsToEnable: {},
 	numCharging: 0,
 	yesterdaySolar: null,
+	yesterdayUsage: null,
 	dayStart: null,
 	dayMode: "day",
 	energyData: null,
@@ -404,8 +405,6 @@ Module.register("MMM-Powerwall", {
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
 
-					this.yesterdaySolar = payload.energy[0].solar_energy_exported;
-
 					if( this.teslaAggregates ) {
 						this.generateDaystart(payload);
 					}
@@ -561,6 +560,13 @@ Module.register("MMM-Powerwall", {
 	},
 
 	generateDaystart: function(payload) {
+		this.yesterdaySolar = payload.energy[0].solar_energy_exported;
+		this.yesterdayUsage = (
+			payload.energy[0].consumer_energy_imported_from_grid +
+			payload.energy[0].consumer_energy_imported_from_solar +
+			payload.energy[0].consumer_energy_imported_from_battery
+		);
+
 		let todaySolar = payload.energy[1].solar_energy_exported;
 
 		let todayGridIn = payload.energy[1].grid_energy_imported;
@@ -903,11 +909,15 @@ Module.register("MMM-Powerwall", {
 		}
 
 		if( this.teslaAggregates && this.dayStart ) {
-			this.makeNodeVisible(this.identifier + "-SolarTotalTextA");
 			this.updateNode(
-				this.identifier + "-SolarTotalA",
+				this.identifier + "-SolarTotalTextA",
 				this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
-				"Wh", "", isDay
+				"Wh today", "", isDay
+			);
+			this.updateNode(
+				this.identifier + "-SolarYesterdayTotal",
+				this.yesterdaySolar,
+				"Wh yesterday", "", isDay
 			);
 			this.updateNode(
 				this.identifier + "-SolarTotalB",
@@ -916,6 +926,8 @@ Module.register("MMM-Powerwall", {
 				(this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export),
 				"Wh", "", !isDay
 			);
+			this.makeNodeVisible(this.identifier + "-SolarTotalTextA");
+			this.makeNodeVisible(this.identifier + "-SolarYesterdayTotal");
 		}
 
 
@@ -931,6 +943,13 @@ Module.register("MMM-Powerwall", {
 					this.teslaAggregates.load.energy_imported - this.dayStart.house.import - this.carTotalToday(),
 					"Wh today"
 				);
+				this.updateNode(
+					this.identifier + "-UsageTotalYesterday",
+					this.yesterdayUsage - this.carTotalYesterday(),
+					"Wh yesterday"
+				)
+				this.makeNodeVisible(this.identifier + "-UsageTotal");
+				this.makeNodeVisible(this.identifier + "-UsageTotalYesterday");
 			}
 		}
 
@@ -1010,11 +1029,25 @@ Module.register("MMM-Powerwall", {
 	cachedCarTotal: null,
 	carTotalToday: function() {
 		if( Array.isArray(this.chargeHistory) && !this.cachedCarTotal ) {
+			let midnight = new Date().setHours(0,0,0,0);
 			this.cachedCarTotal = this.chargeHistory.filter(
-				entry => Date.parse(entry.timestamp) >= new Date().setHours(0,0,0,0)
+				entry => Date.parse(entry.timestamp) >= midnight
 			).reduce((total, next) => total + next.charger_power / 12, 0)
 		}
 		return this.cachedCarTotal || 0;
+	},
+	cachedCarYesterday: null,
+	carTotalYesterday: function() {
+		if( Array.isArray(this.chargeHistory) && !this.cachedCarYesterday ) {
+			let prevMidnight = new Date().setHours(-24,0,0,0);
+			let midnight = new Date().setHours(0,0,0,0);
+			this.cachedCarYesterday = this.chargeHistory.filter(
+				entry => {
+					let date = Date.parse(entry.timestamp);
+					return date >= prevMidnight && date < midnight;
+				}).reduce((total, next) => total + next.charger_power / 12, 0);
+		}
+		return this.cachedCarYesterday || 0;
 	},
 
 	notificationReceived: function(notification, payload, sender) {
@@ -1044,6 +1077,7 @@ Module.register("MMM-Powerwall", {
 			this.dayNumber = now.getDay();
 			this.sunrise = null;
 			this.sunset = null;
+			this.cachedCarYesterday = null;
 			this.cachedCarTotal = null;
 
 			if( now.getHours() == 0 && now.getMinutes() == 0 ) {
@@ -1052,6 +1086,10 @@ Module.register("MMM-Powerwall", {
 					this.yesterdaySolar = (
 						this.teslaAggregates.solar.energy_exported -
 						this.dayStart.solar.export
+					);
+					this.yesterdayUsage = (
+						this.teslaAggregates.load.energy_imported -
+						this.dayStart.house.import
 					);
 				}
 				this.dayStart = {
