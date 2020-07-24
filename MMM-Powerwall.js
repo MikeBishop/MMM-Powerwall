@@ -1606,7 +1606,7 @@ Module.register("MMM-Powerwall", {
 
 		if( this.numCharging !== numCharging ||
 			this.vehicles.filter(
-				vehicle => vehicle.charge.state === "Charging"
+				vehicle => vehicle.charge && vehicle.charge.state === "Charging"
 			).length !== numCharging ) {
 				// If numCharging has changed, or if it disagrees with the Tesla API, refresh
 				this.numCharging = numCharging;
