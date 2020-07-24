@@ -23,7 +23,7 @@
     flex-direction: column;
     flex-wrap: nowrap;
     justify-content: space-evenly;
-    height: 100%;
+    height: 250px;
 }
 
 .MMM-Powerwall.flexitem {
