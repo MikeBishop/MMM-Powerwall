@@ -660,7 +660,7 @@ Module.register("MMM-Powerwall", {
 		let completionParaId = this.identifier + "-CarCompletionPara";
 
 		let picture = document.getElementById(this.identifier + "-Picture");
-		if( picture && statusFor.imageUrl ) {
+		if( picture && statusFor.imageUrl && picture.src !== statusFor.imageUrl ) {
 			picture.src = statusFor.imageUrl;
 		}
 
