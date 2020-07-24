@@ -1608,13 +1608,17 @@ Module.register("MMM-Powerwall", {
 			vehicles.some( (newVehicle, index) => newVehicle !== this.displayVehicles[index] ) ||
 			this.numCharging !== numCharging;
 
-		if( this.numCharging !== numCharging ) {
-			this.updateVehicleData(30000);
+		if( this.numCharging !== numCharging ||
+			this.vehicles.filter(
+				vehicle => vehicle.charge.state === "Charging"
+			).length !== numCharging ) {
+				// If numCharging has changed, or if it disagrees with the Tesla API, refresh
+				this.numCharging = numCharging;
+				this.updateVehicleData(30000);
 		}
 
 		if( areVehiclesDifferent ) {
 			this.displayVehicles = vehicles;
-			this.numCharging = numCharging;
 			await this.advanceToNextVehicle();
 		}
 	},
