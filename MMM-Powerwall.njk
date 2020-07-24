@@ -6,14 +6,14 @@
             <div class="MMM-Powerwall" id="{{id}}-SolarDay">
                 <div class="MMM-Powerwall grid-left">
                     <div class="MMM-Powerwall col1 vflexbox">
-                        <div class="small bright">Solar is producing</div>
-                        <div id="{{id}}-SolarProduction" class="big solar text">
+                        <div class="small bright spaced">Solar is producing</div>
+                        <div id="{{id}}-SolarProduction" class="big solar text spaced">
                             {%- if flows.sources.solar.total > 950 -%}
                                 {{ flows.sources.solar.total // 100 / 10 }} kW
                             {%- else -%}
                                 {{ flows.sources.solar.total // 1 }} W
                             {%- endif %}</div>
-                        <div class="small bright" style="display:none" id="{{id}}-SolarTotalTextA"></div>
+                        <div class="small bright spaced" style="display:none" id="{{id}}-SolarTotalTextA"></div>
                         <div class="xsmall text" style="display:none" id="{{id}}-SolarYesterdayTotal"></div>
                     </div>
                     <div class="MMM-Powerwall col2 graph-container">
@@ -39,14 +39,14 @@
                 </canvas>
                 </div>
                 <div class="MMM-Powerwall col2 vflexbox">
-                <div class="small bright">House is consuming</div>
-                <div id="{{id}}-HouseConsumption" class="big house text">
+                <div class="small bright spaced">House is consuming</div>
+                <div id="{{id}}-HouseConsumption" class="big house text spaced">
                     {%- if flows.sinks.house.total > 950 -%}
                         {{ flows.sinks.house.total // 100 / 10 }} kW
                     {%- else -%}
                         {{ flows.sinks.house.total // 1 }} W
                     {%- endif %}</div>
-                <div class="small bright text" id="{{id}}-UsageTotal" style="display:none"></div>
+                <div class="small bright text spaced" id="{{id}}-UsageTotal" style="display:none"></div>
                 <div class="xsmall text" style="display:none" id="{{id}}-UsageTotalYesterday"></div>
                 </div>
             </div>
@@ -92,8 +92,8 @@
                     </div>
                 </div>
                 <div class="MMM-Powerwall col2 vflexbox">
-                    <div class="MMM-Powerwall small bright"><span id="{{id}}-CarStatus"></span></div>
-                    <div class="MMM-Powerwall big car text" id="{{id}}-CarConsumption"></div>
+                    <div class="MMM-Powerwall small bright spaced"><span id="{{id}}-CarStatus"></span></div>
+                    <div class="MMM-Powerwall big car text spaced" id="{{id}}-CarConsumption"></div>
                     <div class="MMM-Powerwall small" id="{{id}}-CarCompletionPara" style="display:none">Finishing in
                         <span class="small text" id="{{id}}-CarCompletion"></span>
                     </div>

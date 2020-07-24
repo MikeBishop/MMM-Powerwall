@@ -33,6 +33,10 @@
     backface-visibility: hidden;
 }
 
+.MMM-Powerwall .spaced {
+    margin: auto;
+}
+
 .MMM-Powerwall[class*="grid-"] {
     display: grid;
     grid-template-rows: auto;
