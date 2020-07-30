@@ -884,7 +884,9 @@ Module.register("MMM-Powerwall", {
 
 		// Check for any overdue timeouts
 		this.checkTimeouts();
-		let isDay = this.dayMode === "day";
+		let anyProductionToday = this.teslaAggregates && this.teslaAggregates.solar.energy_exported > this.dayStart.solar.export;
+		let isDay = this.dayMode === "day" && anyProductionToday;
+		let showCurrent = isDay && this.flows && this.flows.sources.solar.total > 5;
 
 		/*******************
 		 * SolarProduction *
@@ -900,7 +902,7 @@ Module.register("MMM-Powerwall", {
 			this.updateChart(this.charts.solarProduction, DISPLAY_SINKS, this.flows.sources.solar.distribution);
 			let dayContent = this.identifier + "-SolarDay";
 			let nightContent = this.identifier + "-SolarNight";
-			if( isDay ) {
+			if( showCurrent ) {
 				this.makeNodeVisible(dayContent);
 				this.makeNodeInvisible(nightContent);
 			}
@@ -908,8 +910,13 @@ Module.register("MMM-Powerwall", {
 				this.makeNodeInvisible(dayContent);
 				this.makeNodeVisible(nightContent);
 				this.updateText(
+					this.identifier + "-SolarHeader",
+					isDay ? "Solar has produced" : "Solar produced"
+				)
+				this.updateText(
 					this.identifier + "-SolarTodayYesterday",
-					this.dayMode === "morning" ? "yesterday" : "today"
+					(this.dayMode === "morning" || !anyProductionToday) ? "yesterday" :
+						(( isDay === "day" ? "so far " : "" ) + "today")
 				);
 			}
 		}
@@ -918,19 +925,19 @@ Module.register("MMM-Powerwall", {
 			this.updateNode(
 				this.identifier + "-SolarTotalTextA",
 				this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
-				"Wh today", "", isDay
+				"Wh today", "", showCurrent
 			);
 			this.updateNode(
 				this.identifier + "-SolarYesterdayTotal",
 				this.yesterdaySolar,
-				"Wh yesterday", "", isDay
+				"Wh yesterday", "", showCurrent
 			);
 			this.updateNode(
 				this.identifier + "-SolarTotalB",
-				this.dayMode === "morning" ?
-				this.yesterdaySolar :
-				(this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export),
-				"Wh", "", !isDay
+				(this.dayMode === "morning" || !anyProductionToday) ?
+					this.yesterdaySolar :
+					(this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export),
+				"Wh", "", !showCurrent
 			);
 			this.makeNodeVisible(this.identifier + "-SolarTotalTextA");
 			this.makeNodeVisible(this.identifier + "-SolarYesterdayTotal");
