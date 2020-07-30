@@ -482,7 +482,7 @@ Module.register("MMM-Powerwall", {
 				// }
 
 				if( payload.username === this.config.teslaAPIUsername ) {
-					this.doTimeout("vehicle", () => self.updateVehicleData(), this.config.cloudUpdateInterval);
+					this.doTimeout("vehicle", () => self.updateVehicleData(), this.config.cloudUpdateInterval, true);
 
 					let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
 					if( !statusFor ) {
@@ -518,7 +518,7 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
-	doTimeout: function(name, func, timeout) {
+	doTimeout: function(name, func, timeout, exempt=false) {
 		if( this.timeouts[name] ) {
 			clearTimeout(this.timeouts[name].handle);
 		}
@@ -528,16 +528,17 @@ Module.register("MMM-Powerwall", {
 		}
 		this.timeouts[name] = {
 			func: func,
-			target: Date.now() + delay
+			target: Date.now() + delay,
+			exempt: exempt
 		};
-		if( !this.suspended ) {
+		if( !this.suspended || !exempt ) {
 			this.timeouts[name].handle = setTimeout(() => func(), delay);
 		}
 	},
 
 	checkTimeouts: function() {
 		for( let name in this.timeouts ) {
-			if( !this.suspended && Date.now() - this.timeouts[name].target > 5000 ) {
+			if( (!this.suspended || this.timeouts[exempt]) && Date.now() - this.timeouts[name].target > 5000 ) {
 				this.timeouts[name].func();
 				this.timeouts[name].target = Date.now();
 			}
@@ -1144,6 +1145,8 @@ Module.register("MMM-Powerwall", {
 		else {
 			this.dayMode = "day";
 		}
+
+		this.doTimeout("midnight", () => self.advanceDayMode(), new Date().setHours(24,0,0,0) - now, true);
 	},
 
 	buildGraphs: function() {
