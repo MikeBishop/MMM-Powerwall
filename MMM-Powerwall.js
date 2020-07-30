@@ -482,7 +482,14 @@ Module.register("MMM-Powerwall", {
 				// }
 
 				if( payload.username === this.config.teslaAPIUsername ) {
-					this.doTimeout("vehicle", () => self.updateVehicleData(), this.config.cloudUpdateInterval, true);
+					let intervalToUpdate = this.config.cloudUpdateInterval;
+					let exempt = true;
+					if( payload.state === "online" && payload.drive.gear === "D" ) {
+						intervalToUpdate = 2*this.config.localUpdateInterval + this.config.cloudUpdateInterval;
+						intervalToUpdate /= 3;
+						exempt = false;
+					}
+					this.doTimeout("vehicle", () => self.updateVehicleData(), intervalToUpdate, exempt);
 
 					let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
 					if( !statusFor ) {
@@ -500,6 +507,7 @@ Module.register("MMM-Powerwall", {
 					else {
 						delete statusFor.deferUntil;
 					}
+
 					if( !statusFor.imageUrl ) {
 						statusFor.imageUrl = this.createCompositorUrl(payload.config);
 					}
