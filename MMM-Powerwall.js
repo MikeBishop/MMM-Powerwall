@@ -190,6 +190,7 @@ Module.register("MMM-Powerwall", {
 		return [
 			this.file("node_modules/chart.js/dist/Chart.bundle.js"),
 			this.file("node_modules/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js"),
+			"https://cdn.jsdelivr.net/gh/mill1000/chartjs-plugin-annotation@v0.5.8/chartjs-plugin-annotation.min.js",
 		];
 	},
 
@@ -1319,10 +1320,25 @@ Module.register("MMM-Powerwall", {
 							display: false
 						},
 						plugins: {
-							datalabels: false
+							datalabels: false,
+							annotation: {
+								drawTime: 'afterDatasetsDraw',
+								annotations: [{
+									type: 'line',
+									mode: 'vertical',
+									scaleID: 'xAxis',
+									value: 0,
+									borderColor: 'black',
+									borderWidth: 0.5,
+									label: {
+										enabled: false
+									}
+								}]
+							}
 						},
 						scales: {
 							xAxes: [{
+								id: 'xAxis',
 								ticks: {
 									beginAtZero: true,
 									callback: function( value, index, values) {
