@@ -55,7 +55,6 @@
     margin: 10pt;
 }
 
-
 .scene {
     margin: 0;
     position: relative;
@@ -201,37 +200,45 @@
     white-space: nowrap;
 }
 
-.MMM-Powerwall .two-cars {
-    text-indent: -40%;
+.MMM-Powerwall .border {
+    border-style: dashed;
+    border-width: thick;
+    margin: -5px;
+    border-radius: 10px;
 }
 
-.MMM-Powerwall .flip-image {
-    transform: scaleX(-1);
+.MMM-Powerwall .border.grid-outage
+{
+    border-color: red;
 }
 
-.MMM-Powerwall .car-image {
-    overflow: hidden;
-    max-width: 275px;
+.MMM-Powerwall .border.storm-watch {
+    border-color: #09A9E6;
 }
 
-.MMM-Powerwall .flip-outer {
+.MMM-Powerwall .border.grid-sync {
+    border-color: gold;
+}
+
+.MMM-Powerwall .status-overlay {
+    z-index: 1;
     position: relative;
-    width: 100%;
-    height: 100%;
-    text-align: center;
-    transition: transform 0.8s;
-    transform-style: preserve-3d;
-    perspective: 1000px;
-    backface-visibility: hidden;
+    bottom: 100px;
+    margin: auto;
+    width: 100px;
+    font-weight: bold;
+    right: 2px;
 }
 
-.MMM-Powerwall .flip-front,
-.MMM-Powerwall .flip-back {
-    position: absolute;
-    width: 100%;
-    height: 100%;
+.MMM-Powerwall .status-overlay.grid-outage
+{
+    color: red;
 }
 
-.MMM-Powerwall .flip-back {
-  transform: rotateX(180deg);
+.MMM-Powerwall .status-overlay.storm-watch {
+    color: #09A9E6;
+}
+
+.MMM-Powerwall .status-overlay.grid-sync {
+    color: gold;
 }

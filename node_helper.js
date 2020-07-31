@@ -138,7 +138,7 @@ module.exports = NodeHelper.create({
 				}
 				if (this.powerwallSOE[ip].lastResult) {
 					let cache = (this.powerwallCloudSOE[username] || [])[siteID] || [];
-					let cloudSOE = cache.lastResult || 0;
+					let cloudSOE = (cache.lastResult || {}).percentage_charged || 0;
 					let syncPoint = cache.syncPoint || 0;
 					this.sendSocketNotification("SOE", {
 						ip: ip,
@@ -362,19 +362,39 @@ module.exports = NodeHelper.create({
 			}
 		);
 
+		url = "https://" + powerwallIP + "/api/system_status/grid_status";
+		let gridPromise = fetch(url, {agent: unauthenticated_agent}).then(
+			async result => {
+				if( !result.ok ) {
+					this.log("Powerwall Grid Status fetch failed");
+					return null;
+				}
+
+				let response = await result.json();
+				return response.grid_status;
+			}
+		)
+
 		let cloudSOE = 0, syncPoint = 0;
 		if( username && siteID ) {
 			let cache = this.powerwallCloudSOE[username][siteID];
 			if( cache.lastUpdate + resyncInterval < Date.now() ) {
 				let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
-				cloudSOE = await this.doTeslaApi(url, username, null, siteID, this.powerwallCloudSOE, null, "percentage_charged");
+				let cloudStatus = await this.doTeslaApi(url, username, null, siteID, this.powerwallCloudSOE);
+				cloudSOE = cloudStatus.percentage_charged;
+
+				this.sendSocketNotification("StormWatch", {
+					ip: powerwallIP,
+					storm: cloudStatus.storm_mode_active
+				});
+
 				if( cloudSOE != 0 ) {
 					syncPoint = await localPromise;
 					this.updateCache(syncPoint, this.powerwallCloudSOE, [username, siteID], now, "syncPoint");
 				}
 			}
-			if( cloudSOE === 0 && cache.lastResult && cache.syncPoint ) {
-				cloudSOE = cache.lastResult;
+			if( cloudSOE === 0 && cache.lastResult.percentage_charged && cache.syncPoint ) {
+				cloudSOE = cache.lastResult.percentage_charged;
 				syncPoint = cache.syncPoint;
 			}
 		}
@@ -385,6 +405,12 @@ module.exports = NodeHelper.create({
 		this.sendSocketNotification("SOE", {
 			ip: powerwallIP,
 			soe: cloudSOE + localSOE - syncPoint
+		});
+
+		let gridStatus = await gridPromise;
+		this.sendSocketNotification("GridStatus", {
+			ip: powerwallIP,
+			gridStatus: gridStatus
 		});
 
 		await aggregatePromise;

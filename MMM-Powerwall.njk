@@ -51,7 +51,7 @@
                 </div>
             </div>
         {%- elif graph == "PowerwallSelfPowered" -%}
-            <div class="MMM-Powerwall grid-left">
+            <div class="MMM-Powerwall grid-left" id="{{id}}-PowerwallSelfPowered">
                 <div class="scene MMM-Powerwall col1">
                     <div class="small bright text" id="{{id}}-PowerwallStatus">
                             {%- if flows.sinks.battery.total > 0 %}Charging at {{ flows.sinks.battery.total }} W
@@ -66,6 +66,7 @@
                                  id="{{id}}-battery-meter"></div>
                         </div>
                     </div>
+                    <div class="MMM-Powerwall status-overlay medium" id="{{id}}-StatusOverlay"></div>
                 </div>
                 <div class="MMM-Powerwall col2 graph-container">
                     <canvas id="{{id}}-SelfPoweredDetails">
