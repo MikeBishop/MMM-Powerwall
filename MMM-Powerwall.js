@@ -504,9 +504,6 @@ Module.register("MMM-Powerwall", {
 						break;
 					}
 
-					if( statusFor.drive ) {
-						statusFor.oldLocation = statusFor.drive.location;
-					}
 					if( payload.state === "online" && !payload.drive.gear && !payload.sentry && payload.charge.power == 0 ) {
 						// If car is idle and not in Sentry mode, don't request data for half an hour;
 						// let it try to sleep.
@@ -767,8 +764,8 @@ Module.register("MMM-Powerwall", {
 			}
 
 			if( addLocation ) {
-				if (statusFor.oldLocation && statusFor.locationText &&
-					this.isSameLocation(statusFor.oldLocation, statusFor.drive.location)) {
+				if (statusFor.namedLocation && statusFor.locationText &&
+					this.isSameLocation(statusFor.namedLocation, statusFor.drive.location)) {
 					statusText += " in " + statusFor.locationText;
 				}
 				else {
@@ -783,6 +780,7 @@ Module.register("MMM-Powerwall", {
 							if( revGeo.address.Match_addr ) {
 								statusText += " in " + revGeo.address.Match_addr;
 								statusFor.locationText = revGeo.address.Match_addr;
+								statusFor.namedLocation = statusFor.drive.location;
 							}
 						}
 					}
