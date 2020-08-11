@@ -551,7 +551,7 @@ Module.register("MMM-Powerwall", {
 
 	checkTimeouts: function() {
 		for( let name in this.timeouts ) {
-			if( (!this.suspended || this.timeouts[exempt]) && Date.now() - this.timeouts[name].target > 5000 ) {
+			if( (!this.suspended || this.timeouts.exempt) && Date.now() - this.timeouts[name].target > 5000 ) {
 				this.timeouts[name].func();
 				this.timeouts[name].target = Date.now();
 			}
