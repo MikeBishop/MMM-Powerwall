@@ -1102,6 +1102,7 @@ Module.register("MMM-Powerwall", {
 
 			if( now.getHours() == 0 && now.getMinutes() == 0 ) {
 				// It's midnight
+				this.updateSelfConsumption();
 				if( this.dayStart ) {
 					this.yesterdaySolar = (
 						this.teslaAggregates.solar.energy_exported -
