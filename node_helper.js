@@ -77,34 +77,40 @@ module.exports = NodeHelper.create({
 					};
 					this.log("Read Tesla API tokens from file");
 					this.log(JSON.stringify(this.teslaApiAccounts));
-					await self.doTeslaApiTokenUpdate();
 				}
 				catch(e) {
-					if( password ) {
-						await self.doTeslaApiLogin(username,password,filename);
-					}
-					else {
-						this.log("Missing both Tesla password and access tokens");
-					}
 				}
 			}
-
-			if( !this.vehicles[username]) {
-				// See if there are any cars on the account.
-				this.vehicles[username] = await this.doTeslaApiGetVehicleList(username);
+			if( !this.teslaApiAccounts[username] ) {
+				if( password ) {
+					await this.doTeslaApiLogin(username, password, filename);
+				}
+				else {
+					this.log("Missing both Tesla password and access tokens");
+				}
+			}
+			else {
+				await self.doTeslaApiTokenUpdate();
 			}
 
-			if( !siteID ) {
-				this.log("Attempting to infer siteID");
-				siteID = await this.inferSiteID(username);
-			}
-			this.log("Found siteID " + siteID);
+			if( this.checkTeslaCredentials(username) ) {
+				if( !this.vehicles[username]) {
+					// See if there are any cars on the account.
+					this.vehicles[username] = await this.doTeslaApiGetVehicleList(username);
+				}
 
-			this.sendSocketNotification("TeslaAPIConfigured", {
-				username: username,
-				siteID: siteID,
-				vehicles: this.vehicles[username]
-			});
+				if( !siteID ) {
+					this.log("Attempting to infer siteID");
+					siteID = await this.inferSiteID(username);
+				}
+				this.log("Found siteID " + siteID);
+
+				this.sendSocketNotification("TeslaAPIConfigured", {
+					username: username,
+					siteID: siteID,
+					vehicles: this.vehicles[username]
+				});
+			}
 		}
 		else if (notification === "UpdateLocal") {
 			let ip = payload.powerwallIP;
@@ -535,9 +541,12 @@ module.exports = NodeHelper.create({
 	doTeslaApiTokenUpdate: async function() {
 		let anyUpdates = false;
 
-		if( Date.now() < this.lastUpdate + 3600 ) {
+		if( Date.now() < this.lastUpdate + 3600000 ) {
 			// Only check for expired tokens hourly
 			return;
+		}
+		else {
+			this.lastUpdate = Date.now();
 		}
 
 		// We don't actually track which tokens came from which file.
@@ -565,7 +574,13 @@ module.exports = NodeHelper.create({
 					anyUpdates = true;
 					this.teslaApiAccounts[username] = await result.json();
 				}
-		
+				else {
+					// Unable to use refresh token
+					this.log("Unable to refresh login token; need password")
+					delete this.teslaApiAccounts[username]
+					this.checkTeslaCredentials(username);
+					anyUpdates = true;
+				}
 			}
 		}
 
@@ -585,6 +600,9 @@ module.exports = NodeHelper.create({
 		if( !this.teslaApiAccounts[username] ) {
 			this.log("Called doTeslaApi() without credentials!")
 			return {};
+		}
+		else {
+			await this.doTeslaApiTokenUpdate();
 		}
 
 		try {
