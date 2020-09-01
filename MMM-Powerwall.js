@@ -70,6 +70,8 @@ Module.register("MMM-Powerwall", {
 	numCharging: 0,
 	yesterdaySolar: null,
 	yesterdayUsage: null,
+	gridStatus: "SystemGridConnected",
+	stormWatch: false,
 	dayStart: null,
 	dayMode: "day",
 	energyData: null,
@@ -526,8 +528,68 @@ Module.register("MMM-Powerwall", {
 					}
 				}
 				break;
+			case "GridStatus":
+				if( payload.ip === this.config.powerwallIP ) {
+					this.gridStatus = payload.gridStatus;
+				}
+				this.updateGrid();
+				break;
+			case "StormWatch":
+				if( payload.ip === this.config.powerwallIP ) {
+					this.stormWatch = payload.storm;
+				}
+				this.updateGrid();
+				break;
 			default:
 				break;
+		}
+	},
+
+	updateGrid: function() {
+		let borderTarget = document.getElementById(this.identifier + "-PowerwallSelfPowered");
+		let statusTarget = document.getElementById(this.identifier + "-StatusOverlay");
+		let displayText = {
+			"storm-watch": "Storm Watch",
+			"grid-outage": "Grid Outage",
+			"grid-sync": "Grid Sync",
+			border: null
+		};
+		let result;
+
+		switch(this.gridStatus) {
+			default:
+			case "SystemGridConnected":
+				// Grid is fine; check for Storm Watch
+				if( this.stormWatch ) {
+					result = "storm-watch";
+				}
+				else {
+					result = null;
+				}
+				break;
+			case "SystemIslandedActive":
+				// Grid is down
+				result = "grid-outage";
+				break;
+			case "SystemTransitionToGrid":
+				// Grid is coming up
+				result = "grid-sync";
+				break;
+		}
+
+		if( borderTarget ) {
+			borderTarget.classList.remove(...Object.keys(displayText));
+			if( result ) {
+				borderTarget.classList.add(result);
+				borderTarget.classList.add("border");
+			}
+		}
+		if( statusTarget ) {
+			statusTarget.classList.remove(...Object.keys(displayText));
+			statusTarget.textContent = displayText[result];
+			if( result ) {
+				statusTarget.classList.add(result);
+			}
 		}
 	},
 
