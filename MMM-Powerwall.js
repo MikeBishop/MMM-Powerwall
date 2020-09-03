@@ -17,7 +17,8 @@ const REQUIRED_CALLS = {
 	SolarProduction: ["local", "energy"],
 	HouseConsumption: ["local", "energy"],
 	EnergyBar: ["local", "energy"],
-	PowerLine: ["power"]
+	PowerLine: ["power"],
+	Grid: ["local", "energy"]
 }
 
 const DISPLAY_SOURCES = [
@@ -47,7 +48,8 @@ Module.register("MMM-Powerwall", {
 			"SolarProduction",
 			"HouseConsumption",
 			"EnergyBar",
-			"PowerLine"
+			"PowerLine",
+			"Grid"
 		],
 		localUpdateInterval: 10000,
 		cloudUpdateInterval: 300000,
@@ -70,6 +72,8 @@ Module.register("MMM-Powerwall", {
 	numCharging: 0,
 	yesterdaySolar: null,
 	yesterdayUsage: null,
+	yesterdayImport: null,
+	yesterdayExport: null,
 	gridStatus: "SystemGridConnected",
 	stormWatch: false,
 	dayStart: null,
@@ -531,65 +535,17 @@ Module.register("MMM-Powerwall", {
 			case "GridStatus":
 				if( payload.ip === this.config.powerwallIP ) {
 					this.gridStatus = payload.gridStatus;
+					this.updateData();
 				}
-				this.updateGrid();
 				break;
 			case "StormWatch":
 				if( payload.ip === this.config.powerwallIP ) {
 					this.stormWatch = payload.storm;
+					this.updateData();
 				}
-				this.updateGrid();
 				break;
 			default:
 				break;
-		}
-	},
-
-	updateGrid: function() {
-		let borderTarget = document.getElementById(this.identifier + "-PowerwallSelfPowered");
-		let statusTarget = document.getElementById(this.identifier + "-StatusOverlay");
-		let displayText = {
-			"storm-watch": "Storm Watch",
-			"grid-outage": "Grid Outage",
-			"grid-sync": "Grid Sync",
-			border: null
-		};
-		let result;
-
-		switch(this.gridStatus) {
-			default:
-			case "SystemGridConnected":
-				// Grid is fine; check for Storm Watch
-				if( this.stormWatch ) {
-					result = "storm-watch";
-				}
-				else {
-					result = null;
-				}
-				break;
-			case "SystemIslandedActive":
-				// Grid is down
-				result = "grid-outage";
-				break;
-			case "SystemTransitionToGrid":
-				// Grid is coming up
-				result = "grid-sync";
-				break;
-		}
-
-		if( borderTarget ) {
-			borderTarget.classList.remove(...Object.keys(displayText));
-			if( result ) {
-				borderTarget.classList.add(result);
-				borderTarget.classList.add("border");
-			}
-		}
-		if( statusTarget ) {
-			statusTarget.classList.remove(...Object.keys(displayText));
-			statusTarget.textContent = displayText[result];
-			if( result ) {
-				statusTarget.classList.add(result);
-			}
 		}
 	},
 
@@ -638,6 +594,12 @@ Module.register("MMM-Powerwall", {
 			payload.energy[0].consumer_energy_imported_from_grid +
 			payload.energy[0].consumer_energy_imported_from_solar +
 			payload.energy[0].consumer_energy_imported_from_battery
+		);
+		this.yesterdayImport = payload.energy[0].grid_energy_imported;
+		this.yesterdayExport = (
+			payload.energy[0].grid_energy_exported_from_solar +
+			payload.energy[0].grid_energy_exported_from_battery +
+			payload.energy[0].grid_energy_exported_from_generator
 		);
 
 		let todaySolar = payload.energy[1].solar_energy_exported;
@@ -1035,6 +997,60 @@ Module.register("MMM-Powerwall", {
 			}
 		}
 
+		/********
+		 * Grid *
+		 ********/
+		if( this.flows ) {
+			// Display/hide Storm Watch
+			let swNode = this.identifier + "-StormWatch";
+			if( this.stormWatch ) {
+				this.makeNodeVisible(swNode);
+			}
+			else {
+				this.makeNodeInvisible(swNode);
+			}
+
+			// Various grid states
+			if( this.gridStatus != "SystemGridConnected") {
+				// Grid outage
+				this.updateText(this.identifier + "-GridDirection", "");
+				this.updateText(this.identifier + "-GridInOut",
+					this.gridStatus == "SystemTransitionToGrid" ?
+						"coming online" : "disconnected"
+				);
+			}
+			else if( this.flows.sources.grid.total > 0 ) {
+				// Importing energy
+				this.updateText(this.identifier + "-GridDirection", "importing")
+				this.updateNode(this.identifier + "-GridInOut",
+					this.flows.sources.grid.total, "W");
+			}
+			else if ( this.flows.sinks.grid.total > 0 ) {
+				this.updateText(this.identifier + "-GridDirection", "exporting")
+				this.updateNode(this.identifier + "-GridInOut",
+					this.flows.sinks.grid.total, "W");
+			}
+			else {
+				this.updateText(this.identifier + "-GridDirection", "")
+				this.updateText(this.identifier + "-GridInOut", "idle");
+			}
+
+			if( this.dayStart ) {
+				this.updateNode(this.identifier + "-GridInToday",
+					this.teslaAggregates.site.energy_imported - this.dayStart.grid.import,
+					"Wh imported today"
+				);
+				this.updateNode(this.identifier + "-GridInYesterday",
+					this.yesterdayImport, "Wh yesterday");
+				this.updateNode(this.identifier + "-GridOutToday",
+					this.teslaAggregates.site.energy_exported - this.dayStart.grid.export,
+					"Wh exported today"
+				);
+				this.updateNode(this.identifier + "-GridOutYesterday",
+					this.yesterdayExport, "Wh yesterday");
+			}
+		}
+
 		/*******************
 		 * Powerwall Meter *
 		 *******************/
@@ -1173,6 +1189,14 @@ Module.register("MMM-Powerwall", {
 					this.yesterdayUsage = (
 						this.teslaAggregates.load.energy_imported -
 						this.dayStart.house.import
+					);
+					this.yesterdayImport = (
+						this.teslaAggregates.site.energy_imported -
+						this.dayStart.grid.import
+					);
+					this.yesterdayExport = (
+						this.teslaAggregates.site.energy_exported -
+						this.dayStart.grid.export
 					);
 				}
 				this.dayStart = {

@@ -14,7 +14,7 @@
 
 .MMM-Powerwall.flexbox {
     display: flex;
-    flex-wrap: wrap; 
+    flex-wrap: wrap;
     justify-content: space-evenly;
 }
 
@@ -207,38 +207,11 @@
     border-radius: 10px;
 }
 
-.MMM-Powerwall .border.grid-outage
-{
-    border-color: red;
-}
-
-.MMM-Powerwall .border.storm-watch {
+.MMM-Powerwall .storm-watch {
     border-color: #09A9E6;
-}
-
-.MMM-Powerwall .border.grid-sync {
-    border-color: gold;
-}
-
-.MMM-Powerwall .status-overlay {
-    z-index: 1;
-    position: relative;
-    bottom: 100px;
-    margin: auto;
-    width: 100px;
-    font-weight: bold;
-    right: 2px;
 }
 
 .MMM-Powerwall .status-overlay.grid-outage
 {
     color: red;
-}
-
-.MMM-Powerwall .status-overlay.storm-watch {
-    color: #09A9E6;
-}
-
-.MMM-Powerwall .status-overlay.grid-sync {
-    color: gold;
 }
