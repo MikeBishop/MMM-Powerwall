@@ -116,6 +116,9 @@ Module.register("MMM-Powerwall", {
 			this.sendSocketNotification("Enable-Debug");
 		}
 
+		// Reverse graphs to accomodate wrap-reverse
+		this.config.graphs.reverse();
+
 		let callsToEnable = new Set();
 		this.config.graphs.forEach(
 			graph => REQUIRED_CALLS[graph].forEach(
