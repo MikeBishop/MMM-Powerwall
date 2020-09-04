@@ -43,14 +43,13 @@ var DISPLAY_ALL = [
 Module.register("MMM-Powerwall", {
 	defaults: {
 		graphs: [
-			"Grid",
 			"CarCharging",
+			"Grid",
 			"PowerwallSelfPowered",
 			"SolarProduction",
 			"HouseConsumption",
 			"EnergyBar",
-			"PowerLine",
-			"Grid"
+			"PowerLine"
 		],
 		localUpdateInterval: 10000,
 		cloudUpdateInterval: 300000,
