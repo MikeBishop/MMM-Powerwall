@@ -23,7 +23,7 @@
     flex-direction: column;
     flex-wrap: nowrap;
     justify-content: space-evenly;
-    height: 250px;
+    height: 100%;
 }
 
 .MMM-Powerwall.flexitem {
@@ -48,11 +48,6 @@
 
 .MMM-Powerwall.grid-right {
     grid-template-columns: auto minmax(min-content,40%);
-}
-
-.MMM-Powerwall.grid-equal {
-    grid-template-columns: auto auto;
-    margin: 10pt;
 }
 
 .scene {
@@ -180,6 +175,20 @@
     transform: translate(-50%, -50%);
     text-align: center;
   }
+
+.MMM-Powerwall .grid-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: 25% 25% 25% 25%;
+    grid-template-rows: 25% 50% 21%;
+    grid-template-areas:
+        "icon direction direction direction"
+        "icon number number number"
+        "import import export export";
+    gap: 1%;
+    place-items: center;
+    height: 100%;
+}
 
 .MMM-Powerwall .graph-container {
     position: relative;

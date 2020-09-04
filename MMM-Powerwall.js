@@ -43,6 +43,7 @@ var DISPLAY_ALL = [
 Module.register("MMM-Powerwall", {
 	defaults: {
 		graphs: [
+			"Grid",
 			"CarCharging",
 			"PowerwallSelfPowered",
 			"SolarProduction",
@@ -1021,18 +1022,20 @@ Module.register("MMM-Powerwall", {
 			}
 			else if( this.flows.sources.grid.total > 0 ) {
 				// Importing energy
-				this.updateText(this.identifier + "-GridDirection", "importing")
+				this.updateText(this.identifier + "-GridDirection", "providing")
 				this.updateNode(this.identifier + "-GridInOut",
 					this.flows.sources.grid.total, "W");
+				this.makeNodeVisible(this.identifier + "-GridInOut");
 			}
 			else if ( this.flows.sinks.grid.total > 0 ) {
-				this.updateText(this.identifier + "-GridDirection", "exporting")
+				this.updateText(this.identifier + "-GridDirection", "receiving")
 				this.updateNode(this.identifier + "-GridInOut",
 					this.flows.sinks.grid.total, "W");
+				this.makeNodeVisible(this.identifier + "-GridInOut");
 			}
 			else {
-				this.updateText(this.identifier + "-GridDirection", "")
-				this.updateText(this.identifier + "-GridInOut", "idle");
+				this.updateText(this.identifier + "-GridDirection", "idle");
+				this.makeNodeInvisible(this.identifier + "-GridInOut");
 			}
 
 			if( this.dayStart ) {
