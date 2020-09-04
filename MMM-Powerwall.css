@@ -187,12 +187,12 @@
 .MMM-Powerwall .grid-grid {
     position: relative;
     display: grid;
-    grid-template-columns: 25% 25% 25% 25%;
+    grid-template-columns: 50% 50%;
     grid-template-rows: 25% 50% 21%;
     grid-template-areas:
-        "icon direction direction direction"
-        "icon number number number"
-        "import import export export";
+        "icon direction"
+        "icon number"
+        "import export";
     gap: 1%;
     place-items: center;
     height: 100%;
