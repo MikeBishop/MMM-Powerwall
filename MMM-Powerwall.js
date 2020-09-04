@@ -1022,14 +1022,14 @@ Module.register("MMM-Powerwall", {
 						"coming online" : "disconnected"
 				);
 			}
-			else if( this.flows.sources.grid.total > 0 ) {
+			else if( this.flows.sources.grid.total >= 0.5 ) {
 				// Importing energy
 				this.updateText(this.identifier + "-GridDirection", "providing")
 				this.updateNode(this.identifier + "-GridInOut",
 					this.flows.sources.grid.total, "W");
 				this.makeNodeVisible(this.identifier + "-GridInOut");
 			}
-			else if ( this.flows.sinks.grid.total > 0 ) {
+			else if ( this.flows.sinks.grid.total >= 0.5 ) {
 				this.updateText(this.identifier + "-GridDirection", "receiving")
 				this.updateNode(this.identifier + "-GridInOut",
 					this.flows.sinks.grid.total, "W");
