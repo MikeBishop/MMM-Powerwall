@@ -1016,7 +1016,7 @@ Module.register("MMM-Powerwall", {
 			// Various grid states
 			if( this.gridStatus != "SystemGridConnected") {
 				// Grid outage
-				this.updateText(this.identifier + "-GridDirection", "");
+				this.updateText(this.identifier + "-GridDirection", "Grid is");
 				this.updateText(this.identifier + "-GridInOut",
 					this.gridStatus == "SystemTransitionToGrid" ?
 						"coming online" : "disconnected"
@@ -1024,19 +1024,19 @@ Module.register("MMM-Powerwall", {
 			}
 			else if( this.flows.sources.grid.total >= 0.5 ) {
 				// Importing energy
-				this.updateText(this.identifier + "-GridDirection", "providing")
+				this.updateText(this.identifier + "-GridDirection", "Grid is providing")
 				this.updateNode(this.identifier + "-GridInOut",
 					this.flows.sources.grid.total, "W");
 				this.makeNodeVisible(this.identifier + "-GridInOut");
 			}
 			else if ( this.flows.sinks.grid.total >= 0.5 ) {
-				this.updateText(this.identifier + "-GridDirection", "receiving")
+				this.updateText(this.identifier + "-GridDirection", "Grid is receiving")
 				this.updateNode(this.identifier + "-GridInOut",
 					this.flows.sinks.grid.total, "W");
 				this.makeNodeVisible(this.identifier + "-GridInOut");
 			}
 			else {
-				this.updateText(this.identifier + "-GridDirection", "idle");
+				this.updateText(this.identifier + "-GridDirection", "Grid is idle");
 				this.makeNodeInvisible(this.identifier + "-GridInOut");
 			}
 

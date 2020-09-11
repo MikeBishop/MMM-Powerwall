@@ -49,6 +49,7 @@ var config = {
 This module implements several different graphs.  Currently, these are:
 
 - CarCharging<br>![](images/CarCharging.png)
+- Grid<br>![](images/Grid.png)
 - PowerwallSelfPowered<br>![](images/PowerwallSelfPowered.png)
 - SolarProduction<br>![](images/SolarProduction.png)
 - HouseConsumption<br>![](images/HouseConsumption.png)
