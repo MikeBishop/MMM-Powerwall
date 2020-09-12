@@ -8,6 +8,6 @@
   "dependencies": {
     "chart.js": "latest",
     "chartjs-plugin-datalabels": "^0.7.0",
-    "node-fetch": "^2.6.0"
+    "node-fetch": "^2.6.1"
   }
 }
