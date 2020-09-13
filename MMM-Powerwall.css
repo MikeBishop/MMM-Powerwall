@@ -14,7 +14,14 @@
 
 .MMM-Powerwall.flexbox {
     display: flex;
-    flex-wrap: wrap; 
+    flex-wrap: nowrap;
+    justify-content: space-evenly;
+}
+
+.MMM-Powerwall.rflexbox {
+    display: flex;
+    flex-wrap: wrap-reverse;
+    flex-direction: row-reverse;
     justify-content: space-evenly;
 }
 
