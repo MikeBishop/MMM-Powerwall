@@ -867,19 +867,60 @@ Module.register("MMM-Powerwall", {
 		this.updateText(id, prefix + this.formatAsK(value, unit), animate);
 	},
 
-	updateText: function(id, text, animate = true) {
+	updateText: function(id, text, animate = true, classAdd = null, classRemove = null) {
 		let targetNode = document.getElementById(id);
-		if (targetNode && targetNode.innerText !== text ) {
+		let self = this;
+		if (targetNode && (
+				targetNode.innerText !== text ||
+				(classAdd && !this.classPresent(targetNode, classAdd)) ||
+				(classRemove && this.classPresent(targetNode, classRemove)) )) {
 			if( animate ) {
 				targetNode.style.opacity = 0
 				setTimeout(function (){
+					self.updateClass(targetNode, classAdd, classRemove);
 					targetNode.innerText = text;
 					targetNode.style.opacity = 1;
-				}, 250)
+				}, 250);
 			}
 			else {
+				self.updateClass(targetNode, classAdd, classRemove);
 				targetNode.innerText = text;
 			}
+		}
+	},
+
+	updateClass: function(node, classAdd, classRemove) {
+		if( node ) {
+			if( classAdd ) {
+				if( Array.isArray(classAdd) ) {
+					node.classList.add(...classAdd);
+				}
+				else {
+					node.classList.add(classAdd);
+				}
+			}
+			if( classRemove ) {
+				if( Array.isArray(classRemove) ) {
+					node.classList.remove(...classRemove);
+				}
+				else {
+					node.classList.remove(classRemove);
+				}
+			}
+		}
+	},
+
+	classPresent: function(node, classList) {
+		if( classList && node ) {
+			if( Array.isArray(classList)) {
+				return classList.some(toCheck => node.classList.contains(toRemove));
+			}
+			else {
+				return node.classList.contains(classList);
+			}
+		}
+		else {
+			return false;
 		}
 	},
 
@@ -1014,30 +1055,34 @@ Module.register("MMM-Powerwall", {
 			}
 
 			// Various grid states
+			let directionNodeId = this.identifier + "-GridDirection";
+			let inOutNodeId = this.identifier + "-GridInOut";
 			if( this.gridStatus != "SystemGridConnected") {
 				// Grid outage
-				this.updateText(this.identifier + "-GridDirection", "Grid is");
-				this.updateText(this.identifier + "-GridInOut",
-					this.gridStatus == "SystemTransitionToGrid" ?
-						"coming online" : "disconnected"
+				this.updateText(directionNodeId,
+					"Grid is " +
+						(this.gridStatus == "SystemTransitionToGrid" ?
+						"coming online" : "disconnected"),
+					true, "grid-error"
 				);
+				this.makeNodeInvisible(inOutNodeId);
 			}
 			else if( this.flows.sources.grid.total >= 0.5 ) {
 				// Importing energy
-				this.updateText(this.identifier + "-GridDirection", "Grid is providing")
-				this.updateNode(this.identifier + "-GridInOut",
+				this.updateText(directionNodeId, "Grid is providing", true, null, "grid-error")
+				this.updateNode(inOutNodeId,
 					this.flows.sources.grid.total, "W");
-				this.makeNodeVisible(this.identifier + "-GridInOut");
+				this.makeNodeVisible(inOutNodeId);
 			}
 			else if ( this.flows.sinks.grid.total >= 0.5 ) {
-				this.updateText(this.identifier + "-GridDirection", "Grid is receiving")
-				this.updateNode(this.identifier + "-GridInOut",
+				this.updateText(directionNodeId, "Grid is receiving", true, null, "grid-error")
+				this.updateNode(inOutNodeId,
 					this.flows.sinks.grid.total, "W");
-				this.makeNodeVisible(this.identifier + "-GridInOut");
+				this.makeNodeVisible(inOutNodeId);
 			}
 			else {
-				this.updateText(this.identifier + "-GridDirection", "Grid is idle");
-				this.makeNodeInvisible(this.identifier + "-GridInOut");
+				this.updateText(directionNodeId, "Grid is idle", true, null, "grid-error");
+				this.makeNodeInvisible(inOutNodeId);
 			}
 
 			if( this.dayStart ) {

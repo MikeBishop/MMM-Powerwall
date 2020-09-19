@@ -228,3 +228,27 @@
     color: #09A9E6;
     margin-top: auto;
 }
+
+.MMM-Powerwall .grid-direction {
+    grid-area: direction;
+    align-self: flex-end;
+}
+
+.MMM-Powerwall .grid-number {
+    grid-area:number;
+}
+
+.MMM-Powerwall .grid-import {
+    grid-area:import;
+}
+
+.MMM-Powerwall .grid-export {
+    grid-area:export;
+}
+
+.MMM-Powerwall .grid-error {
+    color: red;
+    font-size: 30px;
+    grid-area: 1 / 2 / 3 / 4;
+    margin: auto;
+}

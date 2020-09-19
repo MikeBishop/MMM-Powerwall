@@ -53,16 +53,16 @@
         {%- elif graph == "Grid" -%}
             <div class="MMM-Powerwall grid-grid">
                 <img src="modules/MMM-Powerwall/images/tower.png" style="grid-area:icon; max-height: 100px">
-                <div class="small bright text" style="grid-area: direction;align-self:end" id="{{id}}-GridDirection">Grid is Idle</div>
-                <div class="MMM-Powerwall vflexbox" style="grid-area:number">
+                <div class="MMM-Powerwall small bright text grid-direction" id="{{id}}-GridDirection">Grid is Idle</div>
+                <div class="MMM-Powerwall vflexbox grid-number">
                     <div class="big grid text spaced" id="{{id}}-GridInOut"></div>
                     <div class="medium bright storm-watch" style="display:none" id="{{id}}-StormWatch">Storm Watch</div>
                 </div>
-                <div class="MMM-Powerwall vflexbox" style="grid-area:import">
+                <div class="MMM-Powerwall vflexbox grid-import">
                     <div class="small bright spaced text" id="{{id}}-GridInToday"></div>
                     <div class="xsmall text" id="{{id}}-GridInYesterday"></div>
                 </div>
-                <div class="MMM-Powerwall vflexbox"  style="grid-area:export">
+                <div class="MMM-Powerwall vflexbox grid-export">
                     <div class="small bright spaced text" id="{{id}}-GridOutToday"></div>
                     <div class="xsmall text" id="{{id}}-GridOutYesterday"></div>
                 </div>
