@@ -30,7 +30,8 @@
     flex-direction: column;
     flex-wrap: nowrap;
     justify-content: space-evenly;
-    height: 250px;
+    height: 100%;
+    max-height: 250px;
 }
 
 .MMM-Powerwall.flexitem {
@@ -55,11 +56,6 @@
 
 .MMM-Powerwall.grid-right {
     grid-template-columns: auto minmax(min-content,40%);
-}
-
-.MMM-Powerwall.grid-equal {
-    grid-template-columns: auto auto;
-    margin: 10pt;
 }
 
 .scene {
@@ -188,6 +184,20 @@
     text-align: center;
   }
 
+.MMM-Powerwall .grid-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: 50% 50%;
+    grid-template-rows: 25% 50% 21%;
+    grid-template-areas:
+        "icon direction"
+        "icon number"
+        "import export";
+    gap: 1%;
+    place-items: center;
+    height: 100%;
+}
+
 .MMM-Powerwall .graph-container {
     position: relative;
     height: 250px;
@@ -214,38 +224,31 @@
     border-radius: 10px;
 }
 
-.MMM-Powerwall .border.grid-outage
-{
-    border-color: red;
-}
-
-.MMM-Powerwall .border.storm-watch {
-    border-color: #09A9E6;
-}
-
-.MMM-Powerwall .border.grid-sync {
-    border-color: gold;
-}
-
-.MMM-Powerwall .status-overlay {
-    z-index: 1;
-    position: relative;
-    bottom: 100px;
-    margin: auto;
-    width: 100px;
-    font-weight: bold;
-    right: 2px;
-}
-
-.MMM-Powerwall .status-overlay.grid-outage
-{
-    color: red;
-}
-
-.MMM-Powerwall .status-overlay.storm-watch {
+.MMM-Powerwall .storm-watch {
     color: #09A9E6;
+    margin-top: auto;
 }
 
-.MMM-Powerwall .status-overlay.grid-sync {
-    color: gold;
+.MMM-Powerwall .grid-direction {
+    grid-area: direction;
+    align-self: flex-end;
+}
+
+.MMM-Powerwall .grid-number {
+    grid-area:number;
+}
+
+.MMM-Powerwall .grid-import {
+    grid-area:import;
+}
+
+.MMM-Powerwall .grid-export {
+    grid-area:export;
+}
+
+.MMM-Powerwall .grid-error {
+    color: red;
+    font-size: 30px;
+    grid-area: 1 / 2 / 3 / 4;
+    margin: auto;
 }

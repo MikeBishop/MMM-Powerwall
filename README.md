@@ -49,6 +49,7 @@ var config = {
 This module implements several different graphs.  Currently, these are:
 
 - CarCharging<br>![](images/CarCharging.png)
+- Grid<br>![](images/Grid.png)
 - PowerwallSelfPowered<br>![](images/PowerwallSelfPowered.png)
 - SolarProduction<br>![](images/SolarProduction.png)
 - HouseConsumption<br>![](images/HouseConsumption.png)
@@ -103,6 +104,7 @@ This module relies on the following APIs:
 - The TWCManager local API, documented at https://github.com/ngardiner/TWCManager/blob/v1.2.0/docs/modules/Control_HTTP.md
 - The Sunrise Sunset API, documented at https://sunrise-sunset.org/api
 - The ArcGIS Reverse Geocode API, documented at https://developers.arcgis.com/rest/geocode/api-reference/geocoding-reverse-geocode.htm
+- Powerline icon made by [Freepik](https://www.flaticon.com/authors/freepik) from https://www.flaticon.com/
 
 In addition to any commiters to the repo, the following have helped figure certain pieces out:
 
