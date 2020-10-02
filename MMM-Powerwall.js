@@ -1069,7 +1069,7 @@ Module.register("MMM-Powerwall", {
 			}
 			else if( this.flows.sources.grid.total >= 0.5 ) {
 				// Importing energy
-				this.updateText(directionNodeId, "Grid is providing", true, null, "grid-error")
+				this.updateText(directionNodeId, "Grid is supplying", true, null, "grid-error")
 				this.updateNode(inOutNodeId,
 					this.flows.sources.grid.total, "W");
 				this.makeNodeVisible(inOutNodeId);
