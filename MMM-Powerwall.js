@@ -1598,6 +1598,7 @@ Module.register("MMM-Powerwall", {
 		// 	}]
 		// }
 		if( this.powerHistory ) {
+			let self = this;
 			let lastMidnight = new Date().setHours(0,0,0,0);
 			let chargepoints = (this.chargeHistory || []).filter(
 				entry => Date.parse(entry.timestamp) >= lastMidnight
@@ -1608,7 +1609,7 @@ Module.register("MMM-Powerwall", {
 				entry.charger_power = 0;
 				if( chargepoints[index] ) {
 					if( chargepoints[index].timestamp !== entry.timestamp ) {
-						this.Log("Date mismatch, " + chargepoints[index].timestamp + " vs. " + entry.timestamp);
+						self.Log("Date mismatch, " + chargepoints[index].timestamp + " vs. " + entry.timestamp);
 					}
 					entry.car_power = -1 * chargepoints[index].charger_power
 				}
