@@ -64,6 +64,7 @@ Module.register("MMM-Powerwall", {
 	},
 	requiresVersion: "2.1.0", // Required version of MagicMirror
 	twcEnabled: null,
+	twcConsumption: 0,
 	teslaAPIEnabled: false,
 	teslaAggregates: null,
 	flows: null,
@@ -321,7 +322,9 @@ Module.register("MMM-Powerwall", {
 					}
 
 					this.teslaAggregates = payload.aggregates;
-					this.flows = this.attributeFlows(payload.aggregates, self.twcConsumption);
+					if( this.twcConsumption <= this.teslaAggregates.load.instant_power ) {
+						this.flows = this.attributeFlows(payload.aggregates, self.twcConsumption);
+					}
 
 					if( this.energyData) {
 						this.generateDaystart(this.energyData);
@@ -354,9 +357,12 @@ Module.register("MMM-Powerwall", {
 				break;
 			case "ChargeStatus":
 				if( payload.ip === this.config.twcManagerIP ) {
-					let oldConsumption = self.twcConsumption;
-					self.twcConsumption = Math.round( parseFloat(payload.status.chargerLoadWatts) );
-					if( self.twcConsumption !== oldConsumption && this.teslaAggregates ) {
+					let oldConsumption = this.twcConsumption;
+					this.twcConsumption = Math.round( parseFloat(payload.status.chargerLoadWatts) );
+					if( this.twcConsumption !== oldConsumption &&
+						this.teslaAggregates && this.flows &&
+						this.twcConsumption <= this.teslaAggregates.load.instant_power )
+					{
 						this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
 						await this.updateData();
 					}
