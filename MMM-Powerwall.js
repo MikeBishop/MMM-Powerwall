@@ -22,8 +22,8 @@ const REQUIRED_CALLS = {
 }
 
 const DISPLAY_SOURCES = [
-	POWERWALL,
 	SOLAR,
+	POWERWALL,
 	GRID
 ];
 const DISPLAY_SINKS = [
