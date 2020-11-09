@@ -43,6 +43,7 @@ var config = {
 | `teslaAPIUsername`    | *Recommended* Username for your Tesla account
 | `teslaAPIPassword`    | *Optional* Password for your Tesla account; see below for more options
 | `home`                | *Optional* Coordinates (`[lat, lon]`) of your home; used to indicate when car is at home and to get sunrise/sunset times
+| `debug`               | *Optional* Enables additional debug output to the browser tools Console and to stderr on the MM, useful for troubleshooting
 
 ### Graphs
 
