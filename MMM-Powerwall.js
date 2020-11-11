@@ -109,7 +109,11 @@ Module.register("MMM-Powerwall", {
 		}
 		else {
 			self.twcEnabled = false;
-			DISPLAY_ALL.splice(3, 1);
+		}
+
+		let carIndex = DISPLAY_ALL.indexOf(CAR)
+		if( !self.twcEnabled && carIndex >= 0 ) {
+			DISPLAY_ALL.splice(carIndex, 1);
 		}
 
 		if( this.config.debug ) {
