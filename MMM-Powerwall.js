@@ -120,6 +120,11 @@ Module.register("MMM-Powerwall", {
 			this.sendSocketNotification("Enable-Debug");
 		}
 
+		// Handle singleton graph names
+		if( !Array.isArray(this.config.graphs) ) {
+			this.config.graphs = [this.config.graphs];
+		}
+
 		// Reverse graphs to accomodate wrap-reverse
 		this.config.graphs.reverse();
 
