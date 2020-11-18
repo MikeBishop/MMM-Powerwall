@@ -161,10 +161,7 @@ Module.register("MMM-Powerwall", {
 				powerwallIP: config.powerwallIP,
 				twcManagerIP: config.twcManagerIP,
 				twcManagerPort: config.twcManagerPort,
-				updateInterval: config.localUpdateInterval - 500,
-				username: config.teslaAPIUsername,
-				siteID: config.siteID,
-				resyncInterval: config.cloudUpdateInterval - 500
+				updateInterval: config.localUpdateInterval - 500
 			});
 			this.doTimeout("local", () => self.updateLocal(), this.config.localUpdateInterval);
 		}
