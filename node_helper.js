@@ -27,6 +27,7 @@ module.exports = NodeHelper.create({
 		this.energy = {};
 		this.selfConsumption = {};
 		this.siteIDs = {};
+		this.storm = {};
 		this.vehicles = {};
 		this.vehicleData = {};
 		this.powerHistory = {};
@@ -114,23 +115,12 @@ module.exports = NodeHelper.create({
 		}
 		else if (notification === "UpdateLocal") {
 			let ip = payload.powerwallIP;
-			let username = payload.username;
-			let siteID = payload.siteID;
 			this.initializeCache(this.powerwallAggregates, ip);
 			this.initializeCache(this.powerwallSOE, ip);
 
-			if( username && !this.checkTeslaCredentials(username) ) {
-				username = null;
-				siteID = null;
-			}
-
-			if( siteID ) {
-				this.initializeCache(this.powerwallCloudSOE, username, siteID);
-			}
-
 			let pwPromise;
 			if( this.powerwallAggregates[ip].lastUpdate + payload.updateInterval < Date.now() ) {
-				pwPromise = self.updatePowerwall(ip, username, siteID, payload.resyncInterval);
+				pwPromise = self.updatePowerwall(ip);
 			}
 			else {
 				pwPromise = Promise.resolve();
@@ -143,12 +133,9 @@ module.exports = NodeHelper.create({
 					});
 				}
 				if (this.powerwallSOE[ip].lastResult) {
-					let cache = (this.powerwallCloudSOE[username] || [])[siteID] || [];
-					let cloudSOE = (cache.lastResult || {}).percentage_charged || 0;
-					let syncPoint = cache.syncPoint || 0;
 					this.sendSocketNotification("SOE", {
 						ip: ip,
-						soe: cloudSOE + this.powerwallSOE[ip].lastResult - syncPoint
+						soe: this.powerwallSOE[ip].lastResult
 					});
 				}
 			}
@@ -170,6 +157,32 @@ module.exports = NodeHelper.create({
 				}
 			}
 			await pwPromise;
+		}
+		else if (notification === "UpdateStormWatch") {
+			let username = payload.username;
+			let siteID = payload.siteID;
+
+			if( username && !this.checkTeslaCredentials(username) ) {
+				return;
+			}
+
+			if( siteID ) {
+				this.initializeCache(this.storm, username, siteID);
+			}
+			else {
+				return;
+			}
+
+			if( this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+				await self.doTeslaApiGetStormWatch(username, siteID);
+			}
+			else {
+				this.sendSocketNotification("EnergyData", {
+					username: username,
+					siteID: siteID,
+					energy: this.storm[username][siteID].lastResult.storm_mode_active
+				});
+			}
 		}
 		else if (notification === "UpdateEnergy") {
 			let username = payload.username;
@@ -333,7 +346,7 @@ module.exports = NodeHelper.create({
 		node[lastKey][target] = data;
 	},
 
-	updatePowerwall: async function(powerwallIP, username, siteID, resyncInterval) {
+	updatePowerwall: async function(powerwallIP) {
 		let now = Date.now();
 		let url = "https://" + powerwallIP + "/api/meters/aggregates";
 		this.log("Calling " + url);
@@ -356,6 +369,7 @@ module.exports = NodeHelper.create({
 		);
 
 		url = "https://" + powerwallIP + "/api/system_status/soe";
+		this.log("Calling " + url);
 		let localPromise = fetch(url, {agent: unauthenticated_agent}).then(
 			async result => {
 				if( !result.ok ) {
@@ -364,11 +378,18 @@ module.exports = NodeHelper.create({
 				}
 
 				let response = await result.json();
-				return response.percentage;
+				let adjustedSOE = (response.percentage - 5) / .95
+				this.updateCache(adjustedSOE, this.powerwallSOE, powerwallIP, now);
+
+				this.sendSocketNotification("SOE", {
+					ip: powerwallIP,
+					soe: adjustedSOE
+				});
 			}
 		);
 
 		url = "https://" + powerwallIP + "/api/system_status/grid_status";
+		this.log("Calling " + url);
 		let gridPromise = fetch(url, {agent: unauthenticated_agent}).then(
 			async result => {
 				if( !result.ok ) {
@@ -377,49 +398,26 @@ module.exports = NodeHelper.create({
 				}
 
 				let response = await result.json();
-				return response.grid_status;
+				this.sendSocketNotification("GridStatus", {
+					ip: powerwallIP,
+					gridStatus: response.grid_status
+				});
 			}
 		)
 
-		let cloudSOE = 0, syncPoint = 0;
+		await Promise.all([gridPromise, localPromise, aggregatePromise]);
+	},
+
+	doTeslaApiGetStormWatch: async function(username, siteID) {
 		if( username && siteID ) {
-			let cache = this.powerwallCloudSOE[username][siteID];
-			if( cache.lastUpdate + resyncInterval < Date.now() ) {
-				let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
-				let cloudStatus = await this.doTeslaApi(url, username, null, siteID, this.powerwallCloudSOE);
-				cloudSOE = cloudStatus.percentage_charged;
+			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
+			let cloudStatus = await this.doTeslaApi(url, username, null, siteID, this.storm);
 
-				this.sendSocketNotification("StormWatch", {
-					ip: powerwallIP,
-					storm: cloudStatus.storm_mode_active
-				});
-
-				if( cloudSOE != 0 ) {
-					syncPoint = await localPromise;
-					this.updateCache(syncPoint, this.powerwallCloudSOE, [username, siteID], now, "syncPoint");
-				}
-			}
-			if( cloudSOE === 0 && cache.lastResult.percentage_charged && cache.syncPoint ) {
-				cloudSOE = cache.lastResult.percentage_charged;
-				syncPoint = cache.syncPoint;
-			}
+			this.sendSocketNotification("StormWatch", {
+				ip: powerwallIP,
+				storm: cloudStatus.storm_mode_active
+			});
 		}
-
-		let localSOE = await localPromise;
-		this.updateCache(localSOE, this.powerwallSOE, powerwallIP, now);
-
-		this.sendSocketNotification("SOE", {
-			ip: powerwallIP,
-			soe: cloudSOE + localSOE - syncPoint
-		});
-
-		let gridStatus = await gridPromise;
-		this.sendSocketNotification("GridStatus", {
-			ip: powerwallIP,
-			gridStatus: gridStatus
-		});
-
-		await aggregatePromise;
 	},
 
 	updateTWCManager: async function(twcManagerIP, twcManagerPort) {

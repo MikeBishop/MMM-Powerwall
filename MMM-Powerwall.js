@@ -18,7 +18,7 @@ const REQUIRED_CALLS = {
 	HouseConsumption: ["local", "energy"],
 	EnergyBar: ["local", "energy"],
 	PowerLine: ["power"],
-	Grid: ["local", "energy"]
+	Grid: ["local", "energy", "storm"]
 }
 
 const DISPLAY_SOURCES = [
@@ -263,6 +263,13 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
+	updateStormWatch: function() {
+		if( this.callsToEnable.stormWatch ) {
+			this.Log("Requesting Storm Watch state");
+			this.sendDataRequestNotification("UpdateStormWatch");
+		}
+	},
+
 	updateVehicleData: function(timeout=null) {
 		if( this.callsToEnable.vehicle ) {
 			let now = Date.now();
@@ -309,9 +316,11 @@ Module.register("MMM-Powerwall", {
 						this.updateEnergy();
 						this.updateSelfConsumption();
 						this.updatePowerHistory();
+						this.updateStormWatch();
 						this.doTimeout("cloud", () => {
 							self.updateSelfConsumption();
 							self.updatePowerHistory();
+							self.updateStormWatch();
 						}, this.config.cloudUpdateInterval);
 					}
 					this.updateLocal();
@@ -360,7 +369,7 @@ Module.register("MMM-Powerwall", {
 						false);
 					let meterNode = document.getElementById(this.identifier + "-battery-meter");
 					if (meterNode) {
-						meterNode.style = "height: " + payload.soe + "%;";
+						meterNode.style = "height: " + Math.min(100, payload.soe) + "%;";
 					}
 				}
 				break;
