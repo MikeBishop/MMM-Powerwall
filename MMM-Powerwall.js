@@ -261,7 +261,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	updateStormWatch: function() {
-		if( this.callsToEnable.stormWatch ) {
+		if( this.callsToEnable.storm ) {
 			this.Log("Requesting Storm Watch state");
 			this.sendDataRequestNotification("UpdateStormWatch");
 		}
