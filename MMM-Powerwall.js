@@ -366,7 +366,7 @@ Module.register("MMM-Powerwall", {
 						false);
 					let meterNode = document.getElementById(this.identifier + "-battery-meter");
 					if (meterNode) {
-						meterNode.style = "height: " + Math.min(100, payload.soe) + "%;";
+						meterNode.style = "height: " + payload.soe + "%;";
 					}
 				}
 				break;
