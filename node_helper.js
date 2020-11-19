@@ -177,10 +177,10 @@ module.exports = NodeHelper.create({
 				await self.doTeslaApiGetStormWatch(username, siteID);
 			}
 			else {
-				this.sendSocketNotification("EnergyData", {
+				this.sendSocketNotification("StormWatch", {
 					username: username,
 					siteID: siteID,
-					energy: this.storm[username][siteID].lastResult.storm_mode_active
+					storm: this.storm[username][siteID].lastResult.storm_mode_active
 				});
 			}
 		}
