@@ -18,7 +18,7 @@ const REQUIRED_CALLS = {
 	HouseConsumption: ["local", "energy"],
 	EnergyBar: ["local", "energy"],
 	PowerLine: ["power"],
-	Grid: ["local", "energy"]
+	Grid: ["local", "energy", "storm"]
 }
 
 const DISPLAY_SOURCES = [
@@ -161,10 +161,7 @@ Module.register("MMM-Powerwall", {
 				powerwallIP: config.powerwallIP,
 				twcManagerIP: config.twcManagerIP,
 				twcManagerPort: config.twcManagerPort,
-				updateInterval: config.localUpdateInterval - 500,
-				username: config.teslaAPIUsername,
-				siteID: config.siteID,
-				resyncInterval: config.cloudUpdateInterval - 500
+				updateInterval: config.localUpdateInterval - 500
 			});
 			this.doTimeout("local", () => self.updateLocal(), this.config.localUpdateInterval);
 		}
@@ -263,6 +260,13 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
+	updateStormWatch: function() {
+		if( this.callsToEnable.storm ) {
+			this.Log("Requesting Storm Watch state");
+			this.sendDataRequestNotification("UpdateStormWatch");
+		}
+	},
+
 	updateVehicleData: function(timeout=null) {
 		if( this.callsToEnable.vehicle ) {
 			let now = Date.now();
@@ -309,9 +313,11 @@ Module.register("MMM-Powerwall", {
 						this.updateEnergy();
 						this.updateSelfConsumption();
 						this.updatePowerHistory();
+						this.updateStormWatch();
 						this.doTimeout("cloud", () => {
 							self.updateSelfConsumption();
 							self.updatePowerHistory();
+							self.updateStormWatch();
 						}, this.config.cloudUpdateInterval);
 					}
 					this.updateLocal();
