@@ -725,7 +725,7 @@ Module.register("MMM-Powerwall", {
 				).map(
 					outage => {
 						let startDate = Date.parse(outage.timestamp);
-						let stopDate = new Date(startDate.getTime() + outage.duration);
+						let stopDate = startDate + outage.duration;
 						return {
 							type: 'box',
 							mode: 'vertical',
@@ -733,7 +733,7 @@ Module.register("MMM-Powerwall", {
 							xMin: startDate,
 							xMax: stopDate,
 							backgroundColor: "rgba(255, 0, 0, 0.1)",
-							borderColor: "rgba(0,0,0,0)"
+							borderColor: "rgba(255,0,0,0.1)"
 						};
 					}
 				);
