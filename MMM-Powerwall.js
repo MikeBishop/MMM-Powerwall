@@ -570,11 +570,20 @@ Module.register("MMM-Powerwall", {
 				}
 				break;
 			case "StormWatch":
-				if( payload.ip === this.config.powerwallIP ) {
-					this.stormWatch = payload.storm;
-					this.updateData();
+				if( payload.username === this.config.teslaAPIUsername &&
+					this.config.siteID == payload.siteID ) {
+						this.stormWatch = payload.storm;
+						this.updateData();
 				}
 				break;
+			case "Backup":
+				if( payload.username === this.config.teslaAPIUsername &&
+					this.config.siteID == payload.siteID ) {
+						this.backup = payload.backup
+						if( this.powerHistory ) {
+							this.updatePowerLine();
+						}
+				}
 			default:
 				break;
 		}
