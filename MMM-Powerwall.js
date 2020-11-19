@@ -719,6 +719,26 @@ Module.register("MMM-Powerwall", {
 				powerLine.data = newData;
 			}
 
+			if( Array.isArray(this.backup) ) {
+				powerLine.options.plugins.annotation.annotations = this.backup.filter(
+					outage => Date.parse(outage.timestamp) > lastMidnight
+				).map(
+					outage => {
+						let startDate = Date.parse(outage.timestamp);
+						let stopDate = new Date(startDate.getTime() + outage.duration);
+						return {
+							type: 'box',
+							mode: 'vertical',
+							xScaleID: 'xAxis',
+							xMin: startDate,
+							xMax: stopDate,
+							backgroundColor: "rgba(255, 0, 0, 0.1)",
+							borderColor: "rgba(0,0,0,0)"
+						};
+					}
+				);
+			}
+
 			powerLine.update();
 		}
 	},
@@ -1592,15 +1612,7 @@ Module.register("MMM-Powerwall", {
 							datalabels: false,
 							annotation: {
 								drawTime: 'afterDatasetsDraw',
-								annotations: [{
-									type: 'box',
-									mode: 'vertical',
-									xScaleID: 'xAxis',
-									xMin: new Date().setHours(3,0,0,0),
-									xMax: new Date().setHours(5,0,0,0),
-									backgroundColor: "rgba(255, 0, 0, 0.2)",
-									borderColor: "rgba(0,0,0,0)"
-								}]
+								annotations: []
 							}
 						},
 						scales: {
