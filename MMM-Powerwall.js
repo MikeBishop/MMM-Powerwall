@@ -76,6 +76,7 @@ Module.register("MMM-Powerwall", {
 	yesterdayImport: null,
 	yesterdayExport: null,
 	gridStatus: "SystemGridConnected",
+	gridOutageStart: null,
 	stormWatch: false,
 	dayStart: null,
 	dayMode: "day",
@@ -580,6 +581,10 @@ Module.register("MMM-Powerwall", {
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
 						this.backup = payload.backup
+						if( this.gridStatus === "SystemGridConnected" ) {
+							// If the grid is up, this should include the most recent outage
+							this.gridOutageStart = null;
+						}
 						if( this.powerHistory ) {
 							this.updatePowerLine();
 						}
@@ -720,9 +725,16 @@ Module.register("MMM-Powerwall", {
 			}
 
 			if( Array.isArray(this.backup) ) {
-				powerLine.options.plugins.annotation.annotations = this.backup.filter(
+				let outages = this.backup.filter(
 					outage => Date.parse(outage.timestamp) > lastMidnight
-				).map(
+				);
+				if( this.gridOutageStart ) {
+					outages.push({
+						timestamp: new Date(this.gridOutageStart).toISOString(),
+						duration: Date.now() - this.gridOutageStart
+					});
+				}
+				powerLine.options.plugins.annotation.annotations = outages.map(
 					outage => {
 						let startDate = Date.parse(outage.timestamp);
 						let stopDate = startDate + outage.duration;
@@ -1124,6 +1136,9 @@ Module.register("MMM-Powerwall", {
 					true, "grid-error"
 				);
 				this.makeNodeInvisible(inOutNodeId);
+				if( !this.gridOutageStart ) {
+					this.gridOutageStart = Date.now();
+				}
 			}
 			else if( this.flows.sources.grid.total >= 0.5 ) {
 				// Importing energy
