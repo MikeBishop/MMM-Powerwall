@@ -537,8 +537,15 @@ Module.register("MMM-Powerwall", {
 						delete statusFor.deferUntil;
 					}
 
-					if( !statusFor.imageUrl ) {
-						statusFor.imageUrl = this.createCompositorUrl(payload.config);
+					if( !statusFor.img ) {
+						let image = new Image();
+						image.src = this.createCompositorUrl(payload.config);
+						image.onload = async function(ev) {
+							statusFor.img = image
+							if( statusFor === self.vehicleInFocus ) {
+								await self.drawStatusForVehicle(statusFor, self.numCharging, false);
+							}
+						}
 					}
 					statusFor.drive = payload.drive;
 					statusFor.charge = payload.charge;
@@ -717,8 +724,9 @@ Module.register("MMM-Powerwall", {
 		let completionParaId = this.identifier + "-CarCompletionPara";
 
 		let picture = document.getElementById(this.identifier + "-Picture");
-		if( picture && statusFor.imageUrl && picture.src !== statusFor.imageUrl ) {
-			picture.src = statusFor.imageUrl;
+		if( picture && statusFor.img) {
+			let ctx = picture.getContext('2d');
+			ctx.drawImage(statusFor.img, 0, 0);
 		}
 
 		if( numCharging > 0) {
