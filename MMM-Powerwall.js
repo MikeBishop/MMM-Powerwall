@@ -1589,10 +1589,23 @@ Module.register("MMM-Powerwall", {
 							display: false
 						},
 						plugins: {
-							datalabels: false
+							datalabels: false,
+							annotation: {
+								drawTime: 'afterDatasetsDraw',
+								annotations: [{
+									type: 'box',
+									mode: 'vertical',
+									xScaleID: 'xAxis',
+									xMin: new Date().setHours(3,0,0,0),
+									xMax: new Date().setHours(5,0,0,0),
+									backgroundColor: "rgba(255, 0, 0, 0.2)",
+									borderColor: "rgba(0,0,0,0)"
+								}]
+							}
 						},
 						scales: {
 							xAxes: [{
+								id: 'xAxis',
 								type: "time",
 								ticks: {
 									min: new Date().setHours(0,0,0,0),
