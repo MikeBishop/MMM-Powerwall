@@ -580,7 +580,9 @@ Module.register("MMM-Powerwall", {
 			case "Backup":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
-						this.backup = payload.backup
+						this.backup = payload.backup.filter(
+							outage => Date.parse(outage.timestamp) > lastMidnight
+						);
 						if( this.gridStatus === "SystemGridConnected" ) {
 							// If the grid is up, this should include the most recent outage
 							this.gridOutageStart = null;
@@ -725,9 +727,7 @@ Module.register("MMM-Powerwall", {
 			}
 
 			if( Array.isArray(this.backup) ) {
-				let outages = this.backup.filter(
-					outage => Date.parse(outage.timestamp) > lastMidnight
-				);
+				let outages = this.backup;
 				if( this.gridOutageStart ) {
 					outages.push({
 						timestamp: new Date(this.gridOutageStart).toISOString(),
