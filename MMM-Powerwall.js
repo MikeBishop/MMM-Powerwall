@@ -76,6 +76,7 @@ Module.register("MMM-Powerwall", {
 	yesterdayImport: null,
 	yesterdayExport: null,
 	gridStatus: "SystemGridConnected",
+	gridOutageStart: null,
 	stormWatch: false,
 	dayStart: null,
 	dayMode: "day",
@@ -570,11 +571,26 @@ Module.register("MMM-Powerwall", {
 				}
 				break;
 			case "StormWatch":
-				if( payload.ip === this.config.powerwallIP ) {
-					this.stormWatch = payload.storm;
-					this.updateData();
+				if( payload.username === this.config.teslaAPIUsername &&
+					this.config.siteID == payload.siteID ) {
+						this.stormWatch = payload.storm;
+						this.updateData();
 				}
 				break;
+			case "Backup":
+				if( payload.username === this.config.teslaAPIUsername &&
+					this.config.siteID == payload.siteID ) {
+						this.backup = payload.backup.filter(
+							outage => Date.parse(outage.timestamp) > lastMidnight
+						);
+						if( this.gridStatus === "SystemGridConnected" ) {
+							// If the grid is up, this should include the most recent outage
+							this.gridOutageStart = null;
+						}
+						if( this.powerHistory ) {
+							this.updatePowerLine();
+						}
+				}
 			default:
 				break;
 		}
@@ -708,6 +724,31 @@ Module.register("MMM-Powerwall", {
 				powerLine.options.scales.xAxes[0].ticks.min = lastMidnight;
 				powerLine.options.scales.xAxes[0].ticks.max = new Date().setHours(24,0,0,0);
 				powerLine.data = newData;
+			}
+
+			if( Array.isArray(this.backup) ) {
+				let outages = this.backup;
+				if( this.gridOutageStart ) {
+					outages.push({
+						timestamp: new Date(this.gridOutageStart).toISOString(),
+						duration: Date.now() - this.gridOutageStart
+					});
+				}
+				powerLine.options.plugins.annotation.annotations = outages.map(
+					outage => {
+						let startDate = Date.parse(outage.timestamp);
+						let stopDate = startDate + outage.duration;
+						return {
+							type: 'box',
+							mode: 'vertical',
+							xScaleID: 'xAxis',
+							xMin: startDate,
+							xMax: stopDate,
+							backgroundColor: "rgba(255, 0, 0, 0.1)",
+							borderColor: "rgba(255,0,0,0.1)"
+						};
+					}
+				);
 			}
 
 			powerLine.update();
@@ -1095,6 +1136,9 @@ Module.register("MMM-Powerwall", {
 					true, "grid-error"
 				);
 				this.makeNodeInvisible(inOutNodeId);
+				if( !this.gridOutageStart ) {
+					this.gridOutageStart = Date.now();
+				}
 			}
 			else if( this.flows.sources.grid.total >= 0.5 ) {
 				// Importing energy
@@ -1580,10 +1624,15 @@ Module.register("MMM-Powerwall", {
 							display: false
 						},
 						plugins: {
-							datalabels: false
+							datalabels: false,
+							annotation: {
+								drawTime: 'afterDatasetsDraw',
+								annotations: []
+							}
 						},
 						scales: {
 							xAxes: [{
+								id: 'xAxis',
 								type: "time",
 								ticks: {
 									min: new Date().setHours(0,0,0,0),

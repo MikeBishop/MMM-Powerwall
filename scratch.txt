@@ -100,7 +100,7 @@ Level of aggregation; can be "day", "week", "month", "year", "lifetime"
 Default is "day" for power/energy; no default for self_consumption (request fails)
 
 # kind #
-Values are "power", "energy", or "self_consumption"
+Values are "power", "energy", "backup", or "self_consumption"
 kind=power is only available for period=day
 
 # end_date # 

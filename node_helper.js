@@ -25,6 +25,7 @@ module.exports = NodeHelper.create({
 		this.chargeHistory = {};
 		this.teslaApiAccounts = {};
 		this.energy = {};
+		this.backup = {};
 		this.selfConsumption = {};
 		this.siteIDs = {};
 		this.storm = {};
@@ -246,6 +247,7 @@ module.exports = NodeHelper.create({
 
 			if( siteID ) {
 				this.initializeCache(this.powerHistory, username, siteID);
+				this.initializeCache(this.backup, username, siteID);
 			}
 			else {
 				return;
@@ -259,6 +261,16 @@ module.exports = NodeHelper.create({
 					username: username,
 					siteID: siteID,
 					powerHistory: this.powerHistory[username][siteID].lastResult
+				});
+			}
+			if( this.backup[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+				await self.doTeslaApiGetBackupHistory(username, siteID);
+			}
+			else {
+				this.sendSocketNotification("Backup", {
+					username: username,
+					siteID: siteID,
+					backup: this.backup[username][siteID].lastResult
 				});
 			}
 
@@ -685,6 +697,11 @@ module.exports = NodeHelper.create({
 	doTeslaApiGetPowerHistory: async function(username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=power";
 		await this.doTeslaApi(url, username, "siteID", siteID, this.powerHistory, "PowerHistory", "time_series", "powerHistory");
+	},
+
+	doTeslaApiGetBackupHistory: async function(username, siteID) {
+		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=backup";
+		await this.doTeslaApi(url, username, "siteID", siteID, this.backup, "Backup", "events", "backup");
 	},
 
 	doTeslaApiGetSelfConsumption: async function(username, siteID) {
