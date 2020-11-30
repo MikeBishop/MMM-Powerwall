@@ -580,6 +580,7 @@ Module.register("MMM-Powerwall", {
 			case "Backup":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
+						let lastMidnight = new Date().setHours(0,0,0,0);
 						this.backup = payload.backup.filter(
 							outage => Date.parse(outage.timestamp) > lastMidnight
 						);
