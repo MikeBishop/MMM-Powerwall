@@ -159,6 +159,14 @@
     background: #0BC60B;
 }
 
+.MMM-Powerwall .battery-warn {
+    background: #DDDD00;
+}
+
+.MMM-Powerwall .battery-critical {
+    background: red;
+}
+
 .MMM-Powerwall .grid {
     color: #CACECF
 }
