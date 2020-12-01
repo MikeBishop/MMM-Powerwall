@@ -117,6 +117,7 @@
     height:97%;
     margin: 1px;
     transition: width 1s;
+    float: left
 }
 
 .cbattery:after {
@@ -159,6 +160,10 @@
     background: #0BC60B;
 }
 
+.MMM-Powerwall .battery-cold {
+    background: lightskyblue;
+}
+
 .MMM-Powerwall .battery-warn {
     background: #DDDD00;
 }
@@ -190,6 +195,7 @@
     left: 50%;
     transform: translate(-50%, -50%);
     text-align: center;
+    width: fit-content;
   }
 
 .MMM-Powerwall .grid-grid {
