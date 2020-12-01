@@ -778,16 +778,23 @@ Module.register("MMM-Powerwall", {
 		}
 
 		if( numCharging > 0) {
-			// Cars are charging, including this one
+			// Cars are drawing power, including this one
+			let isCharging = statusFor.charge.status === "Charging";
 			if( numCharging > 1) {
 				statusText += " and " + (numCharging - 1) + " more are";
 			}
 			else {
 				statusText += " is";
 			}
-			statusText += " charging at";
 
-			if( statusFor.charge.time > 0 ) {
+			if( isCharging ) {
+				statusText += " charging at";
+			}
+			else {
+				statusText += " consuming";
+			}
+
+			if( statusFor.charge.time > 0 && isCharging ) {
 				let timeText = "";
 				let hours = Math.trunc(statusFor.charge.time);
 				let minutes = Math.round(
