@@ -796,14 +796,26 @@ Module.register("MMM-Powerwall", {
 
 			if( statusFor.charge.time > 0 && isCharging ) {
 				let timeText = "";
+				let days = Math.trunc(statusFor.charge / 24);
 				let hours = Math.trunc(statusFor.charge.time);
 				let minutes = Math.round(
 					(statusFor.charge.time - hours)
 					* 12) * 5;
-				if( statusFor.charge.time >= 1 ) {
-					timeText = hours >= 2 ? (hours + " hours ") : "1 hour ";
+				if( days > 0 ) {
+					timeText = days > 1 ? (days + " days") : "1 day";
+					hours = Math.round(statusFor.charge.time - days*24);
+					minutes = 0
+				}
+				if( hours > 0 ) {
+					if( timeText.length ) {
+						timeText += ", "
+					}
+					timeText += hours >= 2 ? (hours + " hours") : "1 hour";
 				}
 				if( minutes > 0 ) {
+					if( timeText.length ) {
+						timeText += ", "
+					}
 					timeText += minutes + " minutes";
 				}
 				this.updateText(this.identifier + "-CarCompletion", timeText, animate);
@@ -813,7 +825,6 @@ Module.register("MMM-Powerwall", {
 				this.makeNodeInvisible(completionParaId)
 			}
 			consumptionVisible = true;
-
 		}
 		else {
 			// Cars not charging; show current instead
