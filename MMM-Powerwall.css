@@ -116,7 +116,7 @@
 .meter-horizontal {
     height:97%;
     margin: 1px;
-    transition: height 1s;
+    transition: width 1s;
 }
 
 .cbattery:after {
