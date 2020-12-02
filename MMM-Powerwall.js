@@ -892,13 +892,24 @@ Module.register("MMM-Powerwall", {
 		}
 
 		this.updateText(this.identifier + "-CarStatus", statusText, animate);
+		let soc = statusFor.charge.soc;
 		let meterNode = document.getElementById(this.identifier + "-car-meter");
 		if( meterNode ) {
-			meterNode.style.width = statusFor.charge.soc + "%";
+			meterNode.style.width = soc + "%";
+			meterNode.classList.remove("battery", "battery-warn", "battery-critical")
+			if ( soc > 99.5 || soc < 9.5 ) {
+				meterNode.classList.add("battery-critical");
+			}
+			else if ( soc > 90.5 || soc < 19.5 ) {
+				meterNode.classList.add("battery-warn");
+			}
+			else {
+				meterNode.classList.add("battery");
+			}
 		}
 		this.updateNode(
 			this.identifier + "-car-meter-text",
-			statusFor.charge.soc,
+			soc,
 			"%",
 			"",
 			animate
