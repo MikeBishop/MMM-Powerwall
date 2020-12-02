@@ -893,7 +893,10 @@ Module.register("MMM-Powerwall", {
 
 		this.updateText(this.identifier + "-CarStatus", statusText, animate);
 		let soc = statusFor.charge.soc;
-		let usableSoc = statusFor.charge.usable_soc ?? soc;
+		let usableSoc = statusFor.charge.usable_soc;
+		if( !usableSoc ) {
+			usableSoc = soc;
+		}
 		let lockedSoc = soc - usableSoc;
 		let meterNode = document.getElementById(this.identifier + "-car-meter");
 		let lockedMeterNode = document.getElementById(this.identifier + "-car-meter-unavailable");
