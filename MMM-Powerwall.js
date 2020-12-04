@@ -779,7 +779,7 @@ Module.register("MMM-Powerwall", {
 
 		if( numCharging > 0) {
 			// Cars are drawing power, including this one
-			let isCharging = statusFor.charge.status === "Charging";
+			let isCharging = statusFor.charge.state === "Charging";
 			if( numCharging > 1) {
 				statusText += " and " + (numCharging - 1) + " more are";
 			}
