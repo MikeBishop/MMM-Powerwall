@@ -794,10 +794,15 @@ module.exports = NodeHelper.create({
 		if( !useCached || forceWake ) {
 			let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
 			let response = await this.doTeslaApi(url, username);
-			state = response.state;
-			if (state !== "online" && forceWake &&
-				await this.doTeslaApiWakeVehicle(username, vehicleID)) {
-					state = "online";
+			if( response ) {
+				state = response.state;
+				if (state !== "online" && forceWake &&
+					await this.doTeslaApiWakeVehicle(username, vehicleID)) {
+						state = "online";
+				}
+			}
+			else {
+				state = "error"
 			}
 		}
 
