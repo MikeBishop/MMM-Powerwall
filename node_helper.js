@@ -837,6 +837,7 @@ module.exports = NodeHelper.create({
 				charge: {
 					state: data.charge_state.charging_state,
 					soc: data.charge_state.battery_level,
+					usable_soc: data.charge_state.usable_battery_level,
 					limit: data.charge_state.charge_limit_soc,
 					power: power,
 					time: data.charge_state.time_to_full_charge

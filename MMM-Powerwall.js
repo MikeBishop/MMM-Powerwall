@@ -916,9 +916,16 @@ Module.register("MMM-Powerwall", {
 
 		// Update battery meter
 		let soc = statusFor.charge.soc;
+		let usableSoc = statusFor.charge.usable_soc;
+		if( !usableSoc ) {
+			usableSoc = soc;
+		}
+		let lockedSoc = soc - usableSoc;
 		let meterNode = document.getElementById(this.identifier + "-car-meter");
-		if( meterNode ) {
-			meterNode.style.width = soc + "%";
+		let lockedMeterNode = document.getElementById(this.identifier + "-car-meter-unavailable");
+		if( meterNode && lockedMeterNode ) {
+			meterNode.style.width = usableSoc + "%";
+			lockedMeterNode.style.width = lockedSoc + "%";
 			meterNode.classList.remove("battery", "battery-warn", "battery-critical")
 			if ( soc > 99.5 || soc < 9.5 ) {
 				meterNode.classList.add("battery-critical");
@@ -932,9 +939,9 @@ Module.register("MMM-Powerwall", {
 		}
 		this.updateNode(
 			this.identifier + "-car-meter-text",
-			soc,
+			usableSoc,
 			"%",
-			"",
+			(lockedSoc > 2) ? "❄ " : "",
 			animate
 		);
 		if( consumptionVisible ) {
