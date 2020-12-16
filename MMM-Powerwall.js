@@ -777,39 +777,27 @@ Module.register("MMM-Powerwall", {
 			ctx.drawImage(statusFor.img, 0, 0);
 		}
 
+		let isCharging = statusFor.charge.state === "Charging";
 		if( numCharging > 0) {
-			// Cars are charging, including this one
+			// Cars are drawing power, including this one
 			if( numCharging > 1) {
 				statusText += " and " + (numCharging - 1) + " more are";
 			}
 			else {
 				statusText += " is";
 			}
-			statusText += " charging at";
 
-			if( statusFor.charge.time > 0 ) {
-				let timeText = "";
-				let hours = Math.trunc(statusFor.charge.time);
-				let minutes = Math.round(
-					(statusFor.charge.time - hours)
-					* 12) * 5;
-				if( statusFor.charge.time >= 1 ) {
-					timeText = hours >= 2 ? (hours + " hours ") : "1 hour ";
-				}
-				if( minutes > 0 ) {
-					timeText += minutes + " minutes";
-				}
-				this.updateText(this.identifier + "-CarCompletion", timeText, animate);
-				this.makeNodeVisible(completionParaId);
+			if( isCharging ) {
+				statusText += " charging at";
 			}
 			else {
-				this.makeNodeInvisible(completionParaId)
+				statusText += " consuming";
 			}
-			consumptionVisible = true;
 
+			consumptionVisible = true;
 		}
 		else {
-			// Cars not charging; show current instead
+			// Cars not charging at home; show current instead
 			statusText += " is";
 			switch (statusFor.drive.gear) {
 				case "D":
@@ -891,7 +879,42 @@ Module.register("MMM-Powerwall", {
 			this.makeNodeInvisible(completionParaId);
 		}
 
+		// Regardless of which path, set the car status text
 		this.updateText(this.identifier + "-CarStatus", statusText, animate);
+
+		// If charging, display time to completion
+		if( statusFor.charge.time > 0 && isCharging ) {
+			let timeText = "";
+			let days = Math.trunc(statusFor.charge.time / 24);
+			let hours = Math.trunc(statusFor.charge.time);
+			let minutes = Math.round(
+				(statusFor.charge.time - hours)
+				* 12) * 5;
+			if( days > 0 ) {
+				timeText = days > 1 ? (days + " days") : "1 day";
+				hours = Math.round(statusFor.charge.time - days*24);
+				minutes = 0
+			}
+			if( hours > 0 ) {
+				if( timeText.length ) {
+					timeText += ", "
+				}
+				timeText += hours >= 2 ? (hours + " hours") : "1 hour";
+			}
+			if( minutes > 0 ) {
+				if( timeText.length ) {
+					timeText += ", "
+				}
+				timeText += minutes + " minutes";
+			}
+			this.updateText(this.identifier + "-CarCompletion", timeText, animate);
+			this.makeNodeVisible(completionParaId);
+		}
+		else {
+			this.makeNodeInvisible(completionParaId)
+		}
+
+		// Update battery meter
 		let soc = statusFor.charge.soc;
 		let meterNode = document.getElementById(this.identifier + "-car-meter");
 		if( meterNode ) {
