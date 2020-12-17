@@ -279,6 +279,8 @@ Module.register("MMM-Powerwall", {
 			if( Array.isArray(this.vehicles) ) {
 				for( let vehicle of this.vehicles) {
 					if( willingToDefer && vehicle.deferUntil && now < vehicle.deferUntil) {
+						let self = this;
+						this.doTimeout("vehicle", () => self.updateVehicleData(), vehicle.deferUntil - now + 1000, true);
 						continue;
 					}
 
