@@ -627,7 +627,9 @@ Module.register("MMM-Powerwall", {
 	suspend: function() {
 		this.suspended = true;
 		for( let name in this.timeouts ) {
-			clearTimeout(this.timeouts[name].handle)
+			if( !this.timeouts[name].exempt ) {
+				clearTimeout(this.timeouts[name].handle);
+			}
 		}
 	},
 
