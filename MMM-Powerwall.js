@@ -522,13 +522,11 @@ Module.register("MMM-Powerwall", {
 
 				if( payload.username === this.config.teslaAPIUsername ) {
 					let intervalToUpdate = this.config.cloudUpdateInterval;
-					let exempt = true;
 					if( payload.state === "online" && payload.drive.gear === "D" ) {
 						intervalToUpdate = 2*this.config.localUpdateInterval + this.config.cloudUpdateInterval;
 						intervalToUpdate /= 3;
-						exempt = false;
 					}
-					this.doTimeout("vehicle", () => self.updateVehicleData(), intervalToUpdate, exempt);
+					this.doTimeout("vehicle", () => self.updateVehicleData(), intervalToUpdate, true);
 
 					let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
 					if( !statusFor ) {
@@ -610,7 +608,7 @@ Module.register("MMM-Powerwall", {
 			target: Date.now() + delay,
 			exempt: exempt
 		};
-		if( !this.suspended || !exempt ) {
+		if( !this.suspended || exempt ) {
 			this.timeouts[name].handle = setTimeout(() => func(), delay);
 		}
 	},
