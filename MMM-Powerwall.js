@@ -192,8 +192,8 @@ Module.register("MMM-Powerwall", {
 			graphs: this.config.graphs,
 			translations: Object.assign(
 				{},
+				Translator.translationsFallback[this.name],
 				Translator.translations[this.name],
-				Translator.translationsFallback[this.name]
 			)
 		};
 
