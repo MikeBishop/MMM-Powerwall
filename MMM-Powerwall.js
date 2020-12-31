@@ -5,11 +5,11 @@
  * MIT Licensed.
  */
 
-const SOLAR = { key: "solar", displayAs: "Solar", color: "gold", color_trans: "rgba(255, 215, 0, 0.7)" };
-const POWERWALL = { key: "battery", displayAs: "Powerwall", color: "#0BC60B", color_trans: "rgba(11, 198, 11, 0.7)"};
-const GRID = { key: "grid", displayAs: "Grid", color: "#CACECF", color_trans: "rgba(202, 206, 207, 0.7)" };
-const HOUSE = { key: "house", displayAs: "Local Usage", color: "#09A9E6", color_trans: "rgba(9, 169, 230, 0.7)" };
-const CAR = { key: "car", displayAs: "Car Charging", color: "#B91413", color_trans: "rgba(185, 20, 19, 0.7)" };
+const SOLAR = { key: "solar", color: "gold", color_trans: "rgba(255, 215, 0, 0.7)" };
+const POWERWALL = { key: "battery", color: "#0BC60B", color_trans: "rgba(11, 198, 11, 0.7)"};
+const GRID = { key: "grid", color: "#CACECF", color_trans: "rgba(202, 206, 207, 0.7)" };
+const HOUSE = { key: "house", color: "#09A9E6", color_trans: "rgba(9, 169, 230, 0.7)" };
+const CAR = { key: "car", color: "#B91413", color_trans: "rgba(185, 20, 19, 0.7)" };
 
 const REQUIRED_CALLS = {
 	CarCharging: ["local", "vehicle"],
@@ -189,21 +189,22 @@ Module.register("MMM-Powerwall", {
 	getTemplateData: function() {
 		let result = {
 			id: this.identifier,
-			dayMode: this.dayMode,
-			config: this.config,
-			twcEnabled: this.twcEnabled,
-			teslaAPIEnabled: this.teslaAPIEnabled,
-			flows: this.flows,
-			charge: true,
-			totals: this.totals,
-			sunrise: this.sunrise,
-			soe: this.soe,
-			historySeries: this.historySeries,
-			numCharging: this.numCharging,
+			graphs: this.config.graphs,
+			translations: Object.assign(
+				{},
+				Translator.translations[this.name],
+				Translator.translationsFallback[this.name]
+			)
 		};
 
 		this.Log("Returning " + JSON.stringify(result));
 		return result;
+	},
+
+	getTranslations: function() {
+		return {
+			en: "translations/en.json",
+		};
 	},
 
 	getScripts: function() {
@@ -492,7 +493,7 @@ Module.register("MMM-Powerwall", {
 						this.updateNode(
 							this.identifier + "-SelfPoweredYesterday",
 							Math.round(this.selfConsumptionYesterday[0]) + Math.round(this.selfConsumptionYesterday[1]),
-							"% Yesterday"
+							"% " + this.translate("yesterday")
 						);
 						let scChart = this.charts.selfConsumption
 						if( scChart ) {
@@ -761,15 +762,12 @@ Module.register("MMM-Powerwall", {
 			return false;
 		}
 
-		let statusText = statusFor.display_name;
 		let animate = !hidden;
 		let number = 0;
 		let unit = "W";
 		let consumptionVisible;
-		let addLocation = false;
-		let postLocation = "";
 		let consumptionId = this.identifier + "-CarConsumption";
-		let completionParaId = this.identifier + "-CarCompletionPara";
+		let completionParaId = this.identifier + "-CarCompletion";
 
 		let picture = document.getElementById(this.identifier + "-Picture");
 		if( picture && statusFor.img) {
@@ -780,30 +778,61 @@ Module.register("MMM-Powerwall", {
 		let isCharging = statusFor.charge.state === "Charging";
 		if( numCharging > 0) {
 			// Cars are drawing power, including this one
-			if( numCharging > 1) {
-				statusText += " and " + (numCharging - 1) + " more are";
-			}
-			else {
-				statusText += " is";
+			let verb = "consuming";
+			if( isCharging ) {
+				verb = "charging_at";
 			}
 
-			if( isCharging ) {
-				statusText += " charging at";
-			}
-			else {
-				statusText += " consuming";
-			}
+			statusText = this.translate(
+				verb + (numCharging > 1 ? "_plural" : ""),
+				{
+					NAME: statusFor.display_name,
+					NUM: numCharging - 1,
+				}
+			);
 
 			consumptionVisible = true;
 		}
 		else {
-			// Cars not charging at home; show current instead
-			statusText += " is";
+			// Determine location up-front, for later insertion
+			let locText = "";
+			if( this.isHome(statusFor.drive.location) ) {
+				locText = this.translate("at_home");
+			}
+			else if (statusFor.namedLocation && statusFor.locationText &&
+				this.isSameLocation(statusFor.namedLocation, statusFor.drive.location)) {
+				locText = this.translate("location", {TOWN:  statusFor.locationText});
+			}
+			else {
+				let url =
+					"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
+					"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
+					statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
+				try {
+					let result = await fetch(url);
+					if( result.ok ) {
+						let revGeo = await result.json();
+						if( revGeo.address.Match_addr ) {
+							locText = this.translate("location", {TOWN: revGeo.address.Match_addr} );
+							statusFor.locationText = revGeo.address.Match_addr;
+							statusFor.namedLocation = statusFor.drive.location;
+						}
+					}
+				}
+				catch {
+					statusFor.locationText = null;
+				}
+			}
+			let vars = {
+				NAME: statusFor.display_name,
+				LOCATION: locText
+			};
+
+			// Cars not charging on TWCManager; show current instead
 			switch (statusFor.drive.gear) {
 				case "D":
 				case "R":
-					statusText += " driving";
-					addLocation = true;
+					statusText = this.translate("driving", vars);
 
 					unit = statusFor.drive.units;
 					if( unit === "mi/hr" ) {
@@ -815,7 +844,6 @@ Module.register("MMM-Powerwall", {
 					}
 
 					this.updateNode(consumptionId, number, unit, "", animate);
-
 					consumptionVisible = true;
 
 					break;
@@ -823,59 +851,24 @@ Module.register("MMM-Powerwall", {
 				default:
 					switch( statusFor.charge.state ) {
 						case "Disconnected":
-							statusText += " parked";
+							statusText = this.translate("parked", vars);
 							break;
 						case "Charging":
 							// Car charging away from home, or no TWCManager
-							statusText += " charging";
+							statusText = this.translate("charging", vars);
 							break;
 						default:
-							postLocation = " and not charging";
+							statusText = this.translate("not_charging", vars);
 							break;
 					}
 
 					number = null;
 					unit = "";
 
-					if( this.isHome(statusFor.drive.location) ) {
-						statusText += " at home";
-						addLocation = false;
-					}
-					else {
-						addLocation = true;
-					}
-
 					consumptionVisible = false;
 					break;
 			}
 
-			if( addLocation ) {
-				if (statusFor.namedLocation && statusFor.locationText &&
-					this.isSameLocation(statusFor.namedLocation, statusFor.drive.location)) {
-					statusText += " in " + statusFor.locationText;
-				}
-				else {
-					let url =
-						"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
-						"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
-						statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
-					try {
-						let result = await fetch(url);
-						if( result.ok ) {
-							let revGeo = await result.json();
-							if( revGeo.address.Match_addr ) {
-								statusText += " in " + revGeo.address.Match_addr;
-								statusFor.locationText = revGeo.address.Match_addr;
-								statusFor.namedLocation = statusFor.drive.location;
-							}
-						}
-					}
-					catch {
-						statusFor.locationText = null;
-					}
-				}
-			}
-			statusText += postLocation;
 			this.makeNodeInvisible(completionParaId);
 		}
 
@@ -884,30 +877,40 @@ Module.register("MMM-Powerwall", {
 
 		// If charging, display time to completion
 		if( statusFor.charge.time > 0 && isCharging ) {
-			let timeText = "";
+			let timeText = "less_than_day";
 			let days = Math.trunc(statusFor.charge.time / 24);
 			let hours = Math.trunc(statusFor.charge.time);
 			let minutes = Math.round(
 				(statusFor.charge.time - hours)
 				* 12) * 5;
 			if( days > 0 ) {
-				timeText = days > 1 ? (days + " days") : "1 day";
+				timeText = "more_than_day";
 				hours = Math.round(statusFor.charge.time - days*24);
 				minutes = 0
 			}
-			if( hours > 0 ) {
-				if( timeText.length ) {
-					timeText += ", "
-				}
-				timeText += hours >= 2 ? (hours + " hours") : "1 hour";
-			}
-			if( minutes > 0 ) {
-				if( timeText.length ) {
-					timeText += ", "
-				}
-				timeText += minutes + " minutes";
-			}
-			this.updateText(this.identifier + "-CarCompletion", timeText, animate);
+
+			this.updateText(completionParaId,
+				this.translate(timeText,
+					{
+						DAYS:
+							days > 1 ?
+								this.translate("multiday", {NUM: "" + days}) :
+								this.translate("1day"),
+						HOURS:
+							hours > 0 ?
+								hours >= 2 ?
+									this.translate("multihours", {NUM: "" + hours}) :
+									this.translate("1hour") :
+								" ",
+						MINUTES:
+							minutes > 0 ?
+								this.translate("minutes", {NUM: "" + minutes}) :
+								" ",
+						LISTSEP: (hours > 0 && (days > 0 || minutes > 0)) ? this.translate("listsep") : " "
+					}
+				),
+				animate
+			);
 			this.makeNodeVisible(completionParaId);
 		}
 		else {
@@ -1098,12 +1101,15 @@ Module.register("MMM-Powerwall", {
 				this.makeNodeVisible(nightContent);
 				this.updateText(
 					this.identifier + "-SolarHeader",
-					isDay ? "Solar has produced" : "Solar produced"
+					this.translate(isDay ? "solar_sameday" : "solar_prevday")
 				)
 				this.updateText(
 					this.identifier + "-SolarTodayYesterday",
-					(this.dayMode === "morning" || !anyProductionToday) ? "yesterday" :
-						(( isDay === "day" ? "so far " : "" ) + "today")
+					this.translate(
+						(this.dayMode === "morning" || !anyProductionToday) ?
+							"yesterday" :
+							( this.dayMode === "day" ? "today_during" : "today")
+					)
 				);
 			}
 		}
@@ -1112,12 +1118,12 @@ Module.register("MMM-Powerwall", {
 			this.updateNode(
 				this.identifier + "-SolarTotalTextA",
 				this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
-				"Wh today", "", showCurrent
+				"Wh " + this.translate("today"), "", showCurrent
 			);
 			this.updateNode(
 				this.identifier + "-SolarYesterdayTotal",
 				this.yesterdaySolar,
-				"Wh yesterday", "", showCurrent
+				"Wh " + this.translate("yesterday"), "", showCurrent
 			);
 			this.updateNode(
 				this.identifier + "-SolarTotalB",
@@ -1141,12 +1147,12 @@ Module.register("MMM-Powerwall", {
 				this.updateNode(
 					this.identifier + "-UsageTotal",
 					this.teslaAggregates.load.energy_imported - this.dayStart.house.import - this.carTotalToday(),
-					"Wh today"
+					"Wh " + this.translate("today")
 				);
 				this.updateNode(
 					this.identifier + "-UsageTotalYesterday",
 					this.yesterdayUsage - this.carTotalYesterday(),
-					"Wh yesterday"
+					"Wh " + this.translate("yesterday")
 				)
 				this.makeNodeVisible(this.identifier + "-UsageTotal");
 				this.makeNodeVisible(this.identifier + "-UsageTotalYesterday");
@@ -1172,9 +1178,11 @@ Module.register("MMM-Powerwall", {
 			if( this.gridStatus != "SystemGridConnected") {
 				// Grid outage
 				this.updateText(directionNodeId,
-					"Grid is " +
-						(this.gridStatus == "SystemTransitionToGrid" ?
-						"coming online" : "disconnected"),
+					this.translate(
+						this.gridStatus == "SystemTransitionToGrid" ?
+							"grid_transition" :
+							"grid_disconnected"
+					),
 					true, "grid-error"
 				);
 				this.makeNodeInvisible(inOutNodeId);
@@ -1184,35 +1192,43 @@ Module.register("MMM-Powerwall", {
 			}
 			else if( this.flows.sources.grid.total >= 0.5 ) {
 				// Importing energy
-				this.updateText(directionNodeId, "Grid is supplying", true, null, "grid-error")
+				this.updateText(directionNodeId, this.translate("grid_supply"), true, null, "grid-error")
 				this.updateNode(inOutNodeId,
 					this.flows.sources.grid.total, "W");
 				this.makeNodeVisible(inOutNodeId);
 			}
 			else if ( this.flows.sinks.grid.total >= 0.5 ) {
-				this.updateText(directionNodeId, "Grid is receiving", true, null, "grid-error")
+				this.updateText(directionNodeId, this.translate("grid_receive"), true, null, "grid-error")
 				this.updateNode(inOutNodeId,
 					this.flows.sinks.grid.total, "W");
 				this.makeNodeVisible(inOutNodeId);
 			}
 			else {
-				this.updateText(directionNodeId, "Grid is idle", true, null, "grid-error");
+				this.updateText(directionNodeId, this.translate("grid_idle"), true, null, "grid-error");
 				this.makeNodeInvisible(inOutNodeId);
 			}
 
 			if( this.dayStart ) {
-				this.updateNode(this.identifier + "-GridInToday",
+				this.updateNode(
+					this.identifier + "-GridInToday",
 					this.teslaAggregates.site.energy_imported - this.dayStart.grid.import,
-					"Wh imported today"
+					"Wh " + this.translate("import_today")
 				);
-				this.updateNode(this.identifier + "-GridInYesterday",
-					this.yesterdayImport, "Wh yesterday");
-				this.updateNode(this.identifier + "-GridOutToday",
+				this.updateNode(
+					this.identifier + "-GridInYesterday",
+					this.yesterdayImport,
+					"Wh " + this.translate("yesterday")
+				);
+				this.updateNode(
+					this.identifier + "-GridOutToday",
 					this.teslaAggregates.site.energy_exported - this.dayStart.grid.export,
-					"Wh exported today"
+					"Wh " + this.translate("export_today")
 				);
-				this.updateNode(this.identifier + "-GridOutYesterday",
-					this.yesterdayExport, "Wh yesterday");
+				this.updateNode(
+					this.identifier + "-GridOutYesterday",
+					this.yesterdayExport,
+					"Wh " + this.translate("yesterday")
+				);
 			}
 		}
 
@@ -1227,12 +1243,12 @@ Module.register("MMM-Powerwall", {
 					targetId,
 					Math.abs(battery),
 					"W",
-					battery > 0 ? "Supplying " : "Charging at ",
+					this.translate(battery > 0 ? "battery_supply" : "battery_charging") + " ",
 					false
 				);
 			}
 			else {
-				this.updateText(targetId, "Standby");
+				this.updateText(targetId, this.translate("battery_standby"));
 			}
 		}
 
@@ -1488,7 +1504,7 @@ Module.register("MMM-Powerwall", {
 								data: DISPLAY_SINKS.map( (entry) => distribution[entry.key] ),
 								backgroundColor: DISPLAY_SINKS.map( (entry) => entry.color ),
 								weight: 2,
-								labels: DISPLAY_SINKS.map( (entry) => entry.displayAs )
+								labels: DISPLAY_SINKS.map( (entry) => this.translate(entry.key) )
 							},
 							{
 								data: [1],
@@ -1521,7 +1537,7 @@ Module.register("MMM-Powerwall", {
 								data: DISPLAY_SOURCES.map( (entry) => distribution[entry.key] ),
 								backgroundColor: DISPLAY_SOURCES.map( (entry) => entry.color ),
 								weight: 2,
-								labels: DISPLAY_SOURCES.map( (entry) => entry.displayAs )
+								labels: DISPLAY_SOURCES.map( (entry) => this.translate(entry.key) )
 							},
 							{
 								data: [1],
@@ -1550,7 +1566,7 @@ Module.register("MMM-Powerwall", {
 						datasets: [{
 							data: this.selfConsumptionToday,
 							backgroundColor: scSources.map( entry => entry.color),
-							labels: scSources.map( entry => entry.displayAs ),
+							labels: scSources.map( entry => this.translate(entry.key) ),
 							datalabels: {
 								formatter: function(value, context) {
 									return [
@@ -1575,7 +1591,7 @@ Module.register("MMM-Powerwall", {
 				let energyBar = new Chart(myCanvas, {
 					type: 'horizontalBar',
 					data: {
-						labels: DISPLAY_ALL.map(entry => entry.displayAs),
+						labels: DISPLAY_ALL.map(entry => this.translate(entry.key)),
 						datasets: [{
 							backgroundColor: DISPLAY_ALL.map(entry => entry.color),
 							borderColor: DISPLAY_ALL.map(entry => entry.color),
@@ -1630,7 +1646,7 @@ Module.register("MMM-Powerwall", {
 								},
 								scaleLabel: {
 									display: true,
-									labelString: "Energy To / From (kWh)",
+									labelString: this.translate("energybar_label"),
 									fontColor: "white"
 								}
 							}],
@@ -1696,7 +1712,7 @@ Module.register("MMM-Powerwall", {
 								},
 								scaleLabel: {
 									display: true,
-									labelString: "Power To / From (kW)",
+									labelString: this.translate("powerline_label"),
 									fontColor: "white"
 								}
 							}]
