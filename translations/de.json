@@ -20,7 +20,7 @@
   "_header": "*******************",
     "charging_at": "{NAME} lädt auf mit",
     "charging_at_plural": "{NAME} und {NUM} laden auf mit",
-    "consuming": "{NAME} is consuming",
+    "consuming": "{NAME} verbraucht",
     "consuming_plural": "{NAME} und {NUM} verbrauchen",
 
     "driving": "{NAME} fährt {LOCATION}",
@@ -31,8 +31,7 @@
         "at_home": "zuhause",
         "elsewhere": "in {TOWN}",
 
-    "more_than_day": "Abgeschlossen in {DAYS}{LISTSEP}{HOURS}",
-    "less_than_day": "Abgeschlossen in {HOURS}{LISTSEP}{MINUTES}",
+    "completion_time": "Abgeschlossen in {DAYS}{LISTSEP1}{HOURS}{LISTSEP2}{MINUTES}",
       "_comment": "...wobei die Teile sich wie folgt zusammensetzen:",
         "listsep": ", ",
         "1day": "1 Tag",
