@@ -279,6 +279,8 @@ Module.register("MMM-Powerwall", {
 			if( Array.isArray(this.vehicles) ) {
 				for( let vehicle of this.vehicles) {
 					if( willingToDefer && vehicle.deferUntil && now < vehicle.deferUntil) {
+						let self = this;
+						this.doTimeout("vehicle", () => self.updateVehicleData(), vehicle.deferUntil - now + 1000, true);
 						continue;
 					}
 
@@ -522,13 +524,11 @@ Module.register("MMM-Powerwall", {
 
 				if( payload.username === this.config.teslaAPIUsername ) {
 					let intervalToUpdate = this.config.cloudUpdateInterval;
-					let exempt = true;
 					if( payload.state === "online" && payload.drive.gear === "D" ) {
 						intervalToUpdate = 2*this.config.localUpdateInterval + this.config.cloudUpdateInterval;
 						intervalToUpdate /= 3;
-						exempt = false;
 					}
-					this.doTimeout("vehicle", () => self.updateVehicleData(), intervalToUpdate, exempt);
+					this.doTimeout("vehicle", () => self.updateVehicleData(), intervalToUpdate, true);
 
 					let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
 					if( !statusFor ) {
@@ -610,7 +610,7 @@ Module.register("MMM-Powerwall", {
 			target: Date.now() + delay,
 			exempt: exempt
 		};
-		if( !this.suspended || !exempt ) {
+		if( !this.suspended || exempt ) {
 			this.timeouts[name].handle = setTimeout(() => func(), delay);
 		}
 	},
@@ -627,7 +627,9 @@ Module.register("MMM-Powerwall", {
 	suspend: function() {
 		this.suspended = true;
 		for( let name in this.timeouts ) {
-			clearTimeout(this.timeouts[name].handle)
+			if( !this.timeouts[name].exempt ) {
+				clearTimeout(this.timeouts[name].handle);
+			}
 		}
 	},
 
