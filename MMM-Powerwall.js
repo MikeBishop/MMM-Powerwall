@@ -547,7 +547,7 @@ Module.register("MMM-Powerwall", {
 						delete statusFor.deferUntil;
 					}
 
-					if( !statusFor.img ) {
+					if( !statusFor.img && payload.config.option_codes ) {
 						let image = new Image();
 						image.src = this.createCompositorUrl(payload.config);
 						image.onload = async function(ev) {
@@ -773,6 +773,12 @@ Module.register("MMM-Powerwall", {
 		let consumptionId = this.identifier + "-CarConsumption";
 		let completionParaId = this.identifier + "-CarCompletion";
 
+		let vars = {
+			NAME: statusFor.display_name,
+			NUM: numCharging - 1,
+		};
+
+
 		let picture = document.getElementById(this.identifier + "-Picture");
 		if( picture && statusFor.img) {
 			let ctx = picture.getContext('2d');
@@ -789,23 +795,24 @@ Module.register("MMM-Powerwall", {
 
 			statusText = this.translate(
 				verb + (numCharging > 1 ? "_plural" : ""),
-				{
-					NAME: statusFor.display_name,
-					NUM: numCharging - 1,
-				}
+				vars
 			);
 
 			consumptionVisible = true;
 		}
+		else if (!statusFor.charge.state) {
+			// No data
+			statusText = this.translate("unavailable", vars)
+			consumptionVisible = false;
+		}
 		else {
 			// Determine location up-front, for later insertion
-			let locText = "";
 			if( this.isHome(statusFor.drive.location) ) {
-				locText = this.translate("at_home");
+				vars[LOCATION] = this.translate("at_home");
 			}
 			else if (statusFor.namedLocation && statusFor.locationText &&
 				this.isSameLocation(statusFor.namedLocation, statusFor.drive.location)) {
-				locText = this.translate("location", {TOWN:  statusFor.locationText});
+				vars[LOCATION] = this.translate("location", {TOWN:  statusFor.locationText});
 			}
 			else {
 				let url =
@@ -817,7 +824,7 @@ Module.register("MMM-Powerwall", {
 					if( result.ok ) {
 						let revGeo = await result.json();
 						if( revGeo.address.Match_addr ) {
-							locText = this.translate("location", {TOWN: revGeo.address.Match_addr} );
+							vars[LOCATION] = this.translate("location", {TOWN: revGeo.address.Match_addr} );
 							statusFor.locationText = revGeo.address.Match_addr;
 							statusFor.namedLocation = statusFor.drive.location;
 						}
@@ -827,10 +834,6 @@ Module.register("MMM-Powerwall", {
 					statusFor.locationText = null;
 				}
 			}
-			let vars = {
-				NAME: statusFor.display_name,
-				LOCATION: locText
-			};
 
 			// Cars not charging on TWCManager; show current instead
 			switch (statusFor.drive.gear) {
@@ -945,7 +948,7 @@ Module.register("MMM-Powerwall", {
 		}
 		this.updateNode(
 			this.identifier + "-car-meter-text",
-			usableSoc,
+			usableSoc || "??",
 			"%",
 			(lockedSoc > 2) ? "❄ " : "",
 			animate
@@ -973,7 +976,10 @@ Module.register("MMM-Powerwall", {
 
 	formatAsK: function(number, unit) {
 		let separator = (unit[0] === "%") ? "" : " "
-		if( number > 950 ) {
+		if( isNaN(number) ) {
+			return number + separator + unit;
+		}
+		else if( number > 950 ) {
 			return Math.round(number / 100) / 10.0 + separator + "k" + unit;
 		}
 		else {
