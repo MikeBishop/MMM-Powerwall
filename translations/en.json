@@ -31,8 +31,7 @@
         "at_home": "at home",
         "elsewhere": "in {TOWN}",
 
-    "more_than_day": "Finishing in {DAYS}{LISTSEP}{HOURS}",
-    "less_than_day": "Finishing in {HOURS}{LISTSEP}{MINUTES}",
+    "completion_time": "Finishing in {DAYS}{LISTSEP1}{HOURS}{LISTSEP2}{MINUTES}",
       "_comment": "...where the pieces are drawn from:",
         "listsep": ", ",
         "1day": "1 day",

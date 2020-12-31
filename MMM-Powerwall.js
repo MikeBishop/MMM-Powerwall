@@ -879,20 +879,18 @@ Module.register("MMM-Powerwall", {
 
 		// If charging, display time to completion
 		if( statusFor.charge.time > 0 && isCharging ) {
-			let timeText = "less_than_day";
 			let days = Math.trunc(statusFor.charge.time / 24);
 			let hours = Math.trunc(statusFor.charge.time);
 			let minutes = Math.round(
 				(statusFor.charge.time - hours)
 				* 12) * 5;
 			if( days > 0 ) {
-				timeText = "more_than_day";
 				hours = Math.round(statusFor.charge.time - days*24);
 				minutes = 0
 			}
 
 			this.updateText(completionParaId,
-				this.translate(timeText,
+				this.translate("completion_time",
 					{
 						DAYS:
 							days > 1 ?
@@ -908,7 +906,8 @@ Module.register("MMM-Powerwall", {
 							minutes > 0 ?
 								this.translate("minutes", {NUM: "" + minutes}) :
 								" ",
-						LISTSEP: (hours > 0 && (days > 0 || minutes > 0)) ? this.translate("listsep") : " "
+						LISTSEP1: (hours > 0 && days > 0) ? this.translate("listsep") : " ",
+						LISTSEP2: (hours > 0 && minutes > 0) ? this.translate("listsep") : " "
 					}
 				),
 				animate
