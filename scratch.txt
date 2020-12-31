@@ -128,3 +128,5 @@ https://static-assets.tesla.com/v1/compositor/?model=ms&view=STUD_3QTR&size=1440
 https://static-assets.tesla.com/v1/compositor/?model=mx&view=STUD_3QTR&size=1440&options=APPF,CH04,DRLH,FG02,PI00,COL2-PMSS,RFPX,X021,WT20&bkba_opt=1&context=design_studio_2
 
 Can no longer get options codes from API, but might be able to translate a sufficient set from data_request/vehicle_config values (model, color, wheel).
+
+ps.json regen:  node_modules/pseudoloc-js/bin/pseudoloc -r translations/en.json -w translations/ps.json -S '{' -E '}' -e 0.3
