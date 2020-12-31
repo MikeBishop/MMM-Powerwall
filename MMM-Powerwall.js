@@ -204,6 +204,7 @@ Module.register("MMM-Powerwall", {
 	getTranslations: function() {
 		return {
 			en: "translations/en.json",
+			de: "translations/de.json",
 		};
 	},
 
