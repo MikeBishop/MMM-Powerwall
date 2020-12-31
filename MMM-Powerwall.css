@@ -195,14 +195,13 @@
     left: 50%;
     transform: translate(-50%, -50%);
     text-align: center;
-    width: fit-content;
   }
 
 .MMM-Powerwall .grid-grid {
     position: relative;
     display: grid;
     grid-template-columns: 50% 50%;
-    grid-template-rows: 25% 50% 21%;
+    grid-template-rows: 25% 45% 30%;
     grid-template-areas:
         "icon direction"
         "icon number"
