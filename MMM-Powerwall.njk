@@ -1,31 +1,24 @@
 <div class="MMM-Powerwall rflexbox">
-{% for graph in config.graphs %}
+{% for graph in graphs %}
     <div class="module MMM-Powerwall module-content flexitem">
         {% if graph == "SolarProduction" -%}
         <div class="MMM-Powerwall" style="height: 100%">
             <div class="MMM-Powerwall" id="{{id}}-SolarDay">
                 <div class="MMM-Powerwall grid-left">
                     <div class="MMM-Powerwall col1 vflexbox">
-                        <div class="small bright spaced">Solar is producing</div>
-                        <div id="{{id}}-SolarProduction" class="big solar text spaced">
-                            {%- if flows.sources.solar.total > 950 -%}
-                                {{ flows.sources.solar.total // 100 / 10 }} kW
-                            {%- else -%}
-                                {{ flows.sources.solar.total // 1 }} W
-                            {%- endif %}</div>
+                        <div class="small bright spaced">{{translations.solar_current}}</div>
+                        <div id="{{id}}-SolarProduction" class="big solar text spaced"></div>
                         <div class="small bright spaced" style="display:none" id="{{id}}-SolarTotalTextA"></div>
                         <div class="xsmall text" style="display:none" id="{{id}}-SolarYesterdayTotal"></div>
                     </div>
                     <div class="MMM-Powerwall col2 graph-container">
-                        <canvas id="{{id}}-SolarDestinations">
-                            Graph goes here
-                        </canvas>
+                        <canvas id="{{id}}-SolarDestinations"></canvas>
                     </div>
                 </div>
             </div>
             <div style="display:none; height: 100%" id="{{id}}-SolarNight">
                 <div class="MMM-Powerwall vflexbox">
-                    <div id="{{id}}-SolarHeader" class="small bright">Solar produced</div>
+                    <div id="{{id}}-SolarHeader" class="small bright"></div>
                     <div id="{{id}}-SolarTotalB" class="big solar text"></div>
                     <div class="small bright text" id="{{id}}-SolarTodayYesterday"></div>
                 </div>
@@ -34,18 +27,11 @@
         {%- elif graph == "HouseConsumption" -%}
             <div class="MMM-Powerwall grid-right">
                 <div class="MMM-Powerwall col1 graph-container">
-                <canvas id="{{id}}-HouseSources">
-                    Graph goes here
-                </canvas>
+                    <canvas id="{{id}}-HouseSources"></canvas>
                 </div>
                 <div class="MMM-Powerwall col2 vflexbox">
-                    <div class="small bright spaced">House is consuming</div>
-                    <div id="{{id}}-HouseConsumption" class="big house text spaced">
-                        {%- if flows.sinks.house.total > 950 -%}
-                            {{ flows.sinks.house.total // 100 / 10 }} kW
-                        {%- else -%}
-                            {{ flows.sinks.house.total // 1 }} W
-                        {%- endif %}</div>
+                    <div class="small bright spaced">{{translations.house_consuming}}</div>
+                    <div id="{{id}}-HouseConsumption" class="big house text spaced"></div>
                     <div class="small bright text spaced" id="{{id}}-UsageTotal" style="display:none"></div>
                     <div class="xsmall text" style="display:none" id="{{id}}-UsageTotalYesterday"></div>
                 </div>
@@ -53,10 +39,10 @@
         {%- elif graph == "Grid" -%}
             <div class="MMM-Powerwall grid-grid">
                 <img src="modules/MMM-Powerwall/images/tower.png" style="grid-area:icon; max-height: 100px">
-                <div class="MMM-Powerwall small bright text grid-direction" id="{{id}}-GridDirection">Grid is Idle</div>
+                <div class="MMM-Powerwall small bright text grid-direction" id="{{id}}-GridDirection"></div>
                 <div class="MMM-Powerwall vflexbox grid-number">
                     <div class="big grid text spaced" id="{{id}}-GridInOut"></div>
-                    <div class="medium bright storm-watch" style="display:none" id="{{id}}-StormWatch">Storm Watch</div>
+                    <div class="medium bright storm-watch" style="display:none" id="{{id}}-StormWatch">{{translations.stormwatch}}</div>
                 </div>
                 <div class="MMM-Powerwall vflexbox grid-import">
                     <div class="small bright spaced text" id="{{id}}-GridInToday"></div>
@@ -70,27 +56,20 @@
         {%- elif graph == "PowerwallSelfPowered" -%}
             <div class="MMM-Powerwall grid-left">
                 <div class="scene MMM-Powerwall col1">
-                    <div class="small bright text" id="{{id}}-PowerwallStatus">
-                            {%- if flows.sinks.battery.total > 0 %}Charging at {{ flows.sinks.battery.total }} W
-                            {%- else %}Supplying {{ flows.sources.battery.total }} W
-                            {%- endif %}
-                    </div>
+                    <div class="small bright text" id="{{id}}-PowerwallStatus"></div>
                     <div class="MMM-Powerwall cube">
                         <div class="cube__face cube__face--front"
-                             id="{{id}}-PowerwallSOE">{{soe // 1}}%</div>
+                             id="{{id}}-PowerwallSOE"></div>
                         <div class="cube__face cube__face--right">
-                            <div class="battery meter-vertical" style="height: {{soe // 1}}%;"
-                                 id="{{id}}-battery-meter"></div>
+                            <div class="battery meter-vertical" id="{{id}}-battery-meter"></div>
                         </div>
                     </div>
                 </div>
                 <div class="MMM-Powerwall col2 graph-container">
-                    <canvas id="{{id}}-SelfPoweredDetails">
-                        Graph goes here
-                    </canvas>
+                    <canvas id="{{id}}-SelfPoweredDetails"></canvas>
                     <div class="MMM-Powerwall overlay small">
                         <span class="bright"><span class="MMM-Powerwall bright big text" id="{{id}}-SelfPoweredTotal"></span><br>
-                        Self-Powered</span><br>
+                        {{translations.selfpowered}}</span><br>
                         <span class="MMM-Powerwall text xsmall" id="{{id}}-SelfPoweredYesterday"></span>
                     </div>
                 </div>
@@ -112,9 +91,7 @@
                 <div class="MMM-Powerwall col2 vflexbox">
                     <div class="MMM-Powerwall small bright spaced"><span id="{{id}}-CarStatus"></span></div>
                     <div class="MMM-Powerwall big car text spaced" id="{{id}}-CarConsumption"></div>
-                    <div class="MMM-Powerwall small" id="{{id}}-CarCompletionPara" style="display:none">Finishing in
-                        <span class="small text" id="{{id}}-CarCompletion"></span>
-                    </div>
+                    <div class="MMM-Powerwall small" id="{{id}}-CarCompletion" style="display:none"></div>
                 </div>
             </div>
         {%- elif graph == "EnergyBar" -%}
@@ -126,7 +103,7 @@
                 <canvas id="{{id}}-PowerLine"></canvas>
             </div>
         {%- else -%}
-        Unknown graph type selected
+        {{translations.unknown}}
         {%- endif -%}
     </div>
 {%- endfor %}
