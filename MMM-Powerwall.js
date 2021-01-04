@@ -808,11 +808,11 @@ Module.register("MMM-Powerwall", {
 		else {
 			// Determine location up-front, for later insertion
 			if( this.isHome(statusFor.drive.location) ) {
-				vars[LOCATION] = this.translate("at_home");
+				vars["LOCATION"] = this.translate("at_home");
 			}
 			else if (statusFor.namedLocation && statusFor.locationText &&
 				this.isSameLocation(statusFor.namedLocation, statusFor.drive.location)) {
-				vars[LOCATION] = this.translate("location", {TOWN:  statusFor.locationText});
+				vars["LOCATION"] = this.translate("location", {TOWN:  statusFor.locationText});
 			}
 			else {
 				let url =
@@ -824,7 +824,7 @@ Module.register("MMM-Powerwall", {
 					if( result.ok ) {
 						let revGeo = await result.json();
 						if( revGeo.address.Match_addr ) {
-							vars[LOCATION] = this.translate("location", {TOWN: revGeo.address.Match_addr} );
+							vars["LOCATION"] = this.translate("location", {TOWN: revGeo.address.Match_addr} );
 							statusFor.locationText = revGeo.address.Match_addr;
 							statusFor.namedLocation = statusFor.drive.location;
 						}
