@@ -776,7 +776,7 @@ module.exports = NodeHelper.create({
 			let response = await this.doTeslaApiCommand(url, username);
 			state = response.state;
 			if( response.state !== "online") {
-				if( timeout > 600000 ) {
+				if( timeout > 20000 ) {
 					break;
 				}
 				await this.delay(timeout);
@@ -849,6 +849,36 @@ module.exports = NodeHelper.create({
 					wheel_type: data.vehicle_config.wheel_type
 				}
 			});
+		}
+		else {
+			// Car fails to wake and we have no cached data.  Send a sparse response.
+			this.sendSocketNotification("VehicleData", {
+				username: username,
+				ID: vehicleID,
+				state: state,
+				sentry: undefined,
+				drive: {
+					speed: undefined,
+					units: undefined,
+					gear: undefined,
+					location: undefined
+				},
+				charge: {
+					state: undefined,
+					soc: undefined,
+					usable_soc: undefined,
+					limit: undefined,
+					power: undefined,
+					time: undefined
+				},
+				config: {
+					car_type: undefined,
+					option_codes: undefined,
+					exterior_color: undefined,
+					wheel_type: undefined
+				}
+			});
+
 		}
 	}
 });

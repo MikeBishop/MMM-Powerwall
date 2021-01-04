@@ -22,6 +22,7 @@
     "charging_at_plural": "{NAME} and {NUM} more are charging at",
     "consuming": "{NAME} is consuming",
     "consuming_plural": "{NAME} and {NUM} more are consuming",
+    "unavailable": "{NAME} is unavailable",
 
     "driving": "{NAME} is driving {LOCATION}",
     "parked": "{NAME} is parked {LOCATION}",

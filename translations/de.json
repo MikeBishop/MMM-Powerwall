@@ -22,6 +22,7 @@
     "charging_at_plural": "{NAME} und {NUM} laden auf mit",
     "consuming": "{NAME} verbraucht",
     "consuming_plural": "{NAME} und {NUM} verbrauchen",
+    "unavailable": "{NAME} ist nicht verfügbar",
 
     "driving": "{NAME} fährt {LOCATION}",
     "parked": "{NAME} parkt {LOCATION}",
