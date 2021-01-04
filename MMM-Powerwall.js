@@ -936,7 +936,7 @@ Module.register("MMM-Powerwall", {
 			meterNode.style.width = usableSoc + "%";
 			lockedMeterNode.style.width = lockedSoc + "%";
 			meterNode.classList.remove("battery", "battery-warn", "battery-critical")
-			if ( soc > 99.5 || soc < 9.5 ) {
+			if ( soc > 99.5 || soc < 7.5 ) {
 				meterNode.classList.add("battery-critical");
 			}
 			else if ( soc > 90.5 || soc < 19.5 ) {
@@ -950,7 +950,7 @@ Module.register("MMM-Powerwall", {
 			this.identifier + "-car-meter-text",
 			usableSoc || "??",
 			"%",
-			(lockedSoc > 2) ? "❄ " : "",
+			(lockedSoc >= 2) ? "❄ " : "",
 			animate
 		);
 		if( consumptionVisible ) {
