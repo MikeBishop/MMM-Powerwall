@@ -898,9 +898,11 @@ Module.register("MMM-Powerwall", {
 				this.translate("completion_time",
 					{
 						DAYS:
-							days > 1 ?
-								this.translate("multiday", {NUM: "" + days}) :
-								this.translate("1day"),
+							days > 0 ?
+								days > 1 ?
+									this.translate("multiday", {NUM: "" + days}) :
+									this.translate("1day") :
+								" ",
 						HOURS:
 							hours > 0 ?
 								hours >= 2 ?
