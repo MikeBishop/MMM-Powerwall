@@ -916,7 +916,7 @@ Module.register("MMM-Powerwall", {
 						LISTSEP1: (hours > 0 && days > 0) ? this.translate("listsep") : " ",
 						LISTSEP2: (hours > 0 && minutes > 0) ? this.translate("listsep") : " "
 					}
-				).replace("/\s+/g", " "),
+				).replace("/\s+/g", " ").trim(),
 				animate
 			);
 			this.makeNodeVisible(completionParaId);
