@@ -1084,9 +1084,10 @@ Module.register("MMM-Powerwall", {
 
 		// Check for any overdue timeouts
 		this.checkTimeouts();
-		let anyProductionToday = this.teslaAggregates && this.dayStart &&
-			this.teslaAggregates.solar.energy_exported > this.dayStart.solar.export;
-		let isDay = this.dayMode === "day" && anyProductionToday;
+		let anyProductionToday = this.teslaAggregates && this.dayStart ?
+			this.teslaAggregates.solar.energy_exported > this.dayStart.solar.export :
+			null;
+		let isDay = this.dayMode === "day" && anyProductionToday !== false;
 		let showCurrent = isDay && this.flows && this.flows.sources.solar.total > 5;
 
 		/*******************
