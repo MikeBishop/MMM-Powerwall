@@ -1697,7 +1697,17 @@ Module.register("MMM-Powerwall", {
 							datalabels: false,
 							annotation: {
 								drawTime: 'afterDatasetsDraw',
-								annotations: []
+								annotations: [{
+									type: 'line',
+									mode: 'horizontal',
+									scaleID: 'yAxis',
+									value: 0,
+									borderColor: 'black',
+									borderWidth: 0.5,
+									label: {
+										enabled: false
+									}
+								}]
 							}
 						},
 						scales: {
@@ -1726,7 +1736,8 @@ Module.register("MMM-Powerwall", {
 									display: true,
 									labelString: this.translate("powerline_label"),
 									fontColor: "white"
-								}
+								},
+								stacked: true
 							}]
 						}
 					}
@@ -1763,14 +1774,14 @@ Module.register("MMM-Powerwall", {
 				}
 				return entry
 			});
-			let entryVal = function(sample, entry) {
+			let entryVal = function(sample, entry, filter) {
 				if(sample) {
 					switch(entry.key) {
 						case "solar":
 						case "battery":
 						case "grid":
 						case "car":
-							return sample[entry.key + "_power"];
+							return filter(sample[entry.key + "_power"]);
 						case "house":
 							// Positive
 							let housePlusCar =
@@ -1778,10 +1789,10 @@ Module.register("MMM-Powerwall", {
 								sample.battery_power +
 								sample.grid_power;
 							if( Math.abs(sample.car_power) > housePlusCar ) {
-								return -1 * housePlusCar;
+								return filter(-1 * housePlusCar);
 							}
 							else {
-								return -1 * (housePlusCar + sample.car_power);
+								return filter(-1 * (housePlusCar + sample.car_power));
 							}
 						default:
 							return 0;
@@ -1792,29 +1803,30 @@ Module.register("MMM-Powerwall", {
 				}
 			}
 
+			let process_dataset = (entry, filter) => {
+				return {
+					backgroundColor: entry.color,
+					borderColor: entry.color,
+					borderWidth: 1,
+					order: {
+						house: 1,
+						car: 2,
+						solar: 3,
+						battery: 4,
+						grid: 5
+					}[entry.key],
+					data: datapoints.map(sample => {
+						let val = entryVal(sample, entry, filter);
+						return val
+					})
+				};
+			};
 			return {
 				labels: datapoints.map(entry => entry.timestamp),
-				datasets: DISPLAY_ALL.map(entry => {
-					return {
-						backgroundColor: entry.color_trans,
-						borderColor: entry.color,
-						borderWidth: 1,
-						order: {
-							solar: 5,
-							battery: 4,
-							grid: 3,
-							house: 2,
-							car: 1
-						}[entry.key],
-						data: datapoints.map((sample, index, array) => {
-							let val = entryVal(sample, entry);
-							return (
-								val +
-								entryVal(array[index-1], entry) +
-								entryVal(array[index+1], entry)) != 0 ? val : null
-						})
-					};
-				})
+				datasets: [
+					...DISPLAY_SOURCES.map(entry => process_dataset(entry, x => x > 0 ? x : null)),
+					...DISPLAY_SINKS.map(entry => process_dataset(entry, x => x < 0 ? x : null))
+				]
 			};
 		}
 		else {
