@@ -215,6 +215,7 @@ Module.register("MMM-Powerwall", {
 	getStyles: function () {
 		return [
 			"MMM-Powerwall.css",
+			"font-awesome.css",
 		];
 	},
 
@@ -1062,7 +1063,7 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
-	updateClass: function(node, classAdd, classRemove) {
+	updateClass: function(node, classAdd=null, classRemove=null) {
 		if( node ) {
 			if( classAdd ) {
 				if( Array.isArray(classAdd) ) {
@@ -1086,7 +1087,7 @@ Module.register("MMM-Powerwall", {
 	classPresent: function(node, classList) {
 		if( classList && node ) {
 			if( Array.isArray(classList)) {
-				return classList.some(toCheck => node.classList.contains(toRemove));
+				return classList.some(toCheck => node.classList.contains(toCheck));
 			}
 			else {
 				return node.classList.contains(classList);
@@ -1247,6 +1248,14 @@ Module.register("MMM-Powerwall", {
 			// Various grid states
 			let directionNodeId = this.identifier + "-GridDirection";
 			let inOutNodeId = this.identifier + "-GridInOut";
+			let icon = document.getElementById(this.identifier + "-GridIcon");
+			this.updateClass(icon, null, [
+				"fa-long-arrow-alt-right",
+				"fa-long-arrow-alt-left",
+				"fa-times",
+				"bright",
+				"grid-error",
+			]);
 			if( this.gridStatus != "SystemGridConnected") {
 				// Grid outage
 				this.updateText(directionNodeId,
@@ -1257,6 +1266,7 @@ Module.register("MMM-Powerwall", {
 					),
 					true, "grid-error"
 				);
+				this.updateClass(icon, ["fa-times", "grid-error"]);
 				this.makeNodeInvisible(inOutNodeId);
 				if( !this.gridOutageStart ) {
 					this.gridOutageStart = Date.now();
@@ -1267,12 +1277,14 @@ Module.register("MMM-Powerwall", {
 				this.updateText(directionNodeId, this.translate("grid_supply"), true, null, "grid-error")
 				this.updateNode(inOutNodeId,
 					this.flows.sources.grid.total, "W");
+				this.updateClass(icon, ["fa-long-arrow-alt-right", "bright"]);
 				this.makeNodeVisible(inOutNodeId);
 			}
 			else if ( this.flows.sinks.grid.total >= 0.5 ) {
 				this.updateText(directionNodeId, this.translate("grid_receive"), true, null, "grid-error")
 				this.updateNode(inOutNodeId,
 					this.flows.sinks.grid.total, "W");
+				this.updateClass(icon, ["fa-long-arrow-alt-left", "bright"]);
 				this.makeNodeVisible(inOutNodeId);
 			}
 			else {
