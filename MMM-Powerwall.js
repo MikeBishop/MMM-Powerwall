@@ -13,7 +13,7 @@ const CAR = { key: "car", color: "#B91413", color_trans: "rgba(185, 20, 19, 0.7)
 
 const REQUIRED_CALLS = {
 	CarCharging: ["local", "vehicle"],
-	PowerwallSelfPowered: ["local", "selfConsumption"],
+	PowerwallSelfPowered: ["local", "energy", "selfConsumption"],
 	SolarProduction: ["local", "energy"],
 	HouseConsumption: ["local", "energy"],
 	EnergyBar: ["local", "energy"],
@@ -1146,6 +1146,19 @@ Module.register("MMM-Powerwall", {
 			);
 			this.makeNodeVisible(this.identifier + "-SolarTotalTextA");
 			this.makeNodeVisible(this.identifier + "-SolarYesterdayTotal");
+
+			let scChart = this.charts.selfConsumption
+			if( scChart ) {
+				let offset = [
+					this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
+					this.teslaAggregates.load.energy_imported - this.dayStart.house.import
+				];
+				offset[1] -= Math.min(offset[0], offset[1]);
+
+				scChart.data.datasets[1].data = offset;
+				scChart.update();
+			}
+
 		}
 
 
@@ -1571,26 +1584,48 @@ Module.register("MMM-Powerwall", {
 
 			myCanvas = document.getElementById(this.identifier + "-SelfPoweredDetails");
 			if( myCanvas ) {
+				let offset = [0,1];
+				if (this.teslaAggregates && this.dayStart) {
+					offset = [
+						this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
+						this.teslaAggregates.load.energy_imported - this.dayStart.house.import
+					];
+					offset[1] -= Math.max(offset[0], 0);
+				}
 				let scSources = [SOLAR, POWERWALL, GRID];
 				var selfConsumptionDoughnut = new Chart(myCanvas, {
 					type: "doughnut",
 					data: {
-						datasets: [{
-							data: this.selfConsumptionToday,
-							backgroundColor: scSources.map( entry => entry.color),
-							labels: scSources.map( entry => this.translate(entry.key) ),
-							datalabels: {
-								formatter: function(value, context) {
-									return [
-										context.dataset.labels[context.dataIndex],
-										Math.round(value) + "%"
-									];
-								}
-							}
-						}]
+						datasets: [
+							{
+								data: this.selfConsumptionToday,
+								backgroundColor: scSources.map( entry => entry.color),
+								labels: scSources.map( entry => this.translate(entry.key) ),
+								datalabels: {
+									formatter: function(value, context) {
+										return [
+											context.dataset.labels[context.dataIndex],
+											Math.round(value) + "%"
+										];
+									}
+								},
+								weight: 7
+							},
+							{
+								data: offset,
+								backgroundColor: [SOLAR.color, "rgba(0,0,0,0)"],
+								datalabels: {
+									labels: {
+										title: null,
+										value: null
+									}
+								},
+								weight: 1
+							},
+						]
 					},
 					options: {
-						cutoutPercentage: 65
+						cutoutPercentage: 60
 					}
 				});
 				this.charts.selfConsumption = selfConsumptionDoughnut;
