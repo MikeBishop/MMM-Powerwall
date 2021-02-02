@@ -70,11 +70,11 @@ This module relies on being able to access your Powerwall both locally and via
 the Tesla API.  The local endpoint interactions require no authentication. To
 authenticate to the Tesla API, you have two options:
 
-- **Include your password in the module configuration.**
+- ~~**Include your password in the module configuration.**
   Note that your password will be relayed from client to server at client
   start-up and MagicMirror2 does not use TLS by default, so use this option only
   if your only client is on the same device, or if you completely trust your
-  local network.
+  local network.~~
 - **Generate Tesla API tokens yourself.**
   Create a file named `tokens.json` in the module directory containing the
   following:
