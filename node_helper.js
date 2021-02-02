@@ -613,9 +613,13 @@ module.exports = NodeHelper.create({
 				else {
 					// Unable to use refresh token
 					this.log("Unable to refresh login token; need password")
-					delete this.teslaApiAccounts[username]
-					this.checkTeslaCredentials(username);
-					anyUpdates = true;
+					if( (Date.now() / 1000) > (tokens.created_at + tokens.expires_in)) {
+						// Token is expired; abandon it and try password authentication
+						delete this.teslaApiAccounts[username]
+						this.checkTeslaCredentials(username);
+						anyUpdates = true;
+					}
+					// Otherwise, keep the stale token active.
 				}
 			}
 		}
