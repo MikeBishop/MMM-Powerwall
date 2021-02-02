@@ -80,17 +80,31 @@ authenticate to the Tesla API, you have two options:
   following:
 
 ```
-{"myusername@mydomain.net": <My token response>}
+{
+    "myusername@mydomain.net": {
+        "access_token": "ACCESS TOKEN HERE",
+        "token_type": "bearer",
+        "expires_in": 3888000,
+        "refresh_token": "REFRESH TOKEN HERE",
+        "created_at": DATE HERE
+    }
+}
 ```
-  ...where `<My token response>` is the entire object you get from the Tesla
-  authentication API.  (You can use https://token.tesla-screen.com/ to get
-  this.)
+  ...where:
 
-Alternatively, the module will generate `tokens.json` after the first successful
+  - `"ACCESS TOKEN HERE` and `REFRESH TOKEN HERE` are the tokens you get from
+    the Tesla authentication API; you can use
+    http://registration.teslatasks.com/generateTokens to get these
+  - `DATE HERE` is the approximate timestamp of when the tokens were generated;
+    you can run `date +%s` from a Linux command line to get this.
+
+~~Alternatively, the module will generate `tokens.json` after the first successful
 load with the password in the config.  You can remove the password from your
 `config.js` file afterward, and it will continue to work (unless you change your
 password, which invalidates all existing tokens).  If using multiple instances,
-providing the password to any instance enables all instances to use it.
+providing the password to any instance enables all instances to use it.~~
+
+Password authentication is currently broken, but will return soon.
 
 Neither the password nor the tokens are sent anywhere except from your client to
 the node_helper, and thence to the Tesla API.
