@@ -50,8 +50,6 @@ module.exports = NodeHelper.create({
 	},
 
 	createAuthPage: async function() {
-		var self = this;
-
 		this.expressApp.get("/MMM-Powerwall/auth", (req,res) => {
 			res.send(
 				nunjucks.render(__dirname + "/auth.njk", {
