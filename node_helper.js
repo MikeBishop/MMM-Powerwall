@@ -33,7 +33,6 @@ module.exports = NodeHelper.create({
 		this.energy = {};
 		this.backup = {};
 		this.selfConsumption = {};
-		this.siteIDs = {};
 		this.storm = {};
 		this.vehicles = {};
 		this.vehicleData = {};
@@ -148,15 +147,6 @@ module.exports = NodeHelper.create({
 		});
 	},
 
-	fillTemplate: function(data) {
-		Object.keys(this.translation).forEach(t => {
-			let pattern = "%%TRANSLATE:" + t + "%%";
-			let re = new RegExp(pattern, "g");
-			data = data.replace(re, this.translation[t]);
-		});
-		return data;
-	},
-
 	combineConfig: async function() {
 		// function copied from MichMich (MIT)
 		var defaults = require(__dirname + "/../../js/defaults.js");
@@ -218,10 +208,6 @@ module.exports = NodeHelper.create({
 			let username = config.teslaAPIUsername;
 			let password = config.teslaAPIPassword;
 
-			if( !this.siteIDs[username] ) {
-				this.siteIDs[username] = [];
-			}
-
 			if( !this.teslaApiAccounts[username] ) {
 				if( password ) {
 					await this.doTeslaApiLogin(username, password);
@@ -266,10 +252,6 @@ module.exports = NodeHelper.create({
 					this.log("Attempting to infer siteID");
 					siteID = await this.inferSiteID(username);
 					this.log("Found siteID " + siteID);
-				}
-
-				if( siteID && !this.siteIDs[username].includes(siteID) ) {
-					this.siteIDs[username].push(siteID);
 				}
 
 				this.sendSocketNotification("TeslaAPIConfigured", {
@@ -697,30 +679,17 @@ module.exports = NodeHelper.create({
 			product =>(product.battery_type === "ac_powerwall")
 			).map(product => product.energy_site_id);
 
-		this.log(JSON.stringify(this.siteIDs));
-		if( this.siteIDs[username].length === 0 ) {
-			if (siteIDs.length === 1) {
-				this.log("Inferred site ID " + siteIDs[0]);
-				this.siteIDs[username].push(siteIDs[0]);
-				return siteIDs[0];
-			}
-			else if (siteIDs.length === 0) {
-				console.log("Could not find Powerwall in your Tesla account");
-			}
-			else {
-				console.log("Found multiple Powerwalls on your Tesla account:" + siteIDs);
-				console.log("Add 'siteID' to your config.js to specify which to target");
-			}
+		if (siteIDs.length === 1) {
+			this.log("Inferred site ID " + siteIDs[0]);
+			return siteIDs[0];
+		}
+		else if (siteIDs.length === 0) {
+			console.log("Could not find a Powerwall in your Tesla account");
 		}
 		else {
-			if( !this.siteIDs[username].every(id => siteIDs.includes(id)) ) {
-				console.log("Unknown site ID specified; found: " + siteIDs);
-			}
-			else {
-				return this.siteIDs[username][0];
-			}
+			console.log("Found multiple Powerwalls on your Tesla account:" + siteIDs);
+			console.log("Add 'siteID' to your config.js to specify which to target");
 		}
-		return null;
 	},
 
 	log: function(message) {
