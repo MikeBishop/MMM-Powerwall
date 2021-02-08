@@ -297,12 +297,19 @@ Module.register("MMM-Powerwall", {
 		this.Log("Received " + notification + ": " + JSON.stringify(payload));
 		switch(notification) {
 			case "ReconfigureTeslaAPI":
-				if( payload.teslaAPIUsername == self.config.teslaAPIUsername ) {
-					this.configureTeslaApi();
+				if( payload.teslaAPIUsername == self.config.teslaAPIUsername &&
+					this.config.graphs.indexOf("AuthNeeded") == -1 ) {
+					this.config.graphs.push("AuthNeeded");
+					this.updateDom();
 				}
 				break;
 			case "TeslaAPIConfigured":
 				if( payload.username === self.config.teslaAPIUsername ) {
+					let toRemove = this.config.graphs.indexOf("AuthNeeded");
+					if( toRemove >= 0 ) {
+						this.config.graphs.splice(toRemove, 1);
+						this.updateDom();
+					}
 					this.teslaAPIEnabled = true;
 					if( !self.config.siteID ) {
 						self.config.siteID = payload.siteID;
