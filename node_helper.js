@@ -187,19 +187,27 @@ module.exports = NodeHelper.create({
 	},
 
 	configureAccounts: async function() {
+		let fileContents = {};
 		try {
-			this.teslaApiAccounts = JSON.parse(
-				await fs.readFile(this.tokenFile)
+			fileContents = JSON.parse(
+					await fs.readFile(this.tokenFile)
 			);
-			if( Object.keys(this.teslaApiAccounts).length >= 1 ) {
-				this.log("Read Tesla API tokens from file");
-				this.log(JSON.stringify(this.teslaApiAccounts));
-			}
-			else {
-				this.log("Token file is empty");
-			}
 		}
 		catch(e) {
+		}
+
+		if( Object.keys(fileContents).length >= 1 ) {
+			this.log("Read Tesla API tokens from file");
+
+			this.teslaApiAccounts = {
+				...this.teslaApiAccounts,
+				...fileContents
+			};
+
+			this.log(JSON.stringify(this.teslaApiAccounts));
+		}
+		else {
+			this.log("Token file is empty");
 		}
 
 		let self = this;
@@ -245,6 +253,7 @@ module.exports = NodeHelper.create({
 		if (notification === "Configure-TeslaAPI") {
 			let username = payload.teslaAPIUsername;
 			let siteID = payload.siteID;
+			await this.configureAccounts();
 
 			if( username && this.checkTeslaCredentials(username) ) {
 				if( !siteID ) {

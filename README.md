@@ -79,10 +79,9 @@ authenticate to the Tesla API, you have two options:
   HTTP port, e.g. `http://192.168.0.52:8080/MMM-Powerwall/auth`.  You can sign
   in with your username and password, and the module will cache the tokens.
   You only need to include your username in the module configuration.
-- **Include your password in the module configuration.**
-  Your password will not be relayed over the network, so this should be safe,
-  but gauge your comfort level with your plain-text password stored on the SD
-  card.
+- **Include your password in the module configuration.** Your password will not
+  be relayed between clients and the Magic Mirror, so this should be safe, but
+  gauge your comfort level with your plain-text password stored on the SD card.
 
 The module will generate `tokens.json` after the first successful load with the
 password in the config, so you can then remove the password from your
