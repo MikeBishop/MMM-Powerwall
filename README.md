@@ -70,11 +70,11 @@ This module relies on being able to access your Powerwall both locally and via
 the Tesla API.  The local endpoint interactions require no authentication. To
 authenticate to the Tesla API, you have two options:
 
-- ~~**Include your password in the module configuration.**
+- **Include your password in the module configuration.**
   Note that your password will be relayed from client to server at client
   start-up and MagicMirror2 does not use TLS by default, so use this option only
   if your only client is on the same device, or if you completely trust your
-  local network.~~
+  local network.
 - **Generate Tesla API tokens yourself.**
   Create a file named `tokens.json` in the module directory containing the
   following:
@@ -98,13 +98,19 @@ authenticate to the Tesla API, you have two options:
   - `DATE HERE` is the approximate timestamp of when the tokens were generated;
     you can run `date +%s` from a Linux command line to get this.
 
-~~Alternatively, the module will generate `tokens.json` after the first successful
-load with the password in the config.  You can remove the password from your
-`config.js` file afterward, and it will continue to work (unless you change your
-password, which invalidates all existing tokens).  If using multiple instances,
-providing the password to any instance enables all instances to use it.~~
+However, because of the way refresh tokens are handled in the new Authentication
+model, this does not permit automatic refresh of the token.  **You may need to
+manually supply a fresh token every 45 days if you use this option.**
 
-Password authentication is currently broken, but will return soon.
+If a password is provided, the module will generate `tokens.json` with a
+working refresh token after the first successful load with the password in the
+config.  You can then remove the password from your `config.js` file afterward,
+and it will continue to work (unless you change your password, which invalidates
+all existing tokens).  If using multiple instances, providing the password to
+any instance enables all instances to use it.
+
+Multi-factor authentication is not yet supported, but will be in the near
+future.
 
 Neither the password nor the tokens are sent anywhere except from your client to
 the node_helper, and thence to the Tesla API.
@@ -125,3 +131,4 @@ In addition to any commiters to the repo, the following have helped figure certa
 
 - @ngardiner's work on TWCManager is amazing, and the car charging could not be tracked without it
 - @Kemmey provided initial code for interacting with the compositor
+- Access to Tesla's v3 authentication endpoint adapted from @jorenvandeweyer's implementation
