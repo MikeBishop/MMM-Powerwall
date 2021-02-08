@@ -15,6 +15,9 @@ const fetch = require("node-fetch");
 const auth = require("./tesla-oauth-v3.js");
 const express = require("express");
 const path = require("path");
+const nunjucks = require("nunjucks");
+const { check, validationResult, matchedData } = require('express-validator');
+const bodyParser = require('body-parser');
 
 
 module.exports = NodeHelper.create({
@@ -40,17 +43,107 @@ module.exports = NodeHelper.create({
 		this.debug = false;
 		this.thisConfigs = [];
 		this.tokenFile = path.resolve(__dirname + "/tokens.json");
+		this.template =	null;
 
 		await this.loadTranslation("en");
 		await this.combineConfig();
 		await this.configureAccounts();
-		this.createAuthPage();
+		await this.createAuthPage();
 	},
 
 	createAuthPage: async function() {
 		var self = this;
 
 		this.expressApp.get("/MMM-Powerwall/auth", (req,res) => {
+			res.send(
+				nunjucks.render(__dirname + "/auth.njk", {
+					translations: this.translation,
+					errors: {},
+					data: {}
+				})
+			);
+		});
+
+		this.expressApp.use(bodyParser.urlencoded({ extended: false }));
+		this.expressApp.post("/MMM-Powerwall/auth", [
+			check("username")
+				.isEmail()
+				.withMessage(this.translation.needusername)
+				.trim(),
+			check("password")
+				.notEmpty()
+				.withMessage(this.translation.needpassword)
+				.trim(),
+			check("mfa")
+				.optional( {
+					checkFalsy: true
+				})
+				.isNumeric( {no_symbols: true })
+				.withMessage(this.translation.invalidmfa)
+		], async (req,res) => {
+			var errors = validationResult(req).mapped();
+
+			if (Object.keys(errors).length == 0) {
+				var authenticator = new auth.Authenticator();
+
+				authenticator.on('error', (message) => {
+					if( message == "invalid credentials") {
+						errors.password = {
+							value: "",
+							msg: this.translation.invalidpassword,
+							param: "password",
+							location: "body"
+						};
+					}
+					else {
+						errors.general = {
+							value: "",
+							msg: message,
+							param: null,
+							location: "body"
+						}
+					}
+				});
+				authenticator.on('ready', async (credentials) => {
+					this.log("Got Tesla API tokens")
+					this.teslaApiAccounts[req.body["username"]] = credentials.ownerApi;
+					this.teslaApiAccounts[req.body["username"]].refresh_token = credentials.auth.refresh_token;
+					await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+				});
+				authenticator.on('mfa', () => {
+					let message;
+					if( req.body["mfa"].length == 0 ) {
+						message = this.translation.needmfa;
+					}
+					else {
+						message = this.translation.invalidmfa;
+					}
+
+					errors.mfa = {
+						value: "",
+						msg: message,
+						param: "mfa",
+						location: "body"
+					}
+				});
+
+				await authenticator.login(
+					req.body["username"],
+					req.body["password"],
+					req.body["mfa"]
+				);
+
+				if (Object.keys(errors).length == 0) {
+					return res.redirect("../..");
+				}
+			}
+			return res.send(
+				nunjucks.render(__dirname + "/auth.njk", {
+					translations: this.translation,
+					errors: errors,
+					data: req.body,
+				})
+			);
 
 		});
 	},
