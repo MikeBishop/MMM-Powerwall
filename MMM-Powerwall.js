@@ -117,10 +117,6 @@ Module.register("MMM-Powerwall", {
 			DISPLAY_ALL.splice(carIndex, 1);
 		}
 
-		if( this.config.debug ) {
-			this.sendSocketNotification("Enable-Debug");
-		}
-
 		// Handle singleton graph names
 		if( !Array.isArray(this.config.graphs) ) {
 			this.config.graphs = [this.config.graphs];
@@ -142,7 +138,6 @@ Module.register("MMM-Powerwall", {
 		//Send settings to helper
 		if (self.config.teslaAPIUsername ) {
 			this.configureTeslaApi();
-			this.Log("Enabled Tesla API");
 		}
 
 		setInterval(function() {
@@ -175,8 +170,6 @@ Module.register("MMM-Powerwall", {
 			{
 				siteID: this.config.siteID,
 				teslaAPIUsername: this.config.teslaAPIUsername,
-				teslaAPIPassword: this.config.teslaAPIPassword,
-				tokenFile: this.file("tokens.json")
 			});
 			this.Log("Enabled Tesla API");
 		}
