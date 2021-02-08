@@ -29,6 +29,9 @@ var config = {
 }
 ```
 
+**Do not forget to run `npm install` after updating the module; new dependencies
+are being introduced because of Tesla's new authentication model.**
+
 ## Configuration options
 
 | Option                | Description
