@@ -13,11 +13,10 @@ const unauthenticated_agent = new Https.Agent({
 });
 const fetch = require("node-fetch");
 const auth = require("./tesla-oauth-v3.js");
-const express = require("express");
 const path = require("path");
-const nunjucks = require("nunjucks");
+const nunjucks = require("./../../vendor/node_modules/nunjucks");
 const { check, validationResult, matchedData } = require('express-validator');
-const bodyParser = require('body-parser');
+const bodyParser = require('./../../node_modules/body-parser');
 
 
 module.exports = NodeHelper.create({
