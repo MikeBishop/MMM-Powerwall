@@ -12,6 +12,7 @@ var unauthenticated_agent = new Https.Agent({
 	rejectUnauthorized: false,
 });
 var fetch = require("node-fetch");
+var auth = require("./tesla-oauth-v3.js");
 
 
 module.exports = NodeHelper.create({
@@ -505,28 +506,20 @@ module.exports = NodeHelper.create({
 	},
 
 	doTeslaApiLogin: async function(username, password, filename) {
-		url = "https://owner-api.teslamotors.com/oauth/token";
-		let result = await fetch(url, {
-			method: "POST",
-			body: JSON.stringify({
-				email: username,
-				password: password,
-				grant_type: "password",
-				client_secret: "c7257eb71a564034f9419ee651c7d0e5f7aa6bfbd18bafb5c5c033b093bb2fa3",
-				client_id: "81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384"
-			}),
-			headers: {
-				"content-type": "application/json"
-			}
+		var authenticator = new auth.Authenticator();
+		authenticator.on('error', (message) => {
+			this.log("Tesla Auth: " + message);
 		});
-
-		if( !result.ok ) {
-			return;
-		}
-
-		this.log("Got Tesla API tokens")
-		this.teslaApiAccounts[username] = await result.json();
-		await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+		authenticator.on('ready', async (credentials) => {
+			this.log("Got Tesla API tokens")
+			this.teslaApiAccounts[username] = credentials.ownerApi;
+			this.teslaApiAccounts[username].refresh_token = credentials.auth.refresh_token;
+			await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+		});
+		authenticator.on('mfa', () => {
+			this.log("MFA enabled on Tesla account; not supported yet!");
+		});
+		authenticator.login(username, password);
 	},
 
 	inferSiteID: async function(username) {
@@ -575,8 +568,6 @@ module.exports = NodeHelper.create({
 	},
 
 	doTeslaApiTokenUpdate: async function() {
-		let anyUpdates = false;
-
 		if( Date.now() < this.lastUpdate + 3600000 ) {
 			// Only check for expired tokens hourly
 			return;
@@ -590,43 +581,25 @@ module.exports = NodeHelper.create({
 		for( const username in this.teslaApiAccounts ) {
 			let tokens = this.teslaApiAccounts[username];
 			if( (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
-				url = "https://owner-api.teslamotors.com/oauth/token";
-				let result = await fetch(url, {
-					method: "POST",
-					body: JSON.stringify({
-						email: username,
-						grant_type: "refresh_token",
-						client_secret: "c7257eb71a564034f9419ee651c7d0e5f7aa6bfbd18bafb5c5c033b093bb2fa3",
-						client_id: "81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384",
-						refresh_token: tokens.refresh_token
-					}),
-					headers: {
-						"content-type": "application/json",
-					}
-				});
-		
-				if( result.ok ) {
-					this.log("Updated Tesla API token");
-					anyUpdates = true;
-					this.teslaApiAccounts[username] = await result.json();
-				}
-				else {
-					// Unable to use refresh token
-					this.log("Unable to refresh login token; need password")
+				var authenticator = new auth.Authenticator();
+				authenticator.on('error', async (message) => {
+					this.log("Tesla auth failed: " + message);
 					if( (Date.now() / 1000) > (tokens.created_at + tokens.expires_in)) {
 						// Token is expired; abandon it and try password authentication
 						delete this.teslaApiAccounts[username]
 						this.checkTeslaCredentials(username);
-						anyUpdates = true;
+						await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
 					}
-					// Otherwise, keep the stale token active.
-				}
-			}
-		}
-
-		if( anyUpdates ) {
-			for( const filename of this.filenames ) {
-				await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+				});
+				authenticator.on('ready', async (credentials) => {
+					this.log("Refreshed Tesla API tokens")
+					this.teslaApiAccounts[username] = credentials.ownerApi;
+					this.teslaApiAccounts[username].refresh_token = credentials.auth.refresh_token;
+					for( const filename of this.filenames ) {
+						await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+					}
+				});
+				await authenticator.refresh(this.teslaApiAccounts[username].refresh_token);
 			}
 		}
 	},
