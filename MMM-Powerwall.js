@@ -117,10 +117,6 @@ Module.register("MMM-Powerwall", {
 			DISPLAY_ALL.splice(carIndex, 1);
 		}
 
-		if( this.config.debug ) {
-			this.sendSocketNotification("Enable-Debug");
-		}
-
 		// Handle singleton graph names
 		if( !Array.isArray(this.config.graphs) ) {
 			this.config.graphs = [this.config.graphs];
@@ -142,7 +138,6 @@ Module.register("MMM-Powerwall", {
 		//Send settings to helper
 		if (self.config.teslaAPIUsername ) {
 			this.configureTeslaApi();
-			this.Log("Enabled Tesla API");
 		}
 
 		setInterval(function() {
@@ -175,8 +170,6 @@ Module.register("MMM-Powerwall", {
 			{
 				siteID: this.config.siteID,
 				teslaAPIUsername: this.config.teslaAPIUsername,
-				teslaAPIPassword: this.config.teslaAPIPassword,
-				tokenFile: this.file("tokens.json")
 			});
 			this.Log("Enabled Tesla API");
 		}
@@ -304,12 +297,19 @@ Module.register("MMM-Powerwall", {
 		this.Log("Received " + notification + ": " + JSON.stringify(payload));
 		switch(notification) {
 			case "ReconfigureTeslaAPI":
-				if( payload.teslaAPIUsername == self.config.teslaAPIUsername ) {
-					this.configureTeslaApi();
+				if( payload.teslaAPIUsername == self.config.teslaAPIUsername &&
+					this.config.graphs.indexOf("AuthNeeded") == -1 ) {
+					this.config.graphs.push("AuthNeeded");
+					this.updateDom();
 				}
 				break;
 			case "TeslaAPIConfigured":
 				if( payload.username === self.config.teslaAPIUsername ) {
+					let toRemove = this.config.graphs.indexOf("AuthNeeded");
+					if( toRemove >= 0 ) {
+						this.config.graphs.splice(toRemove, 1);
+						this.updateDom();
+					}
 					this.teslaAPIEnabled = true;
 					if( !self.config.siteID ) {
 						self.config.siteID = payload.siteID;

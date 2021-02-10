@@ -1,0 +1,34 @@
+<html>
+  <head>
+    <title>{{ translations.authTitle }}</title>
+  </head>
+
+<div class="form-header">
+    <h2>{{ translations.authHeader }}</h2>
+    <ul class="errors-list">
+      {% for error in errors %}
+        <li>{{ error.msg }}</li>
+      {% endfor %}
+    </ul>
+</div>
+
+
+<form method="post" action="/MMM-Powerwall/auth" novalidate>
+  {% for field in ["username", "password", "mfa" ] %}
+  <div class="form-field {{ "form-field-invalid" if errors[field] else '' }}">
+    <label for="{{field}}">{{ translations[field] }}</label>
+    <input class="input" id="{{field}}" name="{{field}}" type="
+      {{- "password" if field == "password" else "text" -}}
+      " maxlength="
+      {{- 6 if field == "mfa" else 30 -}}
+      " value="{{ data[field] }}">
+    {% if errors[field] %}
+      <div class="error">{{errors[field].msg}}</div>
+    {% endif %}
+  </div>
+  {% endfor %}
+
+  <div class="form-actions">
+    <button class="btn" type="submit">{{ translations.fetch }}</button>
+  </div>
+</form>

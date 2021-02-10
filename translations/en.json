@@ -78,5 +78,21 @@
   "_section": "Graph axis",
   "_header": "*******************",
     "powerline_label": "Power To / From (kW)",
-    "energybar_label": "Energy To / From (kWh)"
+    "energybar_label": "Energy To / From (kWh)",
+
+  "_header": "*******************",
+  "_section": "Authentication Page",
+  "_header": "*******************",
+    "authTitle": "Log in to Tesla API",
+    "authHeader": "Log in to Tesla API for MMM-Powerwall",
+    "username": "Username",
+    "password": "Password",
+    "mfa": "MFA Token, if enabled",
+    "fetch": "Log In",
+    "invalidmfa": "MFA token not valid",
+    "needusername": "Username is required",
+    "needpassword": "Password is required",
+    "invalidpassword": "Password not valid",
+    "needmfa": "MFA token is required",
+    "authNeeded": "Go to /MMM-Powerwall/auth to log in"
 }

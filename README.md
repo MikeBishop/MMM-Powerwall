@@ -28,6 +28,7 @@ var config = {
     ]
 }
 ```
+You will need to restart the MagicMirror process to load the node_helper.
 
 **Do not forget to run `npm install` after updating the module; new dependencies
 are being introduced because of Tesla's new authentication model.**
@@ -73,50 +74,21 @@ This module relies on being able to access your Powerwall both locally and via
 the Tesla API.  The local endpoint interactions require no authentication. To
 authenticate to the Tesla API, you have two options:
 
-- **Include your password in the module configuration.**
-  Note that your password will be relayed from client to server at client
-  start-up and MagicMirror2 does not use TLS by default, so use this option only
-  if your only client is on the same device, or if you completely trust your
-  local network.
-- **Generate Tesla API tokens yourself.**
-  Create a file named `tokens.json` in the module directory containing the
-  following:
+- **Sign in via the module.**
+  After installing the module, visit `/MMM-Powerwall/auth` on your MagicMirror
+  HTTP port, e.g. `http://192.168.0.52:8080/MMM-Powerwall/auth`.  You can sign
+  in with your username and password, and the module will cache the tokens.
+  You only need to include your username in the module configuration.
+- **Include your password in the module configuration.** Your password will not
+  be relayed between clients and the Magic Mirror, so this should be safe, but
+  gauge your comfort level with your plain-text password stored on the SD card.
 
-```
-{
-    "myusername@mydomain.net": {
-        "access_token": "ACCESS TOKEN HERE",
-        "token_type": "bearer",
-        "expires_in": 3888000,
-        "refresh_token": "REFRESH TOKEN HERE",
-        "created_at": DATE HERE
-    }
-}
-```
-  ...where:
+The module will generate `tokens.json` after the first successful load with the
+password in the config, so you can then remove the password from your
+`config.js` file afterward if desired.
 
-  - `"ACCESS TOKEN HERE` and `REFRESH TOKEN HERE` are the tokens you get from
-    the Tesla authentication API; you can use
-    http://registration.teslatasks.com/generateTokens to get these
-  - `DATE HERE` is the approximate timestamp of when the tokens were generated;
-    you can run `date +%s` from a Linux command line to get this.
-
-However, because of the way refresh tokens are handled in the new Authentication
-model, this does not permit automatic refresh of the token.  **You may need to
-manually supply a fresh token every 45 days if you use this option.**
-
-If a password is provided, the module will generate `tokens.json` with a
-working refresh token after the first successful load with the password in the
-config.  You can then remove the password from your `config.js` file afterward,
-and it will continue to work (unless you change your password, which invalidates
-all existing tokens).  If using multiple instances, providing the password to
-any instance enables all instances to use it.
-
-Multi-factor authentication is not yet supported, but will be in the near
-future.
-
-Neither the password nor the tokens are sent anywhere except from your client to
-the node_helper, and thence to the Tesla API.
+Neither the password nor the tokens are sent anywhere except from the
+node_helper to the Tesla API.  Feel free to verify this in the code.
 
 ## Dependencies and Acknowledgements
 

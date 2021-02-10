@@ -5,19 +5,23 @@
  * MIT Licensed.
  */
 
-var NodeHelper = require("node_helper");
-var fs = require("fs").promises;
-var Https = require("https");
-var unauthenticated_agent = new Https.Agent({
+const NodeHelper = require("node_helper");
+const fs = require("fs").promises;
+const Https = require("https");
+const unauthenticated_agent = new Https.Agent({
 	rejectUnauthorized: false,
 });
-var fetch = require("node-fetch");
-var auth = require("./tesla-oauth-v3.js");
+const fetch = require("node-fetch");
+const auth = require("./tesla-oauth-v3.js");
+const path = require("path");
+const nunjucks = require("./../../vendor/node_modules/nunjucks");
+const { check, validationResult, matchedData } = require('express-validator');
+const bodyParser = require('./../../node_modules/body-parser');
 
 
 module.exports = NodeHelper.create({
 
-	start: function() {
+	start: async function() {
 		this.powerwallAggregates = {};
 		this.powerwallSOE = {};
 		this.powerwallCloudSOE = {};
@@ -28,7 +32,6 @@ module.exports = NodeHelper.create({
 		this.energy = {};
 		this.backup = {};
 		this.selfConsumption = {};
-		this.siteIDs = {};
 		this.storm = {};
 		this.vehicles = {};
 		this.vehicleData = {};
@@ -36,6 +39,200 @@ module.exports = NodeHelper.create({
 		this.filenames = [];
 		this.lastUpdate = 0;
 		this.debug = false;
+		this.thisConfigs = [];
+		this.tokenFile = path.resolve(__dirname + "/tokens.json");
+		this.template =	null;
+
+		await this.loadTranslation("en");
+		await this.combineConfig();
+		await this.configureAccounts();
+		await this.createAuthPage();
+	},
+
+	createAuthPage: async function() {
+		this.expressApp.get("/MMM-Powerwall/auth", (req,res) => {
+			res.send(
+				nunjucks.render(__dirname + "/auth.njk", {
+					translations: this.translation,
+					errors: {},
+					data: {}
+				})
+			);
+		});
+
+		this.expressApp.use(bodyParser.urlencoded({ extended: false }));
+		this.expressApp.post("/MMM-Powerwall/auth", [
+			check("username")
+				.isEmail()
+				.withMessage(this.translation.needusername)
+				.trim(),
+			check("password")
+				.notEmpty()
+				.withMessage(this.translation.needpassword)
+				.trim(),
+			check("mfa")
+				.optional( {
+					checkFalsy: true
+				})
+				.isNumeric( {no_symbols: true })
+				.withMessage(this.translation.invalidmfa)
+		], async (req,res) => {
+			var errors = validationResult(req).mapped();
+
+			if (Object.keys(errors).length == 0) {
+				var authenticator = new auth.Authenticator();
+
+				authenticator.on('error', (message) => {
+					if( message == "invalid credentials") {
+						errors.password = {
+							value: "",
+							msg: this.translation.invalidpassword,
+							param: "password",
+							location: "body"
+						};
+					}
+					else {
+						errors.general = {
+							value: "",
+							msg: message,
+							param: null,
+							location: "body"
+						}
+					}
+				});
+				authenticator.on('ready', async (credentials) => {
+					this.log("Got Tesla API tokens")
+					this.teslaApiAccounts[req.body["username"]] = credentials.ownerApi;
+					this.teslaApiAccounts[req.body["username"]].refresh_token = credentials.auth.refresh_token;
+					await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+				});
+				authenticator.on('mfa', () => {
+					let message;
+					if( req.body["mfa"].length == 0 ) {
+						message = this.translation.needmfa;
+					}
+					else {
+						message = this.translation.invalidmfa;
+					}
+
+					errors.mfa = {
+						value: "",
+						msg: message,
+						param: "mfa",
+						location: "body"
+					}
+				});
+
+				await authenticator.login(
+					req.body["username"],
+					req.body["password"],
+					req.body["mfa"]
+				);
+
+				if (Object.keys(errors).length == 0) {
+					return res.redirect("../..");
+				}
+			}
+			return res.send(
+				nunjucks.render(__dirname + "/auth.njk", {
+					translations: this.translation,
+					errors: errors,
+					data: req.body,
+				})
+			);
+
+		});
+	},
+
+	combineConfig: async function() {
+		// function copied from MichMich (MIT)
+		var defaults = require(__dirname + "/../../js/defaults.js");
+		var configFilename = path.resolve(__dirname + "/../../config/config.js");
+		if (typeof(global.configuration_file) !== "undefined") {
+			configFilename = global.configuration_file;
+		}
+
+		try {
+			var c = require(configFilename);
+			var config = Object.assign({}, defaults, c);
+			this.configOnHd = config;
+			// Get the configuration for this module.
+			if ("modules" in this.configOnHd) {
+				this.thisConfigs = this.configOnHd.modules.
+					filter(m => "config" in m && "module" in m && m.module === 'MMM-Powerwall').
+					map(m => m.config);
+			}
+		} catch (e) {
+			console.error("MMM-Powerwall WARNING! Could not load config file. Starting with default configuration. Error found: " + e);
+			this.configOnHd = defaults;
+		}
+
+		this.debug = this.thisConfigs.some(config => config.debug);
+		this.loadTranslation(this.configOnHd.language);
+	},
+
+	loadTranslation: async function(language) {
+		var self = this;
+
+		try {
+			self.translation = Object.assign({}, self.translation, JSON.parse(
+				await fs.readFile(
+					path.resolve(__dirname + "/translations/" + language + ".json")
+				)
+			));
+		}
+		catch {}
+	},
+
+	configureAccounts: async function() {
+		let fileContents = {};
+		try {
+			fileContents = JSON.parse(
+					await fs.readFile(this.tokenFile)
+			);
+		}
+		catch(e) {
+		}
+
+		if( Object.keys(fileContents).length >= 1 ) {
+			this.log("Read Tesla API tokens from file");
+
+			this.teslaApiAccounts = {
+				...this.teslaApiAccounts,
+				...fileContents
+			};
+
+			this.log(JSON.stringify(this.teslaApiAccounts));
+		}
+		else {
+			this.log("Token file is empty");
+		}
+
+		let self = this;
+		this.thisConfigs.forEach(async config => {
+			let username = config.teslaAPIUsername;
+			let password = config.teslaAPIPassword;
+
+			if( !this.teslaApiAccounts[username] ) {
+				if( password ) {
+					await this.doTeslaApiLogin(username, password);
+				}
+				else {
+					this.log("Missing both Tesla password and access tokens");
+				}
+			}
+		});
+
+		await self.doTeslaApiTokenUpdate();
+
+		for (const username in this.teslaApiAccounts) {
+			if( this.checkTeslaCredentials(username) ) {
+				if( !this.vehicles[username]) {
+					// See if there are any cars on the account.
+					this.vehicles[username] = await this.doTeslaApiGetVehicleList(username);
+				}
+			}
+		}
 	},
 
 	// Override socketNotificationReceived method.
@@ -47,72 +244,28 @@ module.exports = NodeHelper.create({
 	 * argument payload mixed - The payload of the notification.
 	 */
 	socketNotificationReceived: async function(notification, payload) {
-		var self = this;
+		const self = this;
 
 		this.log(notification + JSON.stringify(payload));
 
 		if (notification === "Configure-TeslaAPI") {
 			let username = payload.teslaAPIUsername;
-			let password = payload.teslaAPIPassword;
-			let filename = payload.tokenFile;
 			let siteID = payload.siteID;
+			await this.configureAccounts();
 
-			if( !this.filenames.includes(filename) ) {
-				this.filenames.push(filename)
-			}
-
-			if( !this.siteIDs[username] ) {
-				this.siteIDs[username] = [];
-			}
-
-			if( siteID && !this.siteIDs[username].includes(siteID) ) {
-				this.siteIDs[username].push(siteID);
-			}
-
-			if( !this.teslaApiAccounts[username] ) {
-				try {
-					let fileContent = JSON.parse(
-						await fs.readFile(filename)
-					);
-					this.teslaApiAccounts =  {
-						...this.teslaApiAccounts,
-						...fileContent
-					};
-					this.log("Read Tesla API tokens from file");
-					this.log(JSON.stringify(this.teslaApiAccounts));
-				}
-				catch(e) {
-				}
-			}
-			if( !this.teslaApiAccounts[username] ) {
-				if( password ) {
-					await this.doTeslaApiLogin(username, password, filename);
-				}
-				else {
-					this.log("Missing both Tesla password and access tokens");
-				}
-			}
-			else {
-				await self.doTeslaApiTokenUpdate();
-			}
-
-			if( this.checkTeslaCredentials(username) ) {
-				if( !this.vehicles[username]) {
-					// See if there are any cars on the account.
-					this.vehicles[username] = await this.doTeslaApiGetVehicleList(username);
-				}
-
+			if( username && this.checkTeslaCredentials(username) ) {
 				if( !siteID ) {
 					this.log("Attempting to infer siteID");
 					siteID = await this.inferSiteID(username);
+					this.log("Found siteID " + siteID);
 				}
-				this.log("Found siteID " + siteID);
 
 				this.sendSocketNotification("TeslaAPIConfigured", {
 					username: username,
 					siteID: siteID,
 					vehicles: this.vehicles[username]
 				});
+
 			}
 		}
 		else if (notification === "UpdateLocal") {
@@ -311,9 +464,6 @@ module.exports = NodeHelper.create({
 				<= Date.now() );
 			this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
 		}
-		else if (notification === "Enable-Debug") {
-			this.debug = true;
-		}
 	},
 
 	checkTeslaCredentials: function(username) {
@@ -506,7 +656,7 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApiLogin: async function(username, password, filename) {
+	doTeslaApiLogin: async function(username, password) {
 		var authenticator = new auth.Authenticator();
 		authenticator.on('error', (message) => {
 			this.log("Tesla Auth: " + message);
@@ -515,7 +665,7 @@ module.exports = NodeHelper.create({
 			this.log("Got Tesla API tokens")
 			this.teslaApiAccounts[username] = credentials.ownerApi;
 			this.teslaApiAccounts[username].refresh_token = credentials.auth.refresh_token;
-			await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+			await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
 		});
 		authenticator.on('mfa', () => {
 			this.log("MFA enabled on Tesla account; not supported yet!");
@@ -536,30 +686,17 @@ module.exports = NodeHelper.create({
 			product =>(product.battery_type === "ac_powerwall")
 			).map(product => product.energy_site_id);
 
-		this.log(JSON.stringify(this.siteIDs));
-		if( this.siteIDs[username].length === 0 ) {
-			if (siteIDs.length === 1) {
-				this.log("Inferred site ID " + siteIDs[0]);
-				this.siteIDs[username].push(siteIDs[0]);
-				return siteIDs[0];
-			}
-			else if (siteIDs.length === 0) {
-				console.log("Could not find Powerwall in your Tesla account");
-			}
-			else {
-				console.log("Found multiple Powerwalls on your Tesla account:" + siteIDs);
-				console.log("Add 'siteID' to your config.js to specify which to target");
-			}
+		if (siteIDs.length === 1) {
+			this.log("Inferred site ID " + siteIDs[0]);
+			return siteIDs[0];
+		}
+		else if (siteIDs.length === 0) {
+			console.log("Could not find a Powerwall in your Tesla account");
 		}
 		else {
-			if( !this.siteIDs[username].every(id => siteIDs.includes(id)) ) {
-				console.log("Unknown site ID specified; found: " + siteIDs);
-			}
-			else {
-				return this.siteIDs[username][0];
-			}
+			console.log("Found multiple Powerwalls on your Tesla account:" + siteIDs);
+			console.log("Add 'siteID' to your config.js to specify which to target");
 		}
-		return null;
 	},
 
 	log: function(message) {
@@ -568,18 +705,22 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApiTokenUpdate: async function() {
-		if( Date.now() < this.lastUpdate + 3600000 ) {
-			// Only check for expired tokens hourly
-			return;
-		}
-		else {
-			this.lastUpdate = Date.now();
+	doTeslaApiTokenUpdate: async function(username=null) {
+		let accountsToCheck = [username];
+		if( !username ) {
+			if( Date.now() < this.lastUpdate + 3600000 ) {
+				// Only check for expired tokens hourly
+				return;
+			}
+			else {
+				this.lastUpdate = Date.now();
+			}
+			accountsToCheck = Object.keys(this.teslaApiAccounts);
 		}
 
 		// We don't actually track which tokens came from which file.
 		// If there are multiple, write all to all.
-		for( const username in this.teslaApiAccounts ) {
+		for( const username of accountsToCheck ) {
 			let tokens = this.teslaApiAccounts[username];
 			if( (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
 				var authenticator = new auth.Authenticator();
@@ -589,16 +730,14 @@ module.exports = NodeHelper.create({
 						// Token is expired; abandon it and try password authentication
 						delete this.teslaApiAccounts[username]
 						this.checkTeslaCredentials(username);
-						await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
+						await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
 					}
 				});
 				authenticator.on('ready', async (credentials) => {
 					this.log("Refreshed Tesla API tokens")
 					this.teslaApiAccounts[username] = credentials.ownerApi;
 					this.teslaApiAccounts[username].refresh_token = credentials.auth.refresh_token;
-					for( const filename of this.filenames ) {
-						await fs.writeFile(filename, JSON.stringify(this.teslaApiAccounts));
-					}
+					await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
 				});
 				await authenticator.refresh(this.teslaApiAccounts[username].refresh_token);
 			}

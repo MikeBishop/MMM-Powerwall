@@ -102,6 +102,8 @@
             <div class="MMM-Powerwall big-graph-container">
                 <canvas id="{{id}}-PowerLine"></canvas>
             </div>
+        {%- elif graph == "AuthNeeded" -%}
+            <a href="/MMM-Powerwall/auth">{{translations.authNeeded}}</a>
         {%- else -%}
         {{translations.unknown}}
         {%- endif -%}
