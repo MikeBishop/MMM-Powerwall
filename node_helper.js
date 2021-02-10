@@ -427,7 +427,8 @@ module.exports = NodeHelper.create({
 			let cloudStatus = await this.doTeslaApi(url, username, null, siteID, this.storm);
 
 			this.sendSocketNotification("StormWatch", {
-				ip: powerwallIP,
+				username: username,
+				siteID: siteID,
 				storm: cloudStatus.storm_mode_active
 			});
 		}
