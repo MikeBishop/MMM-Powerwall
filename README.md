@@ -82,6 +82,7 @@ authenticate to the Tesla API, you have two options:
 - **Include your password in the module configuration.** Your password will not
   be relayed between clients and the Magic Mirror, so this should be safe, but
   gauge your comfort level with your plain-text password stored on the SD card.
+  Note that this option does not work if MFA is enabled on your account.
 
 The module will generate `tokens.json` after the first successful load with the
 password in the config, so you can then remove the password from your
