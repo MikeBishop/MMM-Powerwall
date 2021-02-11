@@ -467,14 +467,14 @@ module.exports = NodeHelper.create({
 	},
 
 	checkTeslaCredentials: function(username) {
-		if( this.teslaApiAccounts[username] ) {
-			return true;
-		}
-		else {
+		if( !this.teslaApiAccounts[username] || this.teslaApiAccounts[username].refresh_failures > 3) {
 			this.sendSocketNotification("ReconfigureTeslaAPI", {
 				teslaAPIUsername: username
 			});
 			return false;
+		}
+		else {
+			return true;
 		}
 	},
 
@@ -730,6 +730,11 @@ module.exports = NodeHelper.create({
 						// Token is expired; abandon it and try password authentication
 						delete this.teslaApiAccounts[username]
 						this.checkTeslaCredentials(username);
+						await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+					}
+					else {
+						this.teslaApiAccounts[username].refresh_failures =
+							1 + (this.teslaApiAccounts[username].refresh_failures || 0);
 						await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
 					}
 				});
