@@ -317,14 +317,8 @@ Module.register("MMM-Powerwall", {
 					if( self.config.siteID === payload.siteID ) {
 						self.teslaAPIEnabled = true;
 						this.updateEnergy();
-						this.updateSelfConsumption();
-						this.updatePowerHistory();
-						this.updateStormWatch();
-						this.doTimeout("cloud", () => {
-							self.updateSelfConsumption();
-							self.updatePowerHistory();
-							self.updateStormWatch();
-						}, this.config.cloudUpdateInterval);
+						this.updateAllCloudData();
+						this.scheduleCloudUpdate();
 					}
 					this.updateLocal();
 					this.vehicles = payload.vehicles;
@@ -458,6 +452,7 @@ Module.register("MMM-Powerwall", {
 			case "PowerHistory":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
+						this.scheduleCloudUpdate();
 						this.powerHistory = payload.powerHistory;
 						this.updatePowerLine();
 				}
@@ -472,11 +467,8 @@ Module.register("MMM-Powerwall", {
 			case "SelfConsumption":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
-						this.doTimeout("cloud", () => {
-							self.updateSelfConsumption();
-							self.updatePowerHistory();
-						}, this.config.cloudUpdateInterval);
 
+						this.scheduleCloudUpdate();
 						let yesterday = payload.selfConsumption[0];
 						let today = payload.selfConsumption[1];
 						this.selfConsumptionYesterday = [
@@ -576,6 +568,7 @@ Module.register("MMM-Powerwall", {
 			case "StormWatch":
 				if( payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID ) {
+						this.scheduleCloudUpdate();
 						this.stormWatch = payload.storm;
 						this.updateData();
 				}
@@ -598,6 +591,20 @@ Module.register("MMM-Powerwall", {
 			default:
 				break;
 		}
+	},
+
+	updateAllCloudData: function() {
+		this.updateSelfConsumption();
+		this.updatePowerHistory();
+		this.updateStormWatch();
+	},
+
+	scheduleCloudUpdate: function() {
+		var self = this;
+		this.doTimeout("cloud",
+			() => self.updateAllCloudData(),
+			this.config.cloudUpdateInterval
+		);
 	},
 
 	doTimeout: function(name, func, timeout, exempt=false) {
