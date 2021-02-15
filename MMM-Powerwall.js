@@ -1814,6 +1814,9 @@ Module.register("MMM-Powerwall", {
 					}
 					entry.car_power = -1 * chargepoints[index].charger_power
 				}
+				else {
+					entry.car_power = 0;
+				}
 				return entry
 			});
 			let entryVal = function(sample, entry, filter) {
@@ -1857,17 +1860,22 @@ Module.register("MMM-Powerwall", {
 						battery: 4,
 						grid: 5
 					}[entry.key],
-					data: datapoints.map(sample => {
-						let val = entryVal(sample, entry, filter);
-						return val
-					})
-				};
+					data: datapoints.
+						map(sample => {
+							let val = entryVal(sample, entry, filter);
+							return val
+						}).
+						map((val, i, vals) =>
+							( vals[i] || vals[i-1] || vals[i+1] ) ?
+								Math.abs(val) >= 1 ? val : (filter(.0001) + filter(-.0001))
+							: null)
+					};
 			};
 			return {
 				labels: datapoints.map(entry => entry.timestamp),
 				datasets: [
-					...DISPLAY_SOURCES.map(entry => process_dataset(entry, x => x > 0 ? x : null)),
-					...DISPLAY_SINKS.map(entry => process_dataset(entry, x => x < 0 ? x : null))
+					...DISPLAY_SOURCES.map(entry => process_dataset(entry, x => x > 0 ? x : 0)),
+					...DISPLAY_SINKS.map(entry => process_dataset(entry, x => x < 0 ? x : 0))
 				]
 			};
 		}
