@@ -342,6 +342,11 @@ module.exports = NodeHelper.create({
 						changed = true;
 					}
 				}
+				else {
+					self.sendSocketNotification("ReconfigurePowerwall", {
+						ip: powerwallIP,
+					});
+				}
 			}
 		}
 
@@ -753,7 +758,7 @@ module.exports = NodeHelper.create({
 
 		for( const username of accountsToCheck ) {
 			let tokens = this.teslaApiAccounts[username];
-			if( (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
+			if( tokens && (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
 				var authenticator = new auth.Authenticator();
 				authenticator.on('error', async (message) => {
 					this.log("Tesla auth failed: " + message);

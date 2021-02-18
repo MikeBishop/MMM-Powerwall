@@ -89,6 +89,7 @@ Module.register("MMM-Powerwall", {
 	soe: 0,
 	vehicles: null,
 	displayVehicles: [],
+	accountsNeedAuth: [],
 	vehicleInFocus: null,
 	cloudInterval: null,
 	timeouts: {},
@@ -187,7 +188,8 @@ Module.register("MMM-Powerwall", {
 				{},
 				Translator.translationsFallback[this.name],
 				Translator.translations[this.name],
-			)
+			),
+			accountsNeedAuth: this.accountsNeedAuth,
 		};
 
 		this.Log("Returning " + JSON.stringify(result));
@@ -291,27 +293,55 @@ Module.register("MMM-Powerwall", {
 		}
 	},
 
+	showAccountAuth: function (account) {
+		let needRefresh = false;
+		if( this.accountsNeedAuth.indexOf(account) == -1) {
+			this.accountsNeedAuth.push(account);
+			this.updateDom();
+		}
+		if( this.config.graphs.indexOf("AuthNeeded") == -1 )
+		{
+			this.config.graphs.push("AuthNeeded");
+			this.updateDom();
+		}
+	},
+
+	clearAccountAuth: function(account) {
+		let toRemove = this.accountsNeedAuth.indexOf(account);
+		if( toRemove >= 0 ) {
+			this.accountsNeedAuth.splice(toRemove, 1);
+			this.updateDom();
+		}
+
+		if( this.accountsNeedAuth.length == 0 ) {
+			toRemove = this.config.graphs.indexOf("AuthNeeded");
+			if( toRemove >= 0 ) {
+				this.config.graphs.splice(toRemove, 1);
+				this.updateDom();
+			}
+		}
+	},
+
 	// socketNotificationReceived from helper
 	socketNotificationReceived: async function (notification, payload) {
 		var self = this;
 		this.Log("Received " + notification + ": " + JSON.stringify(payload));
 		switch(notification) {
 			case "ReconfigureTeslaAPI":
+				if( payload.teslaAPIUsername == self.config.teslaAPIUsername )
+				{
+					this.showAccountAuth(payload.teslaAPIUsername);
+				}
+				break;
 			case "ReconfigurePowerwall":
-				if( (payload.teslaAPIUsername == self.config.teslaAPIUsername ||
-					 payload.powerwallIP == self.config.powerwallIP) &&
-					this.config.graphs.indexOf("AuthNeeded") == -1 ) {
-						this.config.graphs.push("AuthNeeded");
-						this.updateDom();
+				if( payload.ip == self.config.powerwallIP)
+				{
+					this.showAccountAuth(payload.ip);
 				}
 				break;
 			case "TeslaAPIConfigured":
 				if( payload.username === self.config.teslaAPIUsername ) {
-					let toRemove = this.config.graphs.indexOf("AuthNeeded");
-					if( toRemove >= 0 ) {
-						this.config.graphs.splice(toRemove, 1);
-						this.updateDom();
-					}
+					this.clearAccountAuth(payload.username);
 					this.teslaAPIEnabled = true;
 					if( !self.config.siteID ) {
 						self.config.siteID = payload.siteID;
@@ -329,12 +359,8 @@ Module.register("MMM-Powerwall", {
 				}
 				break;
 			case "PowerwallConfigured":
-				if( payload.powerwallIP == self.config.powerwallIP ) {
-					let toRemove = this.config.graphs.indexOf("AuthNeeded");
-					if( toRemove >= 0 ) {
-						this.config.graphs.splice(toRemove, 1);
-						this.updateDom();
-					}
+				if( payload.ip == self.config.powerwallIP ) {
+					this.clearAccountAuth(payload.ip);
 				}
 			case "Aggregates":
 				if( payload.ip === this.config.powerwallIP ) {
@@ -1530,271 +1556,269 @@ Module.register("MMM-Powerwall", {
 		}
 		this.charts = {};
 
-		if( this.flows ) {
+		var myCanvas = document.getElementById(this.identifier + "-SolarDestinations");
+		if( myCanvas ) {
+			let distribution = this.flows ?  this.flows.sources.solar.distribution : {};
 
-			var myCanvas = document.getElementById(this.identifier + "-SolarDestinations");
-			if( myCanvas ) {
-				let distribution = this.flows.sources.solar.distribution;
-
-				// Build the chart on the canvas
-				var solarProductionPie = new Chart(myCanvas, {
-					type: "pie",
-					data: {
-						datasets: [
-							{
-								data: DISPLAY_SINKS.map( (entry) => distribution[entry.key] ),
-								backgroundColor: DISPLAY_SINKS.map( (entry) => entry.color ),
-								weight: 2,
-								labels: DISPLAY_SINKS.map( (entry) => this.translate(entry.key) )
-							},
-							{
-								data: [1],
-								backgroundColor: SOLAR.color,
-								weight: 1,
-								showLine: false,
-								datalabels: {
-									labels: {
-										title: null,
-										value: null
-									}
+			// Build the chart on the canvas
+			var solarProductionPie = new Chart(myCanvas, {
+				type: "pie",
+				data: {
+					datasets: [
+						{
+							data: DISPLAY_SINKS.map( (entry) => distribution[entry.key] ),
+							backgroundColor: DISPLAY_SINKS.map( (entry) => entry.color ),
+							weight: 2,
+							labels: DISPLAY_SINKS.map( (entry) => this.translate(entry.key) )
+						},
+						{
+							data: [1],
+							backgroundColor: SOLAR.color,
+							weight: 1,
+							showLine: false,
+							datalabels: {
+								labels: {
+									title: null,
+									value: null
 								}
 							}
-						]
-					}
-				});
-				this.charts.solarProduction = solarProductionPie;
+						}
+					]
+				}
+			});
+			this.charts.solarProduction = solarProductionPie;
+		}
+
+		myCanvas = document.getElementById(this.identifier + "-HouseSources");
+		if( myCanvas ) {
+			let distribution = this.flows ? this.flows.sinks.house.sources : {};
+
+			// Build the chart on the canvas
+			var houseConsumptionPie = new Chart(myCanvas, {
+				type: "pie",
+				data: {
+					datasets: [
+						{
+							data: DISPLAY_SOURCES.map( (entry) => distribution[entry.key] ),
+							backgroundColor: DISPLAY_SOURCES.map( (entry) => entry.color ),
+							weight: 2,
+							labels: DISPLAY_SOURCES.map( (entry) => this.translate(entry.key) )
+						},
+						{
+							data: [1],
+							backgroundColor: HOUSE.color,
+							weight: 1,
+							showLine: false,
+							datalabels: {
+								labels: {
+									title: null,
+									value: null
+								}
+							}
+						}
+					]
+				}
+			});
+			this.charts.houseConsumption = houseConsumptionPie;
+		}
+
+		myCanvas = document.getElementById(this.identifier + "-SelfPoweredDetails");
+		if( myCanvas ) {
+			let offset = [0,1];
+			if (this.teslaAggregates && this.dayStart) {
+				offset = [
+					this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
+					this.teslaAggregates.load.energy_imported - this.dayStart.house.import
+				];
+				offset[1] -= Math.max(offset[0], 0);
 			}
-
-			myCanvas = document.getElementById(this.identifier + "-HouseSources");
-			if( myCanvas ) {
-				let distribution = this.flows.sinks.house.sources;
-
-				// Build the chart on the canvas
-				var houseConsumptionPie = new Chart(myCanvas, {
-					type: "pie",
-					data: {
-						datasets: [
-							{
-								data: DISPLAY_SOURCES.map( (entry) => distribution[entry.key] ),
-								backgroundColor: DISPLAY_SOURCES.map( (entry) => entry.color ),
-								weight: 2,
-								labels: DISPLAY_SOURCES.map( (entry) => this.translate(entry.key) )
+			let scSources = [SOLAR, POWERWALL, GRID];
+			var selfConsumptionDoughnut = new Chart(myCanvas, {
+				type: "doughnut",
+				data: {
+					datasets: [
+						{
+							data: this.selfConsumptionToday,
+							backgroundColor: scSources.map( entry => entry.color),
+							labels: scSources.map( entry => this.translate(entry.key) ),
+							datalabels: {
+								formatter: function(value, context) {
+									return [
+										context.dataset.labels[context.dataIndex],
+										Math.round(value) + "%"
+									];
+								}
 							},
-							{
-								data: [1],
-								backgroundColor: HOUSE.color,
-								weight: 1,
-								showLine: false,
-								datalabels: {
-									labels: {
-										title: null,
-										value: null
-									}
+							weight: 7
+						},
+						{
+							data: offset,
+							backgroundColor: [SOLAR.color, "rgba(0,0,0,0)"],
+							datalabels: {
+								labels: {
+									title: null,
+									value: null
+								}
+							},
+							weight: 1
+						},
+					]
+				},
+				options: {
+					cutoutPercentage: 60
+				}
+			});
+			this.charts.selfConsumption = selfConsumptionDoughnut;
+		}
+
+		myCanvas = document.getElementById(this.identifier + "-EnergyBar");
+		if( myCanvas && this.teslaAggregates ) {
+			let data = this.dataTotals();
+			// Horizontal bar chart here
+			let energyBar = new Chart(myCanvas, {
+				type: 'horizontalBar',
+				data: {
+					labels: DISPLAY_ALL.map(entry => this.translate(entry.key)),
+					datasets: [{
+						backgroundColor: DISPLAY_ALL.map(entry => entry.color),
+						borderColor: DISPLAY_ALL.map(entry => entry.color),
+						borderWidth: 1,
+						data: data
+					}]
+				},
+				options: {
+					// Elements options apply to all of the options unless overridden in a dataset
+					// In this case, we are setting the border of each horizontal bar to be 2px wide
+					elements: {
+						rectangle: {
+							borderWidth: 2,
+						}
+					},
+					maintainAspectRatio: true,
+					aspectRatio: 1.7,
+					title: {
+						display: false
+					},
+					plugins: {
+						datalabels: false,
+						annotation: {
+							drawTime: 'afterDatasetsDraw',
+							annotations: [{
+								type: 'line',
+								mode: 'vertical',
+								scaleID: 'xAxis',
+								value: 0,
+								borderColor: 'black',
+								borderWidth: 0.5,
+								label: {
+									enabled: false
 								}
 							}]
 						}
-					});
-					this.charts.houseConsumption = houseConsumptionPie;
-				}
-			}
-
-			myCanvas = document.getElementById(this.identifier + "-SelfPoweredDetails");
-			if( myCanvas ) {
-				let offset = [0,1];
-				if (this.teslaAggregates && this.dayStart) {
-					offset = [
-						this.teslaAggregates.solar.energy_exported - this.dayStart.solar.export,
-						this.teslaAggregates.load.energy_imported - this.dayStart.house.import
-					];
-					offset[1] -= Math.max(offset[0], 0);
-				}
-				let scSources = [SOLAR, POWERWALL, GRID];
-				var selfConsumptionDoughnut = new Chart(myCanvas, {
-					type: "doughnut",
-					data: {
-						datasets: [
-							{
-								data: this.selfConsumptionToday,
-								backgroundColor: scSources.map( entry => entry.color),
-								labels: scSources.map( entry => this.translate(entry.key) ),
-								datalabels: {
-									formatter: function(value, context) {
-										return [
-											context.dataset.labels[context.dataIndex],
-											Math.round(value) + "%"
-										];
-									}
-								},
-								weight: 7
-							},
-							{
-								data: offset,
-								backgroundColor: [SOLAR.color, "rgba(0,0,0,0)"],
-								datalabels: {
-									labels: {
-										title: null,
-										value: null
-									}
-								},
-								weight: 1
-							},
-						]
 					},
-					options: {
-						cutoutPercentage: 60
-					}
-				});
-				this.charts.selfConsumption = selfConsumptionDoughnut;
-			}
-
-			myCanvas = document.getElementById(this.identifier + "-EnergyBar");
-			if( myCanvas && this.teslaAggregates ) {
-				let data = this.dataTotals();
-				// Horizontal bar chart here
-				let energyBar = new Chart(myCanvas, {
-					type: 'horizontalBar',
-					data: {
-						labels: DISPLAY_ALL.map(entry => this.translate(entry.key)),
-						datasets: [{
-							backgroundColor: DISPLAY_ALL.map(entry => entry.color),
-							borderColor: DISPLAY_ALL.map(entry => entry.color),
-							borderWidth: 1,
-							data: data
+					scales: {
+						xAxes: [{
+							id: 'xAxis',
+							ticks: {
+								beginAtZero: true,
+								callback: function( value, index, values) {
+									if( value % 1000 == 0 ) {
+										return Math.abs(value) / 1000;
+									}
+								},
+								fontColor: "white",
+								precision: 0,
+								suggestedMax: 1000,
+								suggestedMin: -1000
+							},
+							scaleLabel: {
+								display: true,
+								labelString: this.translate("energybar_label"),
+								fontColor: "white"
+							}
+						}],
+						yAxes: [{
+							ticks: {
+								fontColor: "white"
+							}
 						}]
-					},
-					options: {
-						// Elements options apply to all of the options unless overridden in a dataset
-						// In this case, we are setting the border of each horizontal bar to be 2px wide
-						elements: {
-							rectangle: {
-								borderWidth: 2,
-							}
-						},
-						maintainAspectRatio: true,
-						aspectRatio: 1.7,
-						title: {
-							display: false
-						},
-						plugins: {
-							datalabels: false,
-							annotation: {
-								drawTime: 'afterDatasetsDraw',
-								annotations: [{
-									type: 'line',
-									mode: 'vertical',
-									scaleID: 'xAxis',
-									value: 0,
-									borderColor: 'black',
-									borderWidth: 0.5,
-									label: {
-										enabled: false
-									}
-								}]
-							}
-						},
-						scales: {
-							xAxes: [{
-								id: 'xAxis',
-								ticks: {
-									beginAtZero: true,
-									callback: function( value, index, values) {
-										if( value % 1000 == 0 ) {
-											return Math.abs(value) / 1000;
-										}
-									},
-									fontColor: "white",
-									precision: 0,
-									suggestedMax: 1000,
-									suggestedMin: -1000
-								},
-								scaleLabel: {
-									display: true,
-									labelString: this.translate("energybar_label"),
-									fontColor: "white"
-								}
-							}],
-							yAxes: [{
-								ticks: {
-									fontColor: "white"
-								}
-							}]
-						}
 					}
-				});
-				this.charts.energyBar = energyBar;
-			}
+				}
+			});
+			this.charts.energyBar = energyBar;
+		}
 
-			myCanvas = document.getElementById(this.identifier + "-PowerLine");
-			if( myCanvas ) {
-				let data = this.processPowerHistory();
-				let powerLine = new Chart(myCanvas, {
-					type: 'line',
-					data: data,
-					options: {
-						// Elements options apply to all of the options unless overridden in a dataset
-						// In this case, we are setting the border of each horizontal bar to be 2px wide
-						elements: {
-							point: {
-								radius: 0
-							}
-						},
-						maintainAspectRatio: true,
-						aspectRatio: 1.7,
-						spanGaps: false,
-						title: {
-							display: false
-						},
-						plugins: {
-							datalabels: false,
-							annotation: {
-								drawTime: 'afterDatasetsDraw',
-								annotations: [{
-									type: 'line',
-									mode: 'horizontal',
-									scaleID: 'yAxis',
-									value: 0,
-									borderColor: 'black',
-									borderWidth: 0.5,
-									label: {
-										enabled: false
-									}
-								}]
-							}
-						},
-						scales: {
-							xAxes: [{
-								id: 'xAxis',
-								type: "time",
-								ticks: {
-									min: new Date().setHours(0,0,0,0),
-									max: new Date().setHours(24,0,0,0),
-									fontColor: "white",
-									autoSkipPadding: 10
+		myCanvas = document.getElementById(this.identifier + "-PowerLine");
+		if( myCanvas ) {
+			let data = this.processPowerHistory();
+			let powerLine = new Chart(myCanvas, {
+				type: 'line',
+				data: data,
+				options: {
+					// Elements options apply to all of the options unless overridden in a dataset
+					// In this case, we are setting the border of each horizontal bar to be 2px wide
+					elements: {
+						point: {
+							radius: 0
+						}
+					},
+					maintainAspectRatio: true,
+					aspectRatio: 1.7,
+					spanGaps: false,
+					title: {
+						display: false
+					},
+					plugins: {
+						datalabels: false,
+						annotation: {
+							drawTime: 'afterDatasetsDraw',
+							annotations: [{
+								type: 'line',
+								mode: 'horizontal',
+								scaleID: 'yAxis',
+								value: 0,
+								borderColor: 'black',
+								borderWidth: 0.5,
+								label: {
+									enabled: false
 								}
-							}],
-							yAxes: [{
-								type: "linear",
-								ticks: {
-									callback: function( value, index, values) {
-										if( value % 1000 == 0 ) {
-											return Math.abs(value) / 1000;
-										}
-									},
-									fontColor: "white",
-									precision: 0
-								},
-								scaleLabel: {
-									display: true,
-									labelString: this.translate("powerline_label"),
-									fontColor: "white"
-								},
-								stacked: true
 							}]
 						}
+					},
+					scales: {
+						xAxes: [{
+							id: 'xAxis',
+							type: "time",
+							ticks: {
+								min: new Date().setHours(0,0,0,0),
+								max: new Date().setHours(24,0,0,0),
+								fontColor: "white",
+								autoSkipPadding: 10
+							}
+						}],
+						yAxes: [{
+							type: "linear",
+							ticks: {
+								callback: function( value, index, values) {
+									if( value % 1000 == 0 ) {
+										return Math.abs(value) / 1000;
+									}
+								},
+								fontColor: "white",
+								precision: 0
+							},
+							scaleLabel: {
+								display: true,
+								labelString: this.translate("powerline_label"),
+								fontColor: "white"
+							},
+							stacked: true
+						}]
 					}
-				});
-				this.charts.powerLine = powerLine;
-			}
+				}
+			});
+			this.charts.powerLine = powerLine;
+		}
 	},
 
 	processPowerHistory: function() {
