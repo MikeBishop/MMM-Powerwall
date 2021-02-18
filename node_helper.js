@@ -7,12 +7,9 @@
 
 const NodeHelper = require("node_helper");
 const fs = require("fs").promises;
-const Https = require("https");
-const unauthenticated_agent = new Https.Agent({
-	rejectUnauthorized: false,
-});
 const fetch = require("node-fetch");
 const auth = require("./tesla-oauth-v3.js");
+const powerwall = require("./powerwall");
 const path = require("path");
 const nunjucks = require("./../../vendor/node_modules/nunjucks");
 const { check, validationResult, matchedData } = require('express-validator');
@@ -22,13 +19,11 @@ const bodyParser = require('./../../node_modules/body-parser');
 module.exports = NodeHelper.create({
 
 	start: async function() {
-		this.powerwallAggregates = {};
-		this.powerwallSOE = {};
-		this.powerwallCloudSOE = {};
 		this.twcStatus = {};
 		this.twcVINs = {};
 		this.chargeHistory = {};
 		this.teslaApiAccounts = {};
+		this.powerwallAccounts = {};
 		this.energy = {};
 		this.backup = {};
 		this.selfConsumption = {};
@@ -41,6 +36,7 @@ module.exports = NodeHelper.create({
 		this.debug = false;
 		this.thisConfigs = [];
 		this.tokenFile = path.resolve(__dirname + "/tokens.json");
+		this.cookieFile = path.resolve(__dirname + "/cookies.json");
 		this.template =	null;
 
 		await this.loadTranslation("en");
@@ -233,6 +229,69 @@ module.exports = NodeHelper.create({
 				}
 			}
 		}
+
+		try {
+			fileContents = JSON.parse(
+					await fs.readFile(this.cookieFile)
+			);
+		}
+		catch(e) {
+		}
+
+		// Now do Powerwalls
+		let changed = false;
+		this.thisConfigs.forEach(async config => {
+			let powerwallIP = config.powerwallIP;
+			let powerwallPassword = config.powerwallPassword;
+
+			let thisPowerwall = this.powerwallAccounts[powerwallIP];
+			if( !thisPowerwall ) {
+				thisPowerwall = new powerwall.Powerwall(powerwallIP);
+				thisPowerwall.
+					on("error", error => {
+						self.log(powerwallIP + " error: " + error);
+					}).
+					on("login", () => {
+						this.log("Successfully logged into " + powerwallIP);
+					}).
+					on("aggregates", aggregates => {
+						self.sendSocketNotification("Aggregates", {
+							ip: powerwallIP,
+							aggregates: aggregates
+						});
+					}).
+					on("soe", soe => {
+						self.sendSocketNotification("SOE", {
+							ip: powerwallIP,
+							soe: soe
+						});
+					}).
+					on("grid", grid => {
+						self.sendSocketNotification("GridStatus", {
+							ip: powerwallIP,
+							gridStatus: grid
+						});
+					})
+				this.powerwallAccounts[powerwallIP] = thisPowerwall;
+			}
+
+			if( !thisPowerwall.authenticated ) {
+				if( powerwallPassword ) {
+					await thisPowerwall.login(powerwallPassword);
+					if( thisPowerwall.authenticated ) {
+						fileContents[powerwallIP] = thisPowerwall.getCookies();
+						changed = true;
+					}
+				}
+				else if ( powerwallIP in fileContents ) {
+					thisPowerwall.loadCookie(fileContents[powerwallIP]);
+				}
+			}
+		});
+
+		if( changed ) {
+			await fs.writeFile(this.cookieFile, JSON.stringify(fileContents));
+		}
 	},
 
 	// Override socketNotificationReceived method.
@@ -270,30 +329,7 @@ module.exports = NodeHelper.create({
 		}
 		else if (notification === "UpdateLocal") {
 			let ip = payload.powerwallIP;
-			this.initializeCache(this.powerwallAggregates, ip);
-			this.initializeCache(this.powerwallSOE, ip);
-
-			let pwPromise;
-			if( this.powerwallAggregates[ip].lastUpdate + payload.updateInterval < Date.now() ) {
-				pwPromise = self.updatePowerwall(ip);
-			}
-			else {
-				pwPromise = Promise.resolve();
-				let age = Date.now() - this.powerwallAggregates[ip].lastUpdate
-				this.log("Returning cached local data retrieved " + age + "ms ago:" + this.powerwallAggregates[ip].lastResult);
-				if (this.powerwallAggregates[ip].lastResult) {
-					this.sendSocketNotification("Aggregates", {
-						ip: ip,
-						aggregates: this.powerwallAggregates[ip].lastResult
-					});
-				}
-				if (this.powerwallSOE[ip].lastResult) {
-					this.sendSocketNotification("SOE", {
-						ip: ip,
-						soe: this.powerwallSOE[ip].lastResult
-					});
-				}
-			}
+			let pwPromise = this.powerwallAccounts[ip].update(payload.updateInterval);
 
 			ip = payload.twcManagerIP;
 			let port = payload.twcManagerPort;
@@ -509,68 +545,6 @@ module.exports = NodeHelper.create({
 		node[lastKey][target] = data;
 	},
 
-	updatePowerwall: async function(powerwallIP) {
-		let now = Date.now();
-		let url = "https://" + powerwallIP + "/api/meters/aggregates";
-		this.log("Calling " + url);
-		let aggregatePromise = fetch(url, {agent: unauthenticated_agent}).then(
-			async result => {
-				if( !result.ok ) {
-					this.log("Powerwall fetch failed")
-					return
-				}
-
-				var aggregates = await result.json();
-				this.log("Powerwall returned: " + JSON.stringify(aggregates));
-				this.updateCache(aggregates, this.powerwallAggregates, powerwallIP, now);
-				// Send notification
-				this.sendSocketNotification("Aggregates", {
-					ip: powerwallIP,
-					aggregates: aggregates
-				});
-			}
-		);
-
-		url = "https://" + powerwallIP + "/api/system_status/soe";
-		this.log("Calling " + url);
-		let localPromise = fetch(url, {agent: unauthenticated_agent}).then(
-			async result => {
-				if( !result.ok ) {
-					this.log("Powerwall SOE fetch failed");
-					return null;
-				}
-
-				let response = await result.json();
-				let adjustedSOE = (response.percentage - 5) / .95
-				this.updateCache(adjustedSOE, this.powerwallSOE, powerwallIP, now);
-
-				this.sendSocketNotification("SOE", {
-					ip: powerwallIP,
-					soe: adjustedSOE
-				});
-			}
-		);
-
-		url = "https://" + powerwallIP + "/api/system_status/grid_status";
-		this.log("Calling " + url);
-		let gridPromise = fetch(url, {agent: unauthenticated_agent}).then(
-			async result => {
-				if( !result.ok ) {
-					this.log("Powerwall Grid Status fetch failed");
-					return null;
-				}
-
-				let response = await result.json();
-				this.sendSocketNotification("GridStatus", {
-					ip: powerwallIP,
-					gridStatus: response.grid_status
-				});
-			}
-		)
-
-		await Promise.all([gridPromise, localPromise, aggregatePromise]);
-	},
-
 	doTeslaApiGetStormWatch: async function(username, siteID) {
 		if( username && siteID ) {
 			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
@@ -718,8 +692,6 @@ module.exports = NodeHelper.create({
 			accountsToCheck = Object.keys(this.teslaApiAccounts);
 		}
 
-		// We don't actually track which tokens came from which file.
-		// If there are multiple, write all to all.
 		for( const username of accountsToCheck ) {
 			let tokens = this.teslaApiAccounts[username];
 			if( (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
