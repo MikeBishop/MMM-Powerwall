@@ -297,10 +297,12 @@ Module.register("MMM-Powerwall", {
 		this.Log("Received " + notification + ": " + JSON.stringify(payload));
 		switch(notification) {
 			case "ReconfigureTeslaAPI":
-				if( payload.teslaAPIUsername == self.config.teslaAPIUsername &&
+			case "ReconfigurePowerwall":
+				if( (payload.teslaAPIUsername == self.config.teslaAPIUsername ||
+					 payload.powerwallIP == self.config.powerwallIP) &&
 					this.config.graphs.indexOf("AuthNeeded") == -1 ) {
-					this.config.graphs.push("AuthNeeded");
-					this.updateDom();
+						this.config.graphs.push("AuthNeeded");
+						this.updateDom();
 				}
 				break;
 			case "TeslaAPIConfigured":
@@ -326,7 +328,14 @@ Module.register("MMM-Powerwall", {
 					await this.focusOnVehicles(this.vehicles, 0);
 				}
 				break;
-
+			case "PowerwallConfigured":
+				if( payload.powerwallIP == self.config.powerwallIP ) {
+					let toRemove = this.config.graphs.indexOf("AuthNeeded");
+					if( toRemove >= 0 ) {
+						this.config.graphs.splice(toRemove, 1);
+						this.updateDom();
+					}
+				}
 			case "Aggregates":
 				if( payload.ip === this.config.powerwallIP ) {
 					this.doTimeout("local", () => self.updateLocal(), self.config.localUpdateInterval)

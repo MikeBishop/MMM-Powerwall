@@ -301,9 +301,18 @@ module.exports = NodeHelper.create({
 				thisPowerwall.
 					on("error", error => {
 						self.log(powerwallIP + " error: " + error);
+						if( !thisPowerwall.authenticated ) {
+							self.sendSocketNotification("ReconfigurePowerwall", {
+								ip: powerwallIP,
+							});
+						}
 					}).
 					on("login", () => {
 						this.log("Successfully logged into " + powerwallIP);
+						self.sendSocketNotification("PowerwallConfigured", {
+							ip: powerwallIP,
+						});
+
 					}).
 					on("aggregates", aggregates => {
 						self.sendSocketNotification("Aggregates", {

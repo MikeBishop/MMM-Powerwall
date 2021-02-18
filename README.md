@@ -74,18 +74,27 @@ requests made to either local or cloud endpoints.
 ### Authentication
 
 This module relies on being able to access your Powerwall both locally and via
-the Tesla API.  The local endpoint interactions require no authentication. To
-authenticate to the Tesla API, you have two options:
+the Tesla API.  On older firmware versions, the local endpoint interactions
+required no authentication; this changed in 20.49.0. To authenticate to either
+API, you have two options:
 
 - **Sign in via the module.**
   After installing the module, visit `/MMM-Powerwall/auth` on your MagicMirror
   HTTP port, e.g. `http://192.168.0.52:8080/MMM-Powerwall/auth`.  You can sign
-  in with your username and password, and the module will cache the tokens.
-  You only need to include your username in the module configuration.
-- **Include your password in the module configuration.** Your password will not
-  be relayed between clients and the Magic Mirror, so this should be safe, but
-  gauge your comfort level with your plain-text password stored on the SD card.
-  Note that this option does not work if MFA is enabled on your account.
+  in with your username and password, and the module will cache the tokens /
+  Cookies. You only need to include your username and Powerwall IP in the module
+  configuration.
+
+  Caveats:
+    - It is unknown at this time how long the Cookies remain valid on
+      the local API.
+    - You will need to visit the page once per Tesla API account *and* once per
+      Powerwall IP.
+- **Include your passwords in the module configuration.**
+  Your passwords will not be relayed between clients and the Magic Mirror, so
+  this should be safe, but gauge your comfort level with your plain-text
+  password stored on the SD card. Note that this option does not work with the
+  Tesla API if MFA is enabled on your account.
 
 The module will generate `tokens.json` after the first successful load with the
 password in the config, so you can then remove the password from your
