@@ -36,7 +36,7 @@ module.exports = NodeHelper.create({
 		this.debug = false;
 		this.thisConfigs = [];
 		this.tokenFile = path.resolve(__dirname + "/tokens.json");
-		this.cookieFile = path.resolve(__dirname + "/cookies.json");
+		this.localPwFile = path.resolve(__dirname + "/localpw.json");
 		this.template =	null;
 
 		await this.loadTranslation("en");
@@ -164,10 +164,10 @@ module.exports = NodeHelper.create({
 					once("login", async () => {
 						try {
 							fileContents = JSON.parse(
-									await fs.readFile(this.cookieFile)
+									await fs.readFile(this.localPwFile)
 							);
-							fileContents[powerwallIP] = thisPowerwall.getCookies();
-							await fs.writeFile(this.cookieFile, JSON.stringify(fileContents));
+							fileContents[powerwallIP] = req.body["password"];
+							await fs.writeFile(this.localPwFile, JSON.stringify(fileContents));
 						}
 						catch {}
 					});
@@ -283,7 +283,7 @@ module.exports = NodeHelper.create({
 		// Now do Powerwalls
 		try {
 			fileContents = JSON.parse(
-					await fs.readFile(this.cookieFile)
+					await fs.readFile(this.localPwFile)
 			);
 		}
 		catch(e) {
@@ -293,7 +293,7 @@ module.exports = NodeHelper.create({
 		let changed = false;
 		for( const config of this.thisConfigs ) {
 			let powerwallIP = config.powerwallIP;
-			let powerwallPassword = config.powerwallPassword;
+			let powerwallPassword = config.powerwallPassword || fileContents[powerwallIP];
 
 			let thisPowerwall = this.powerwallAccounts[powerwallIP];
 			if( !thisPowerwall ) {
@@ -312,7 +312,6 @@ module.exports = NodeHelper.create({
 						self.sendSocketNotification("PowerwallConfigured", {
 							ip: powerwallIP,
 						});
-
 					}).
 					on("aggregates", aggregates => {
 						self.sendSocketNotification("Aggregates", {
@@ -338,20 +337,17 @@ module.exports = NodeHelper.create({
 			if( !thisPowerwall.authenticated ) {
 				if( powerwallPassword ) {
 					await thisPowerwall.login(powerwallPassword);
-					if( thisPowerwall.authenticated ) {
-						fileContents[powerwallIP] = thisPowerwall.getCookies();
+					if( thisPowerwall.authenticated && fileContents[powerwallIP] != powerwallPassword ) {
+						fileContents[powerwallIP] = powerwallPassword;
 						changed = true;
 					}
-				}
-				else if ( powerwallIP in fileContents ) {
-					thisPowerwall.loadCookie(fileContents[powerwallIP]);
 				}
 			}
 		}
 
 		if( changed ) {
 			try {
-				await fs.writeFile(this.cookieFile, JSON.stringify(fileContents));
+				await fs.writeFile(this.localPwFile, JSON.stringify(fileContents));
 			}
 			catch (e) {}
 		}

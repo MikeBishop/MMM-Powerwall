@@ -78,27 +78,23 @@ the Tesla API.  On older firmware versions, the local endpoint interactions
 required no authentication; this changed in 20.49.0. To authenticate to either
 API, you have two options:
 
-- **Sign in via the module.**
+- **Sign in via the module. (Recommended)**
   After installing the module, visit `/MMM-Powerwall/auth` on your MagicMirror
   HTTP port, e.g. `http://192.168.0.52:8080/MMM-Powerwall/auth`.  You can sign
-  in with your username and password, and the module will cache the tokens /
-  Cookies. You only need to include your username and Powerwall IP in the module
-  configuration.
+  in with your username and password to each account.  The module will cache
+  tokens for the Tesla API, but needs to retain the actual password for the
+  local API. It is NOT RECOMMENDED that these be the same password.  If signing
+  in this way, you only need to include your username and Powerwall IP in the
+  module configuration.
 
-  Caveats:
-    - It is unknown at this time how long the Cookies remain valid on
-      the local API.
-    - You will need to visit the page once per Tesla API account *and* once per
-      Powerwall IP.
 - **Include your passwords in the module configuration.**
-  Your passwords will not be relayed between clients and the Magic Mirror, so
-  this should be safe, but gauge your comfort level with your plain-text
-  password stored on the SD card. Note that this option does not work with the
-  Tesla API if MFA is enabled on your account.
+  Note that the client downloads `config.js` during load, so anything in your
+  config file passes unencrypted over the network (unless you've set up TLS).
+  This method also does not work with the Tesla API if MFA is enabled.
 
-The module will generate `tokens.json` after the first successful load with the
-password in the config, so you can then remove the password from your
-`config.js` file afterward if desired.
+The module will generate `tokens.json` (for the Tesla API) and `localpw.json`
+(for the local Powerwall) after the first successful load with the password(s),
+so you can remove the password from your `config.js` file afterward if desired.
 
 Neither the password nor the tokens are sent anywhere except from the
 node_helper to the Tesla API.  Feel free to verify this in the code.
