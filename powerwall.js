@@ -43,6 +43,8 @@ module.exports = {
             this.lastAggregate = null;
             this.lastSOE = null;
             this.lastGrid = null;
+            this.password = null;
+            this.cookieTimeout = 0;
         }
 
         async login(password) {
@@ -67,9 +69,12 @@ module.exports = {
             }
             if (res.status === 200) {
                 this.authenticated = true;
+                this.password = password;
+                this.cookieTimeout = Date.now() + (60 * 60 * 1000);
                 return this.emit('login');
             }
             else {
+                this.password = null;
                 return this.emit("error", "login failed; " + res.toString());
             }
         }
@@ -94,6 +99,10 @@ module.exports = {
             }
 
             let now = Date.now();
+            if( now > this.cookieTimeout && this.password ) {
+                this.login(this.password)
+            }
+
             if( now - this.lastUpdate < interval ) {
                 this.emit('aggregates', this.lastAggregate);
                 this.emit('soe', this.lastSOE);
@@ -144,6 +153,9 @@ module.exports = {
 
             if( success ) {
                 this.lastUpdate = now;
+            }
+            else if (this.password) {
+                this.login(this.password);
             }
         }
     }
