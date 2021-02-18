@@ -103,7 +103,10 @@
                 <canvas id="{{id}}-PowerLine"></canvas>
             </div>
         {%- elif graph == "AuthNeeded" -%}
-            <a href="/MMM-Powerwall/auth">{{translations.authNeeded}}</a>
+            <h4><a href="/MMM-Powerwall/auth">{{translations.authNeeded}}</a></h4>
+            {% for account in accountsNeedAuth %}
+                <p class="small">{{account}}</p>
+            {% endfor %}
         {%- else -%}
         {{translations.unknown}}
         {%- endif -%}

@@ -40,14 +40,15 @@ are being introduced because of Tesla's new authentication model.**
 | Option                | Description
 |---------------------- |-----------
 | `powerwallIP`         | *Required* IP address of the Powerwall endpoint to query
+| `powerwallPassword`   | *Optional* Password for local Powerwall endpoint
+| `teslaAPIUsername`    | *Recommended* Username for your Tesla account
+| `teslaAPIPassword`    | *Optional* Password for your Tesla account; see below for more options
 | `siteID`              | *Optional* if your Tesla account has exactly one energy site; required if multiple are present
 | `twcManagerIP`        | *Optional* IP address or hostname of TWCManager instance; if omitted, Car Charging will not be displayed
 | `twcManagerPort`      | *Optional* port of TWCManager's web interface; default is `8080`
 | `graphs`              | *Optional* Array of tiles to show. Possible values are described below; default is all
 | `localUpdateInterval` | *Optional* How often (in milliseconds) to poll local endpoints (Powerwall and TWCManager)<br>Default 10000 milliseconds (10 seconds)
 | `cloudUpdateInterval` | *Optional* How often (in milliseconds) to poll Tesla API<br>Default 300000 milliseconds (five minutes)
-| `teslaAPIUsername`    | *Recommended* Username for your Tesla account
-| `teslaAPIPassword`    | *Optional* Password for your Tesla account; see below for more options
 | `home`                | *Optional* Coordinates (`[lat, lon]`) of your home; used to indicate when car is at home and to get sunrise/sunset times
 | `debug`               | *Optional* Enables additional debug output to the browser tools Console and to stderr on the MM, useful for troubleshooting
 
@@ -73,22 +74,27 @@ requests made to either local or cloud endpoints.
 ### Authentication
 
 This module relies on being able to access your Powerwall both locally and via
-the Tesla API.  The local endpoint interactions require no authentication. To
-authenticate to the Tesla API, you have two options:
+the Tesla API.  On older firmware versions, the local endpoint interactions
+required no authentication; this changed in 20.49.0. To authenticate to either
+API, you have two options:
 
-- **Sign in via the module.**
+- **Sign in via the module. (Recommended)**
   After installing the module, visit `/MMM-Powerwall/auth` on your MagicMirror
   HTTP port, e.g. `http://192.168.0.52:8080/MMM-Powerwall/auth`.  You can sign
-  in with your username and password, and the module will cache the tokens.
-  You only need to include your username in the module configuration.
-- **Include your password in the module configuration.** Your password will not
-  be relayed between clients and the Magic Mirror, so this should be safe, but
-  gauge your comfort level with your plain-text password stored on the SD card.
-  Note that this option does not work if MFA is enabled on your account.
+  in with your username and password to each account.  The module will cache
+  tokens for the Tesla API, but needs to retain the actual password for the
+  local API. It is NOT RECOMMENDED that these be the same password.  If signing
+  in this way, you only need to include your username and Powerwall IP in the
+  module configuration.
 
-The module will generate `tokens.json` after the first successful load with the
-password in the config, so you can then remove the password from your
-`config.js` file afterward if desired.
+- **Include your passwords in the module configuration.**
+  Note that the client downloads `config.js` during load, so anything in your
+  config file passes unencrypted over the network (unless you've set up TLS).
+  This method also does not work with the Tesla API if MFA is enabled.
+
+The module will generate `tokens.json` (for the Tesla API) and `localpw.json`
+(for the local Powerwall) after the first successful load with the password(s),
+so you can remove the password from your `config.js` file afterward if desired.
 
 Neither the password nor the tokens are sent anywhere except from the
 node_helper to the Tesla API.  Feel free to verify this in the code.
