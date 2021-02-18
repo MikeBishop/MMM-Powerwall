@@ -51,7 +51,9 @@ module.exports = NodeHelper.create({
 				nunjucks.render(__dirname + "/auth.njk", {
 					translations: this.translation,
 					errors: {},
-					data: {}
+					data: {},
+					configUsers: Object.keys(this.teslaApiAccounts),
+					configIPs: Object.keys(this.powerwallAccounts),
 				})
 			);
 		});
@@ -134,10 +136,57 @@ module.exports = NodeHelper.create({
 					translations: this.translation,
 					errors: errors,
 					data: req.body,
+					configUsers: Object.keys(this.teslaApiAccounts),
+					configIPs: Object.keys(this.powerwallAccounts),
 				})
 			);
-
 		});
+
+		this.expressApp.post("/MMM-Powerwall/authLocal", [
+			check("password")
+				.notEmpty()
+				.withMessage(this.translation.needpassword)
+				.trim()
+		], async (req,res) => {
+			var errors = validationResult(req).mapped();
+
+			if (Object.keys(errors).length == 0) {
+				let thisPowerwall = this.powerwallAccounts[req.body["ip"]];
+				thisPowerwall.
+					once("error", message => {
+						errors.password = {
+							value: "",
+							msg: message,
+							param: "password",
+							location: "body"
+						};
+					}).
+					once("login", async () => {
+						try {
+							fileContents = JSON.parse(
+									await fs.readFile(this.cookieFile)
+							);
+							fileContents[powerwallIP] = thisPowerwall.getCookies();
+							await fs.writeFile(this.cookieFile, JSON.stringify(fileContents));
+						}
+						catch {}
+					});
+				await thisPowerwall.login(req.body["password"]);
+			}
+			if (Object.keys(errors).length == 0) {
+				return res.redirect("../..");
+			}
+			return res.send(
+				nunjucks.render(__dirname + "/auth.njk", {
+					translations: this.translation,
+					errors: errors,
+					data: req.body,
+					configUsers: Object.keys(this.teslaApiAccounts),
+					configIPs: Object.keys(this.powerwallAccounts),
+				})
+			);
+		});
+
 	},
 
 	combineConfig: async function() {
@@ -214,7 +263,8 @@ module.exports = NodeHelper.create({
 					await this.doTeslaApiLogin(username, password);
 				}
 				else {
-					this.log("Missing both Tesla password and access tokens");
+					this.teslaApiAccounts[username] = null;
+					this.log("Missing both Tesla password and access tokens for " + username);
 				}
 			}
 		});
@@ -230,17 +280,18 @@ module.exports = NodeHelper.create({
 			}
 		}
 
+		// Now do Powerwalls
 		try {
 			fileContents = JSON.parse(
 					await fs.readFile(this.cookieFile)
 			);
 		}
 		catch(e) {
+			fileContents = {};
 		}
 
-		// Now do Powerwalls
 		let changed = false;
-		this.thisConfigs.forEach(async config => {
+		for( const config of this.thisConfigs ) {
 			let powerwallIP = config.powerwallIP;
 			let powerwallPassword = config.powerwallPassword;
 
@@ -287,10 +338,13 @@ module.exports = NodeHelper.create({
 					thisPowerwall.loadCookie(fileContents[powerwallIP]);
 				}
 			}
-		});
+		}
 
 		if( changed ) {
-			await fs.writeFile(this.cookieFile, JSON.stringify(fileContents));
+			try {
+				await fs.writeFile(this.cookieFile, JSON.stringify(fileContents));
+			}
+			catch (e) {}
 		}
 	},
 
