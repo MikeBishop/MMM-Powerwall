@@ -1,5 +1,9 @@
 /* eslint-disable camelcase */
-var axios = require('axios');
+var axios = require('axios').default;
+const Https = require("https");
+const keepalive_agent = new Https.Agent({
+    keepAlive: true,
+});
 var crypto = require('crypto');
 var qs = require('querystring');
 var urlsafebase64 = require('urlsafe-base64');
@@ -17,7 +21,9 @@ module.exports = {
                 maxRedirects: 0,
                 validateStatus: (status) => {
                     return (status >= 200 && status < 300) || status === 302;
-                }
+                },
+                httpsAgent: keepalive_agent,
+                timeout: 5000
             });
             this.http.interceptors.request.use(config => {
                 this.jar.getCookies(config.url, {}, (err, cookies) => {
@@ -80,8 +86,13 @@ module.exports = {
         }
         async mfaCode(mfaCode) {
             var _a, _b, _c, _d;
-            const url = `https://auth.tesla.com/oauth2/v3/authorize/mfa/factors?transaction_id=${this.transactionId}`;
-            const res1 = await this.http.get(url);
+            try {
+                const url = `https://auth.tesla.com/oauth2/v3/authorize/mfa/factors?transaction_id=${this.transactionId}`;
+                const res1 = await this.http.get(url);
+            }
+            catch (e) {
+                return this.emit("error", e.toString());
+            }
             const factorId = res1.data.data[0].id;
             const mfaPayload = {
                 transaction_id: this.transactionId, factor_id: factorId, passcode: mfaCode

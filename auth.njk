@@ -6,7 +6,7 @@
 <div class="form-header">
     <h2>{{ translations.authHeader }}</h2>
     <ul class="errors-list">
-      {% for error in errors %}
+      {% for location, error in errors %}
         <li>{{ error.msg }}</li>
       {% endfor %}
     </ul>
