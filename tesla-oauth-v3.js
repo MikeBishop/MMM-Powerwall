@@ -23,7 +23,10 @@ module.exports = {
                     return (status >= 200 && status < 300) || status === 302;
                 },
                 httpsAgent: keepalive_agent,
-                timeout: 5000
+                timeout: 5000,
+                headers: {
+                    "User-Agent": "hackney/1.17.0"
+                }
             });
             this.http.interceptors.request.use(config => {
                 this.jar.getCookies(config.url, {}, (err, cookies) => {
@@ -88,7 +91,7 @@ module.exports = {
             var _a, _b, _c, _d;
             try {
                 const url = `https://auth.tesla.com/oauth2/v3/authorize/mfa/factors?transaction_id=${this.transactionId}`;
-                const res1 = await this.http.get(url);
+                var res1 = await this.http.get(url);
             }
             catch (e) {
                 return this.emit("error", e.toString());
