@@ -162,11 +162,15 @@ module.exports = NodeHelper.create({
 						};
 					}).
 					once("login", async () => {
+						let fileContents = {};
 						try {
 							fileContents = JSON.parse(
 									await fs.readFile(this.localPwFile)
 							);
-							fileContents[powerwallIP] = req.body["password"];
+						}
+						catch {}
+						fileContents[req.body["ip"]] = req.body["password"];
+						try {
 							await fs.writeFile(this.localPwFile, JSON.stringify(fileContents));
 						}
 						catch {}
@@ -238,6 +242,8 @@ module.exports = NodeHelper.create({
 		}
 		catch(e) {
 		}
+
+		await new Promise(resolve => setTimeout(resolve, 10000));
 
 		if( Object.keys(fileContents).length >= 1 ) {
 			this.log("Read Tesla API tokens from file");
@@ -393,25 +399,27 @@ module.exports = NodeHelper.create({
 		}
 		else if (notification === "UpdateLocal") {
 			let ip = payload.powerwallIP;
-			let pwPromise = this.powerwallAccounts[ip].update(payload.updateInterval);
+			if( ip in this.powerwallAccounts ) {
+				let pwPromise = this.powerwallAccounts[ip].update(payload.updateInterval);
 
-			ip = payload.twcManagerIP;
-			let port = payload.twcManagerPort;
-			if( ip ) {
-				this.initializeCache(this.twcStatus, ip);
-				this.initializeCache(this.twcVINs, ip);
-				if( this.twcStatus[ip].lastUpdate + (payload.updateInterval || 0) < Date.now() ) {
-					await self.updateTWCManager(ip, port);
+				ip = payload.twcManagerIP;
+				let port = payload.twcManagerPort;
+				if( ip ) {
+					this.initializeCache(this.twcStatus, ip);
+					this.initializeCache(this.twcVINs, ip);
+					if( this.twcStatus[ip].lastUpdate + (payload.updateInterval || 0) < Date.now() ) {
+						await self.updateTWCManager(ip, port);
+					}
+					else {
+						this.sendSocketNotification("ChargeStatus", {
+							ip: ip,
+							status: this.twcStatus[ip].lastResult,
+							vins: this.twcVINs[ip].lastResult
+						});
+					}
 				}
-				else {
-					this.sendSocketNotification("ChargeStatus", {
-						ip: ip,
-						status: this.twcStatus[ip].lastResult,
-						vins: this.twcVINs[ip].lastResult
-					});
-				}
+				await pwPromise;
 			}
-			await pwPromise;
 		}
 		else if (notification === "UpdateStormWatch") {
 			let username = payload.username;

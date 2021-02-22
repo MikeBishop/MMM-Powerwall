@@ -40,9 +40,7 @@ module.exports = {
                 return response;
             });
             this.lastUpdate = 0;
-            this.lastAggregate = null;
-            this.lastSOE = null;
-            this.lastGrid = null;
+            this.history = {};
             this.password = null;
             this.cookieTimeout = 0;
         }
@@ -79,20 +77,6 @@ module.exports = {
             }
         }
 
-        getCookies() {
-            return this.jar.serializeSync();
-        }
-
-        loadCookie(cookies) {
-            this.jar = toughcookie.CookieJar.deserializeSync(cookies);
-            this.jar.getCookies(this.urlBase, {}).then(cookies => {
-                if( cookies && cookies.length > 0 ) {
-                    // Assume loaded cookies are good without testing; we'll discover if they're not.
-                    this.authenticated = true;
-                }
-            });
-        }
-
         async update(interval) {
             if( this.authenticated == false ) {
                 return this.emit('error', 'not authenticated');
@@ -103,59 +87,51 @@ module.exports = {
                 this.login(this.password)
             }
 
+            const requestTypes = [
+                ["aggregates", this.urlBase + '/api/meters/aggregates', result => result.data],
+                ["soe", this.urlBase + "/api/system_status/soe", result => (result.data.percentage - 5) / .95],
+                ["grid", this.urlBase + "/api/system_status/grid_status", result => result.data.grid_status]
+            ];
+
             if( now - this.lastUpdate < interval ) {
-                this.emit('aggregates', this.lastAggregate);
-                this.emit('soe', this.lastSOE);
-                this.emit('grid', this.lastGrid);
+                for( const [name, url, mapping] of requestTypes ) {
+                    this.emit(name, this.history[name]);
+                }
                 return;
             }
 
-            try {
-                var aggregate = this.http.get(this.urlBase + '/api/meters/aggregates');
-                var soe = this.http.get(this.urlBase + "/api/system_status/soe");
-                var grid = this.http.get(this.urlBase + "/api/system_status/grid_status");
-            }
-            catch (e) {
-                return this.emit("error", "requests failed to initialize");
-            }
-
-            let result, success = true;
-            try {
-                result = await aggregate;
-                this.emit("aggregates", result.data);
-                this.lastAggregate = result.data;
-            }
-            catch (e) {
-                this.emit("error", "aggregates failed: " + e.toString());
-                success = false;
+            let requests = {};
+            for( const [name, url, mapping] of requestTypes ) {
+                try {
+                    requests[name] = this.http.get(url);
+                }
+                catch (e) {
+                    return this.emit("error", "requests failed to initialize");
+                }
             }
 
-            try {
-                result = await soe;
-                let adjusted = (result.data.percentage - 5) / .95;
-                this.emit("soe", adjusted);
-                this.lastSOE = adjusted;
-            }
-            catch (e) {
-                this.emit("error", "soe failed: " + e.toString());
-                success = false;
-            }
-
-            try {
-                result = await grid;
-                this.emit("grid", result.data.grid_status);
-                this.lastGrid = result.data.grid_status;
-            }
-            catch (e) {
-                this.emit("error", "grid failed: " + e.toString());
-                success = false;
+            let needAuth = false;
+            for( const [name, url, mapping] of requestTypes) {
+                try {
+                    let result = await requests[name];
+                    let data = mapping(result);
+                    this.emit(name, data);
+                    this.history[name] = data;
+                }
+                catch (e) {
+                    if( e.response != undefined && e.response.status == 401 && this.password ) {
+                        needAuth = true;
+                    }
+                    else {
+                        this.emit("error", "aggregates failed: " + e.toString());
+                        success = false;
+                    }
+                }
             }
 
-            if( success ) {
-                this.lastUpdate = now;
-            }
-            else if (this.password) {
+            if( needAuth ) {
                 this.login(this.password);
+                this.update(interval);
             }
         }
     }
