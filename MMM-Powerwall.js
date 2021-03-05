@@ -827,6 +827,40 @@ Module.register("MMM-Powerwall", {
 			ctx.drawImage(statusFor.img, 0, 0);
 		}
 
+		// Determine location up-front, for later insertion
+		if( statusFor.drive.location ) {
+			if( this.isHome(statusFor.drive.location) ) {
+				vars["LOCATION"] = this.translate("at_home");
+			}
+			else if (statusFor.namedLocation && statusFor.locationText &&
+				this.isSameLocation(statusFor.namedLocation, statusFor.drive.location)) {
+					vars["LOCATION"] = this.translate("elsewhere", {TOWN:  statusFor.locationText});
+			}
+			else {
+				let url =
+				"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
+				"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
+				statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
+				try {
+					let result = await fetch(url);
+					if( result.ok ) {
+						let revGeo = await result.json();
+						if( revGeo.address.Match_addr ) {
+							vars["LOCATION"] = this.translate("elsewhere", {TOWN: revGeo.address.Match_addr} );
+							statusFor.locationText = revGeo.address.Match_addr;
+							statusFor.namedLocation = statusFor.drive.location;
+						}
+					}
+				}
+				catch {
+					statusFor.locationText = null;
+				}
+			}
+		}
+		else {
+			vars["LOCATION"] = ""
+		}
+
 		let isCharging = statusFor.charge.state === "Charging";
 		if( numCharging > 0) {
 			// Cars are drawing power, including this one
@@ -848,35 +882,6 @@ Module.register("MMM-Powerwall", {
 			consumptionVisible = false;
 		}
 		else {
-			// Determine location up-front, for later insertion
-			if( this.isHome(statusFor.drive.location) ) {
-				vars["LOCATION"] = this.translate("at_home");
-			}
-			else if (statusFor.namedLocation && statusFor.locationText &&
-				this.isSameLocation(statusFor.namedLocation, statusFor.drive.location)) {
-				vars["LOCATION"] = this.translate("location", {TOWN:  statusFor.locationText});
-			}
-			else {
-				let url =
-					"https://geocode.arcgis.com/arcgis/rest/services/World/GeocodeServer/reverseGeocode?" +
-					"f=json&preferredLabelValues=localCity&featureTypes=Locality&location=" +
-					statusFor.drive.location[1] + "%2C" + statusFor.drive.location[0];
-				try {
-					let result = await fetch(url);
-					if( result.ok ) {
-						let revGeo = await result.json();
-						if( revGeo.address.Match_addr ) {
-							vars["LOCATION"] = this.translate("location", {TOWN: revGeo.address.Match_addr} );
-							statusFor.locationText = revGeo.address.Match_addr;
-							statusFor.namedLocation = statusFor.drive.location;
-						}
-					}
-				}
-				catch {
-					statusFor.locationText = null;
-				}
-			}
-
 			// Cars not charging on TWCManager; show current instead
 			switch (statusFor.drive.gear) {
 				case "D":
