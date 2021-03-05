@@ -363,7 +363,7 @@ Module.register("MMM-Powerwall", {
 					this.clearAccountAuth(payload.ip);
 				}
 			case "Aggregates":
-				if( payload.ip === this.config.powerwallIP ) {
+				if( payload.ip === this.config.powerwallIP && payload.aggregates ) {
 					this.doTimeout("local", () => self.updateLocal(), self.config.localUpdateInterval)
 
 					let needUpdate = false;
