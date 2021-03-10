@@ -377,7 +377,7 @@ module.exports = NodeHelper.create({
 	socketNotificationReceived: async function(notification, payload) {
 		const self = this;
 
-		this.log(notification + JSON.stringify(payload));
+		//this.log(notification + JSON.stringify(payload));
 
 		if (notification === "Configure-TeslaAPI") {
 			let username = payload.teslaAPIUsername;
@@ -1066,12 +1066,21 @@ module.exports = NodeHelper.create({
 		var self = this;
 		const streamingBaseURI = "wss://streaming.vn.teslamotors.com/streaming/";
 		const params = [
-			'elevation', 'est_heading', 'est_lat', 'est_lng', 'est_range', 'heading', 'odometer', 'power', 'range', 'shift_state', 'speed', 'soc'
+			'est_lat', 'est_lng', 'power', 'shift_state', 'speed', 'soc'
 		];
 		if( this.websockets[vehicle.id] == null ) {
 			var ws = new websocket(streamingBaseURI, {
 				perMessageDeflate: false
 			});
+			self.log("Tesla Websocket created");
+			ws.disconnectCount = 0;
+			ws.reconnect = false;
+
+			let heartbeat = () => {
+				clearInterval(ws.heartbeat);
+				ws.ping();
+				ws.heartbeat = setInterval(() => ws.close(), 30000);
+			}
 
 			let auth = () => {
 				ws.send(JSON.stringify({
@@ -1082,19 +1091,25 @@ module.exports = NodeHelper.create({
 				}));
 			};
 
-			ws.on('connection', () => {
-				ws.on('pong', () => {
-					ws.interval = setInterval(()=>ws.ping(() => null), 1000);
-				});
+			ws.on('open', () => {
+				self.log("Tesla Websocket connected");
 				ws.disconnectCount = 0;
+				heartbeat();
+				auth();
+			});
+
+			ws.on('pong', () => {
+				ws.interval = setInterval(()=>ws.ping(() => null), 1000);
 			});
 
 			ws.on('message', data => {
+				heartbeat();
 				var d = JSON.parse(data);
 				if (d.msg_type == 'control:hello') {
 					auth()
 				} else if (d.msg_type == 'data:error') {
 					if( d.value.includes("disconnected") ) {
+						self.log("Tesla Websocket got disconnected notice (" + ws.disconnectCount + ")");
 						if( ws.disconnectCount >= 10 ) {
 							this.websockets[vehicle.id] = null;
 							self.registerStreamingApi(username, vehicle);
@@ -1110,22 +1125,38 @@ module.exports = NodeHelper.create({
 				} else {
 					ws.disconnectCount = 0;
 					let values = d.value.split(",");
-					let event = {
-						username: username,
-						ID: vehicle.id
-					};
-					for( let i = 0; i < params.length; i++ ) {
-						event[params[i]] = values[i+1];
+					if( values.length > params.length + 1 ) {
+						// For some reason, Tesla occasionally sends a different set of data than we asked for;
+						// let's remind them if we see it.
+						auth()
 					}
-					self.sendSocketNotification("VehicleSummary", event);
+					else {
+						let event = {
+							username: username,
+							ID: vehicle.id
+						};
+						for( let i = 0; i < params.length; i++ ) {
+							event[params[i]] = values[i+1];
+						}
+						if( ["D","N","R"].includes(event.shift_state) || event.power < 0 ) {
+							ws.reconnect = true;
+						}
+						else {
+							ws.reconnect = false;
+						}
+						self.log("Tesla Websocket says: " + JSON.stringify(d));
+						self.sendSocketNotification("VehicleSummary", event);
+					}
 				}
 			});
 
 			ws.on('close', () => {
-				self.log('Tesla Websocket disconnected');
+				self.log('Tesla Websocket closed');
 				clearInterval(ws.interval);
 				this.websockets[vehicle.id] = null;
-				setInterval(() => self.registerStreamingApi(username, vehicle), 30000);
+				if( ws.reconnect ) {
+					self.registerStreamingApi(username, vehicle);
+				}
 			});
 
 			ws.on('error', e => {

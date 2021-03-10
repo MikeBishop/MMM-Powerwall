@@ -597,11 +597,21 @@ Module.register("MMM-Powerwall", {
 				break;
 			case "VehicleSummary":
 				let intervalToUpdate = this.config.cloudUpdateInterval;
-				this.doTimeout("vehicle", () => self.updateVehicleData(), intervalToUpdate);
 
 				let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
 				if( !statusFor ) {
 					break;
+				}
+
+				if( !statusFor.charge || !statusFor.drive ) {
+					// If we receive this notification without having base info, request it
+					this.updateVehicleData(intervalToUpdate);
+					break;
+				}
+				else {
+					// If we're getting summary data fed on a regular basis, don't need to refresh
+					// the full data.
+					this.doTimeout("vehicle", () => self.updateVehicleData(), intervalToUpdate);
 				}
 
 				const driveStates = ["D", "N", "R"];
@@ -866,6 +876,7 @@ Module.register("MMM-Powerwall", {
 		let vars = {
 			NAME: statusFor.display_name,
 			NUM: numCharging - 1,
+			LOCATION: ""
 		};
 
 
@@ -904,9 +915,6 @@ Module.register("MMM-Powerwall", {
 					statusFor.locationText = null;
 				}
 			}
-		}
-		else {
-			vars["LOCATION"] = ""
 		}
 
 		let isCharging = statusFor.charge.state === "Charging";
