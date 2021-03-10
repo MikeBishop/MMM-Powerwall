@@ -14,8 +14,8 @@ const CAR = { key: "car", color: "#B91413", color_trans: "rgba(185, 20, 19, 0.7)
 const REQUIRED_CALLS = {
 	CarCharging: ["local", "vehicle"],
 	PowerwallSelfPowered: ["local", "energy", "selfConsumption"],
-	SolarProduction: ["local", "energy"],
-	HouseConsumption: ["local", "energy"],
+	SolarProduction: ["local", "energy", "vehicleIfNoTWC"],
+	HouseConsumption: ["local", "energy", "vehicleIfNoTWC"],
 	EnergyBar: ["local", "energy"],
 	PowerLine: ["power"],
 	Grid: ["local", "energy", "storm"]
@@ -135,6 +135,9 @@ Module.register("MMM-Powerwall", {
 		callsToEnable.forEach(call => {
 			self.callsToEnable[call] = true;
 		});
+		if( this.callsToEnable.vehicleIfNoTWC && !this.twcEnabled ) {
+			this.callsToEnable.vehicle = true;
+		}
 
 		//Send settings to helper
 		if (self.config.teslaAPIUsername ) {
@@ -370,6 +373,11 @@ Module.register("MMM-Powerwall", {
 					if (!this.flows) {
 						needUpdate = true;
 					}
+					if( !this.twcEnabled && Math.abs(payload.aggregates.load.instant_power - this.teslaAggregates.load.instant_power) > 1250 ) {
+						// If no TWC, probe for charging changes when we see large
+						// swings in consumption.  1.25kW catches 12A @ 110+V or 6A @ 208+V.
+						this.updateVehicleData(this.localUpdateInterval);
+					}
 
 					this.teslaAggregates = payload.aggregates;
 					if( this.twcConsumption <= this.teslaAggregates.load.instant_power ) {
@@ -586,6 +594,9 @@ Module.register("MMM-Powerwall", {
 					}
 					statusFor.drive = payload.drive;
 					statusFor.charge = payload.charge;
+
+					this.inferTwcFromVehicles();
+
 					if( !this.vehicleInFocus ) {
 						this.advanceToNextVehicle();
 					}
@@ -625,6 +636,17 @@ Module.register("MMM-Powerwall", {
 				}
 			default:
 				break;
+		}
+	},
+
+	inferTwcFromVehicles: function() {
+		if( !this.twcEnabled ) {
+			let chargingAtHome = this.vehicles.filter(v => this.isHome(v.drive.location) && v.charge.state === "Charging");
+			this.numCharging = chargingAtHome.length;
+			this.twcConsumption = chargingAtHome.reduce(
+				(acc, v) => acc + v.charge.power,
+				0
+			);
 		}
 	},
 

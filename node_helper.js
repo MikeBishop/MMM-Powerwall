@@ -243,8 +243,6 @@ module.exports = NodeHelper.create({
 		catch(e) {
 		}
 
-		await new Promise(resolve => setTimeout(resolve, 10000));
-
 		if( Object.keys(fileContents).length >= 1 ) {
 			this.log("Read Tesla API tokens from file");
 
