@@ -13,7 +13,8 @@
     "express-validator": "^6.9.2",
     "node-fetch": "^2.6.1",
     "querystring": "^0.2.0",
-    "urlsafe-base64": "^1.0.0"
+    "urlsafe-base64": "^1.0.0",
+    "ws": "^7.4.4"
   },
   "devDependencies": {
     "pseudoloc-js": "^1.2.2",

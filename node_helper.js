@@ -10,6 +10,7 @@ const fs = require("fs").promises;
 const fetch = require("node-fetch");
 const auth = require("./tesla-oauth-v3.js");
 const powerwall = require("./powerwall");
+const websocket = require("ws");
 const path = require("path");
 const nunjucks = require("./../../vendor/node_modules/nunjucks");
 const { check, validationResult, matchedData } = require('express-validator');
@@ -570,7 +571,12 @@ module.exports = NodeHelper.create({
 
 			let useCache = !(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
 				<= Date.now() );
-			this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
+			let vehicle = this.vehicles[username].find(v => v.id == vehicleID);
+			await this.doTeslaApiGetVehicleData(username, vehicle, useCache);
+
+			if(vehicle.websocket == null) {
+				this.registerStreamingApi(username, vehicle)
+			}
 		}
 	},
 
@@ -885,6 +891,7 @@ module.exports = NodeHelper.create({
 				function(vehicle) {
 					return {
 						id: vehicle.id_s,
+						vehicle_id: vehicle.vehicle_id,
 						vin: vehicle.vin,
 						display_name: vehicle.display_name
 					}});
@@ -927,7 +934,7 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	delay: function wait(ms) {
+	delay: function(ms) {
 		return new Promise(resolve => {
 			setTimeout(resolve, ms);
 		});
@@ -953,9 +960,10 @@ module.exports = NodeHelper.create({
 		return state === "online";
 	},
 
-	doTeslaApiGetVehicleData: async function(username, vehicleID, useCached) {
+	doTeslaApiGetVehicleData: async function(username, vehicle, useCached) {
 		// Slightly more complicated; involves calling multiple APIs
 		let state = "cached";
+		let vehicleID = vehicle.id;
 		const forceWake = !(this.vehicleData[username][vehicleID].lastResult);
 		if( !useCached || forceWake ) {
 			let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
@@ -1050,6 +1058,85 @@ module.exports = NodeHelper.create({
 				}
 			});
 
+		}
+	},
+
+	registerStreamingApi: function(username, vehicle) {
+		var self = this;
+		const streamingBaseURI = "wss://streaming.vn.teslamotors.com/streaming/";
+		const params = [
+			"speed",
+			"soc",
+			"est_lat",
+			"est_lng",
+			"power",
+			"shift_state"
+		];
+		if( vehicle.websocket == null ) {
+			var ws = new websocket(streamingBaseURI, {
+				perMessageDeflate: false
+			});
+
+			let auth = () => {
+				ws.send(JSON.stringify({
+					msg_type: 'data:subscribe_oauth',
+					token: self.teslaApiAccounts[username].access_token,
+					value: params.join(","),
+					tag: vehicle.vehicle_id.toString()
+				}));
+			};
+
+			ws.on('connection', () => {
+				ws.on('pong', () => {
+					ws.interval = setInterval(()=>ws.ping(() => null), 1000);
+				});
+				ws.disconnectCount = 0;
+			});
+
+			ws.on('message', data => {
+				var d = JSON.parse(data);
+				if (d.msg_type == 'control:hello') {
+					auth()
+				} else if (d.msg_type == 'data:error') {
+					if( d.value.includes("disconnected") ) {
+						if( ws.disconnectCount >= 10 ) {
+							vehicle.websocket = null;
+							self.registerStreamingApi(username, vehicle);
+						}
+						else {
+							ws.disconnectCount++;
+							auth();
+						}
+					}
+					else {
+						self.log('Tesla Websocket error: ' + d.value);
+					}
+				} else {
+					ws.disconnectCount = 0;
+					let values = d.value.split(",");
+					let event = {
+						username: username,
+						ID: vehicle.id
+					};
+					for( let i = 0; i < params.length; i++ ) {
+						event[params[i]] = values[i+1];
+					}
+					self.sendSocketNotification("VehicleSummary", event);
+				}
+			});
+
+			ws.on('close', () => {
+				self.log('Tesla Websocket disconnected');
+				clearInterval(ws.interval);
+				vehicle.websocket = null;
+				setInterval(() => self.registerStreamingApi(username, vehicle), 30000);
+			});
+
+			ws.on('error', e => {
+				self.log('Tesla Websocket error: ' + e);
+			});
+
+			vehicle.websocket = ws;
 		}
 	}
 });
