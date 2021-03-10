@@ -586,6 +586,7 @@ Module.register("MMM-Powerwall", {
 					}
 					statusFor.drive = payload.drive;
 					statusFor.charge = payload.charge;
+					statusFor.coarsePower = null;
 					if( !this.vehicleInFocus ) {
 						this.advanceToNextVehicle();
 					}
@@ -594,6 +595,53 @@ Module.register("MMM-Powerwall", {
 					}
 				}
 				break;
+			case "VehicleSummary":
+				let intervalToUpdate = this.config.cloudUpdateInterval;
+				this.doTimeout("vehicle", () => self.updateVehicleData(), intervalToUpdate);
+
+				let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
+				if( !statusFor ) {
+					break;
+				}
+
+				const driveStates = ["D", "N", "R"];
+
+				// These properties just get updated directly
+				statusFor.drive.speed = payload.speed;
+				let socDiff = statusFor.charge.soc - payload.soc;
+				statusFor.charge.soc = payload.soc;
+				statusFor.charge.usable_soc -= socDiff;
+				statusFor.drive.location = [payload.est_lat, payload.est_lng];
+				statusFor.drive.gear = payload.shift_state;
+
+				// Power is coarser, so watch for changes instead
+				if( payload.power < 0 && !driveStates.includes(payload.shift_state) ) {
+					// Probably charging
+					let coarseChargePower = -1 * payload.power;
+					if( statusFor.charge.state != "Charging" ) {
+						statusFor.charge.state = "Charging";
+						statusFor.charge.power = coarseChargePower;
+					}
+					if( statusFor.coarsePower && statusFor.coarsePower != coarseChargePower ) {
+						this.updateVehicleData(10);
+					}
+					statusFor.coarsePower = coarseChargePower;
+				}
+				else if( driveStates.includes(payload.shift_state) ) {
+					// If we're driving, we can't be charging
+					statusFor.charge.state = "Disconnected";
+				}
+				else if( statusFor.charge.state == "Charging" ) {
+					// We've stopped charging
+					this.updateVehicleData(10);
+				}
+
+				if( statusFor === this.vehicleInFocus ) {
+					await this.drawStatusForVehicle(statusFor, this.numCharging, false);
+				}
+
+				break;
+
 			case "GridStatus":
 				if( payload.ip === this.config.powerwallIP ) {
 					this.gridStatus = payload.gridStatus;

@@ -31,6 +31,7 @@ module.exports = NodeHelper.create({
 		this.storm = {};
 		this.vehicles = {};
 		this.vehicleData = {};
+		this.websockets = {};
 		this.powerHistory = {};
 		this.filenames = [];
 		this.lastUpdate = 0;
@@ -574,7 +575,7 @@ module.exports = NodeHelper.create({
 			let vehicle = this.vehicles[username].find(v => v.id == vehicleID);
 			await this.doTeslaApiGetVehicleData(username, vehicle, useCache);
 
-			if(vehicle.websocket == null) {
+			if(this.websockets[vehicle.id] == null) {
 				this.registerStreamingApi(username, vehicle)
 			}
 		}
@@ -1065,14 +1066,9 @@ module.exports = NodeHelper.create({
 		var self = this;
 		const streamingBaseURI = "wss://streaming.vn.teslamotors.com/streaming/";
 		const params = [
-			"speed",
-			"soc",
-			"est_lat",
-			"est_lng",
-			"power",
-			"shift_state"
+			'elevation', 'est_heading', 'est_lat', 'est_lng', 'est_range', 'heading', 'odometer', 'power', 'range', 'shift_state', 'speed', 'soc'
 		];
-		if( vehicle.websocket == null ) {
+		if( this.websockets[vehicle.id] == null ) {
 			var ws = new websocket(streamingBaseURI, {
 				perMessageDeflate: false
 			});
@@ -1100,7 +1096,7 @@ module.exports = NodeHelper.create({
 				} else if (d.msg_type == 'data:error') {
 					if( d.value.includes("disconnected") ) {
 						if( ws.disconnectCount >= 10 ) {
-							vehicle.websocket = null;
+							this.websockets[vehicle.id] = null;
 							self.registerStreamingApi(username, vehicle);
 						}
 						else {
@@ -1128,7 +1124,7 @@ module.exports = NodeHelper.create({
 			ws.on('close', () => {
 				self.log('Tesla Websocket disconnected');
 				clearInterval(ws.interval);
-				vehicle.websocket = null;
+				this.websockets[vehicle.id] = null;
 				setInterval(() => self.registerStreamingApi(username, vehicle), 30000);
 			});
 
@@ -1136,7 +1132,7 @@ module.exports = NodeHelper.create({
 				self.log('Tesla Websocket error: ' + e);
 			});
 
-			vehicle.websocket = ws;
+			this.websockets[vehicle.id] = ws;
 		}
 	}
 });
