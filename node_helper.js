@@ -574,10 +574,6 @@ module.exports = NodeHelper.create({
 				<= Date.now() );
 			let vehicle = this.vehicles[username].find(v => v.id == vehicleID);
 			await this.doTeslaApiGetVehicleData(username, vehicle, useCache);
-
-			if(this.websockets[vehicle.id] == null) {
-				this.registerStreamingApi(username, vehicle)
-			}
 		}
 	},
 
@@ -1002,6 +998,18 @@ module.exports = NodeHelper.create({
 
 		if( dataValid(data) )
 		{
+			let reconnect = false;
+			if( ["D","N","R"].includes(data.drive_state.shift_state) || data.drive_state.power < 0 ) {
+				reconnect = true;
+			}
+			
+			if( this.websockets[vehicle.id] ) {
+				this.websockets[vehicle.id].reconnect = reconnect;
+			}
+			else {
+				this.registerStreamingApi(username, vehicle, reconnect)
+			}
+
 			let power = data.charge_state.charger_actual_current * data.charge_state.charger_voltage;
 			this.sendSocketNotification("VehicleData", {
 				username: username,
@@ -1062,7 +1070,7 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	registerStreamingApi: function(username, vehicle) {
+	registerStreamingApi: function(username, vehicle, reconnect = false) {
 		var self = this;
 		const streamingBaseURI = "wss://streaming.vn.teslamotors.com/streaming/";
 		const params = [
@@ -1074,7 +1082,7 @@ module.exports = NodeHelper.create({
 			});
 			self.log("Tesla Websocket created");
 			ws.disconnectCount = 0;
-			ws.reconnect = false;
+			ws.reconnect = reconnect;
 
 			let heartbeat = () => {
 				clearInterval(ws.heartbeat);
@@ -1155,7 +1163,7 @@ module.exports = NodeHelper.create({
 				clearInterval(ws.interval);
 				this.websockets[vehicle.id] = null;
 				if( ws.reconnect ) {
-					self.registerStreamingApi(username, vehicle);
+					self.registerStreamingApi(username, vehicle, true);
 				}
 			});
 
