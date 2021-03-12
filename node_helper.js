@@ -816,7 +816,7 @@ module.exports = NodeHelper.create({
 		}
 		catch (e) {
 			this.log(e);
-			return {};
+			return null;
 		}
 
 		if( result.ok ) {
@@ -851,7 +851,7 @@ module.exports = NodeHelper.create({
 		else {
 			this.log(url + " returned " + result.status);
 			this.log(await result.text());
-			return {};
+			return null;
 		}
 	},
 
@@ -972,21 +972,26 @@ module.exports = NodeHelper.create({
 			}
 		}
 
-		var data;
-		if( state !== "online" ) {
-			// Car is asleep and either can't wake or we aren't asking
-			data = this.vehicleData[username][vehicleID].lastResult;
-		}
-		else {
+		let dataValid = data => data &&
+			["vehicle_state", "drive_state", "gui_settings", "charge_state", "vehicle_config"].
+			every(
+				key => key in data
+			);
+
+		var data = null;
+		if( state === "online" ) {
 			// Get vehicle state
 			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/vehicle_data";
 			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
 
-		if( data &&
-			["vehicle_state", "drive_state", "gui_settings", "charge_state", "vehicle_config"].every(
-				key => key in data
-			) )
+		if( !dataValid(data) ) {
+			// Car is asleep and either can't wake or we aren't asking
+			data = this.vehicleData[username][vehicleID].lastResult;
+			state = "cached";
+		}
+
+		if( dataValid(data) )
 		{
 			let power = data.charge_state.charger_actual_current * data.charge_state.charger_voltage;
 			this.sendSocketNotification("VehicleData", {
