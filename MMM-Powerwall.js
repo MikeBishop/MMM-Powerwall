@@ -374,10 +374,14 @@ Module.register("MMM-Powerwall", {
 						needUpdate = true;
 					}
 					if( !this.twcEnabled && this.teslaAggregates &&
-							Math.abs(payload.aggregates.load.instant_power - this.teslaAggregates.load.instant_power) > 1250 ) {
+						(
+							Math.abs(payload.aggregates.load.instant_power - this.teslaAggregates.load.instant_power) > 1250 ||
+							payload.aggregates.load.instant_power < this.twcConsumption
+						)
+					) {
 						// If no TWC, probe for charging changes when we see large
 						// swings in consumption.  1.25kW catches 12A @ 110+V or 6A @ 208+V.
-						this.updateVehicleData(this.localUpdateInterval);
+						this.updateVehicleData(this.config.localUpdateInterval);
 					}
 
 					this.teslaAggregates = payload.aggregates;
@@ -640,7 +644,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	inferTwcFromVehicles: async function() {
-		if( !this.twcEnabled ) {
+		if( this.teslaAggregates && !this.twcEnabled ) {
 			let oldConsumption = this.twcConsumption;
 			let chargingAtHome = this.vehicles.filter(v => this.isHome(v.drive.location) && v.charge.state === "Charging");
 			this.numCharging = chargingAtHome.length;
