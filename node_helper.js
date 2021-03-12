@@ -1002,7 +1002,7 @@ module.exports = NodeHelper.create({
 			if( ["D","N","R"].includes(data.drive_state.shift_state) || data.drive_state.power < 0 ) {
 				reconnect = true;
 			}
-			
+
 			if( this.websockets[vehicle.id] ) {
 				this.websockets[vehicle.id].reconnect = reconnect;
 			}
@@ -1085,9 +1085,9 @@ module.exports = NodeHelper.create({
 			ws.reconnect = reconnect;
 
 			let heartbeat = () => {
-				clearInterval(ws.heartbeat);
+				clearTimeout(ws.heartbeat);
 				ws.ping();
-				ws.heartbeat = setInterval(() => ws.close(), 30000);
+				ws.heartbeat = setTimeout(() => ws.close(), 30000);
 			}
 
 			let auth = () => {
@@ -1103,11 +1103,10 @@ module.exports = NodeHelper.create({
 				self.log("Tesla Websocket connected");
 				ws.disconnectCount = 0;
 				heartbeat();
-				auth();
 			});
 
 			ws.on('pong', () => {
-				ws.interval = setInterval(()=>ws.ping(() => null), 1000);
+				ws.timeout = setTimeout(()=>ws.ping(), 1000);
 			});
 
 			ws.on('message', data => {
@@ -1160,7 +1159,8 @@ module.exports = NodeHelper.create({
 
 			ws.on('close', () => {
 				self.log('Tesla Websocket closed');
-				clearInterval(ws.interval);
+				clearTimeout(ws.timeout);
+				clearTimeout(ws.heartbeat);
 				this.websockets[vehicle.id] = null;
 				if( ws.reconnect ) {
 					self.registerStreamingApi(username, vehicle, true);
