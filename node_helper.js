@@ -436,7 +436,7 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			if( this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+			if( this.storm[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetStormWatch(username, siteID);
 			}
 			else {
@@ -769,7 +769,7 @@ module.exports = NodeHelper.create({
 			if( tokens && (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
 				var authenticator = new auth.Authenticator();
 				authenticator.on('error', async (message) => {
-					this.log("Tesla auth failed: " + message);
+					this.log("Tesla refresh failed: " + message);
 					if( (Date.now() / 1000) > (tokens.created_at + tokens.expires_in)) {
 						// Token is expired; abandon it and try password authentication
 						delete this.teslaApiAccounts[username]
@@ -821,7 +821,7 @@ module.exports = NodeHelper.create({
 
 		if( result.ok ) {
 			let json = await result.json();
-			this.log(url + " returned " + JSON.stringify(json));
+			this.log(url + " returned " + JSON.stringify(json).substring(0,150));
 			let response = json.response;
 			if (response_key) {
 				response = response[response_key];
