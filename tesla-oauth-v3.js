@@ -119,8 +119,13 @@ module.exports = {
                 refresh_token: refreshToken,
                 scope: 'openid email offline_access'
             };
-            const res = await this.http.post('https://auth.tesla.com/oauth2/v3/token', payload);
-            const ownerApi = await this.ownerApiToken(res.data.access_token);
+            try {
+                var res = await this.http.post('https://auth.tesla.com/oauth2/v3/token', payload);
+                var ownerApi = await this.ownerApiToken(res.data.access_token);
+            }
+            catch(e) {
+                return this.emit("error", e.toString());
+            }
             const tokens = {
                 auth: res.data,
                 ownerApi
