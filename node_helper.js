@@ -265,11 +265,11 @@ module.exports = NodeHelper.create({
 			let password = config.teslaAPIPassword;
 
 			if( !this.teslaApiAccounts[username] ) {
+				this.teslaApiAccounts[username] = null;
 				if( password ) {
 					await this.doTeslaApiLogin(username, password);
 				}
 				else {
-					this.teslaApiAccounts[username] = null;
 					this.log("Missing both Tesla password and access tokens for " + username);
 				}
 			}
