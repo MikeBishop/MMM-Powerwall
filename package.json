@@ -13,6 +13,7 @@
     "express-validator": "^6.9.2",
     "node-fetch": "^2.6.1",
     "querystring": "^0.2.0",
+    "teslajs": "^4.9.8",
     "urlsafe-base64": "^1.0.0"
   },
   "devDependencies": {
