@@ -26,7 +26,7 @@ module.exports = {
                 var tokens = await tesla.loginAsync({
                     username: username,
                     password: password,
-                    mfa: mfa
+                    mfaPassCode: mfa
                 })
             }
             catch (e) {
@@ -34,8 +34,8 @@ module.exports = {
                 this.tokens = null;
                 return this.emit('error', 'login failed: ' + e.toString());
             }
-            this.tokens = tokens;
-            return this.emit('login', tokens);
+            this.tokens = JSON.parse(tokens.body);
+            return this.emit('login', this.tokens);
         }
 
         async refresh() {
@@ -53,8 +53,8 @@ module.exports = {
                 return this.emit('error', 'refresh failed: ' + e.toString());
             }
 
-            this.tokens = tokens;
-            return this.emit('login', tokens);
+            this.tokens = JSON.parse(tokens.body);
+            return this.emit('login', this.tokens);
         }
     }
 }

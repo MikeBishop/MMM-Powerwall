@@ -80,11 +80,19 @@ module.exports = NodeHelper.create({
 			if (Object.keys(errors).length == 0) {
 				let account = new tesla.TeslaAccount();
 				account.
-					on("login", tokens => {
-						/* Save tokens here */
+					on("login", async tokens => {
+						this.log("Got Tesla API tokens");
+						this.teslaApiAccounts[req.body["username"]] = tokens;
+						await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
 					}).
-					once("error", error => {
-						/* Register error */
+					once("error", message => {
+						let error = {
+							value: "",
+							msg: message,
+							param: message.indexOf("MFA") > 0 ? "mfa" : "password",
+							location: "body"
+						};
+						errors[error.param] = error
 					});
 				await account.login(
 					req.body["username"],
@@ -208,8 +216,6 @@ module.exports = NodeHelper.create({
 		catch(e) {
 		}
 
-		await new Promise(resolve => setTimeout(resolve, 10000));
-
 		if( Object.keys(fileContents).length >= 1 ) {
 			this.log("Read Tesla API tokens from file");
 
@@ -230,11 +236,21 @@ module.exports = NodeHelper.create({
 			let password = config.teslaAPIPassword;
 
 			if( !this.teslaApiAccounts[username] ) {
+				this.teslaApiAccounts[username] = null;
 				if( password ) {
-					await this.doTeslaApiLogin(username, password);
+					let account = new tesla.TeslaAccount();
+					account.
+						on("login", async tokens => {
+							this.log("Got Tesla API tokens");
+							this.teslaApiAccounts[username] = tokens;
+							await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+						}).
+						once("error", message => {
+							this.log(message);
+						});
+					await account.login(username, password);
 				}
 				else {
-					this.teslaApiAccounts[username] = null;
 					this.log("Missing both Tesla password and access tokens for " + username);
 				}
 			}
@@ -667,23 +683,6 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApiLogin: async function(username, password) {
-		var authenticator = new auth.Authenticator();
-		authenticator.on('error', (message) => {
-			this.log("Tesla Auth: " + message);
-		});
-		authenticator.on('ready', async (credentials) => {
-			this.log("Got Tesla API tokens")
-			this.teslaApiAccounts[username] = credentials.ownerApi;
-			this.teslaApiAccounts[username].refresh_token = credentials.auth.refresh_token;
-			await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
-		});
-		authenticator.on('mfa', () => {
-			this.log("MFA enabled on Tesla account; not supported yet!");
-		});
-		authenticator.login(username, password);
-	},
-
 	inferSiteID: async function(username) {
 		url = "https://owner-api.teslamotors.com/api/1/products";
 
@@ -732,28 +731,28 @@ module.exports = NodeHelper.create({
 		for( const username of accountsToCheck ) {
 			let tokens = this.teslaApiAccounts[username];
 			if( tokens && (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
-				// var authenticator = new auth.Authenticator();
-				// authenticator.on('error', async (message) => {
-				// 	this.log("Tesla refresh failed: " + message);
-				// 	if( (Date.now() / 1000) > (tokens.created_at + tokens.expires_in)) {
-				// 		// Token is expired; abandon it and try password authentication
-				// 		delete this.teslaApiAccounts[username]
-				// 		this.checkTeslaCredentials(username);
-				// 		await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
-				// 	}
-				// 	else {
-				// 		this.teslaApiAccounts[username].refresh_failures =
-				// 			1 + (this.teslaApiAccounts[username].refresh_failures || 0);
-				// 		await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
-				// 	}
-				// });
-				// authenticator.on('ready', async (credentials) => {
-				// 	this.log("Refreshed Tesla API tokens")
-				// 	this.teslaApiAccounts[username] = credentials.ownerApi;
-				// 	this.teslaApiAccounts[username].refresh_token = credentials.auth.refresh_token;
-				// 	await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
-				// });
-				// await authenticator.refresh(this.teslaApiAccounts[username].refresh_token);
+				let account = new tesla.TeslaAccount(tokens);
+				account.
+					on("login", async tokens => {
+						this.log("Got Tesla API tokens");
+						this.teslaApiAccounts[username] = tokens;
+						await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+					}).
+					once("error", async message => {
+						this.log("Tesla refresh failed: " + message);
+						if( (Date.now() / 1000) > (tokens.created_at + tokens.expires_in)) {
+							// Token is expired; abandon it and try password authentication
+							delete this.teslaApiAccounts[username]
+							this.checkTeslaCredentials(username);
+							await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+						}
+						else {
+							this.teslaApiAccounts[username].refresh_failures =
+								1 + (this.teslaApiAccounts[username].refresh_failures || 0);
+							await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+						}
+					});
+				await account.refresh();
 			}
 		}
 	},
