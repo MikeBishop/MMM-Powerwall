@@ -854,7 +854,7 @@ module.exports = NodeHelper.create({
 					}});
 		}
 		else {
-			return [];
+			return null;
 		}
 	},
 

@@ -34,7 +34,7 @@ module.exports = {
                         this.emit('error', 'login failed: ' + e.toString());
                     }
                     else {
-                        processTokens(tokens);
+                        this.processTokens(tokens);
                     }
                     resolve();
                 });
@@ -42,12 +42,11 @@ module.exports = {
         }
 
         processTokens(tokens) {
-            let body = JSON.parse(tokens.body);
             this.tokens = {
-                "created_at": body.created_at,
-                "expires_in": body.expires_in,
-                "refresh_token": tokens.refresh_token,
-                "access_token": tokens.auth_token
+                "created_at": tokens.body.created_at,
+                "expires_in": tokens.body.expires_in,
+                "refresh_token": tokens.body.refresh_token,
+                "access_token": tokens.body.access_token
             }
             this.emit('login', this.tokens);
         }
