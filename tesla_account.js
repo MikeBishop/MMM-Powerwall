@@ -22,20 +22,34 @@ module.exports = {
         }
 
         async login(username, password, mfa) {
-            try {
-                var tokens = await tesla.loginAsync({
+            await new Promise(resolve => {
+                tesla.login({
                     username: username,
                     password: password,
                     mfaPassCode: mfa
-                })
+                }, (e, tokens) => {
+                    if( e ) {
+                        this.authenticated = false;
+                        this.tokens = null;
+                        this.emit('error', 'login failed: ' + e.toString());
+                    }
+                    else {
+                        processTokens(tokens);
+                    }
+                    resolve();
+                });
+            });
+        }
+
+        processTokens(tokens) {
+            let body = JSON.parse(tokens.body);
+            this.tokens = {
+                "created_at": body.created_at,
+                "expires_in": body.expires_in,
+                "refresh_token": tokens.refresh_token,
+                "access_token": tokens.auth_token
             }
-            catch (e) {
-                this.authenticated = false;
-                this.tokens = null;
-                return this.emit('error', 'login failed: ' + e.toString());
-            }
-            this.tokens = JSON.parse(tokens.body);
-            return this.emit('login', this.tokens);
+            this.emit('login', this.tokens);
         }
 
         async refresh() {
@@ -46,15 +60,17 @@ module.exports = {
                 return null;
             }
 
-            try {
-                var tokens = await tesla.refreshTokenAsync(this.tokens.refresh_token);
-            }
-            catch (e) {
-                return this.emit('error', 'refresh failed: ' + e.toString());
-            }
-
-            this.tokens = JSON.parse(tokens.body);
-            return this.emit('login', this.tokens);
+            await new Promise(resolve =>
+                tesla.refreshToken(this.tokens.refresh_token, (e, tokens) => {
+                    if( e ) {
+                        this.emit('error', 'refresh failed: ' + e.toString());
+                    }
+                    else {
+                        this.processTokens(tokens);
+                    }
+                    resolve();
+                })
+            );
         }
     }
 }
