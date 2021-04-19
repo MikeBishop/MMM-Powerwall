@@ -756,28 +756,31 @@ module.exports = NodeHelper.create({
 		for( const username of accountsToCheck ) {
 			let tokens = this.teslaApiAccounts[username];
 			if( tokens && (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
-				// var authenticator = new auth.Authenticator();
-				// authenticator.on('error', async (message) => {
-				// 	this.log("Tesla refresh failed: " + message);
-				// 	if( (Date.now() / 1000) > (tokens.created_at + tokens.expires_in)) {
-				// 		// Token is expired; abandon it and try password authentication
-				// 		delete this.teslaApiAccounts[username]
-				// 		this.checkTeslaCredentials(username);
-				// 		await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
-				// 	}
-				// 	else {
-				// 		this.teslaApiAccounts[username].refresh_failures =
-				// 			1 + (this.teslaApiAccounts[username].refresh_failures || 0);
-				// 		await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
-				// 	}
-				// });
-				// authenticator.on('ready', async (credentials) => {
-				// 	this.log("Refreshed Tesla API tokens")
-				// 	this.teslaApiAccounts[username] = credentials.ownerApi;
-				// 	this.teslaApiAccounts[username].refresh_token = credentials.auth.refresh_token;
-				// 	await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
-				// });
-				// await authenticator.refresh(this.teslaApiAccounts[username].refresh_token);
+				try {
+					let args = [
+						path.resolve(__dirname + "/refresh.py"),
+						tokens.refresh_token
+					];			
+					let tokenBL = await spawn("python3", args);
+					this.log("Refreshed Tesla API tokens")
+					this.teslaApiAccounts[username] = JSON.parse(tokenBL.toString());
+					await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+					continue;
+				}
+				catch (e) {}
+
+				// Refresh failed here
+				if( (Date.now() / 1000) > (tokens.created_at + tokens.expires_in)) {
+					// Token is expired; abandon it and try password authentication
+					delete this.teslaApiAccounts[username]
+					this.checkTeslaCredentials(username);
+					await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+				}
+				else {
+					this.teslaApiAccounts[username].refresh_failures =
+						1 + (this.teslaApiAccounts[username].refresh_failures || 0);
+					await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+				}
 			}
 		}
 	},
