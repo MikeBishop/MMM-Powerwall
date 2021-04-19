@@ -6,14 +6,13 @@
   "author": "Mike Bishop",
   "license": "MIT",
   "dependencies": {
+    "await-spawn": "^4.0.1",
     "axios": "^0.21.1",
     "chart.js": "latest",
     "chartjs-plugin-datalabels": "^0.7.0",
-    "crypto-random-string": "^3.3.0",
     "express-validator": "^6.9.2",
     "node-fetch": "^2.6.1",
-    "querystring": "^0.2.0",
-    "urlsafe-base64": "^1.0.0"
+    "querystring": "^0.2.0"
   },
   "devDependencies": {
     "pseudoloc-js": "^1.2.2",

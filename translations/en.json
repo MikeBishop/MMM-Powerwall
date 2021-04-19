@@ -95,5 +95,6 @@
     "needpassword": "Password is required",
     "invalidpassword": "Password not valid",
     "needmfa": "MFA token is required",
-    "authNeeded": "Go to /MMM-Powerwall/auth to log in"
+    "authNeeded": "Go to /MMM-Powerwall/auth to log in",
+    "authFailed": "Authentication failed"
 }
