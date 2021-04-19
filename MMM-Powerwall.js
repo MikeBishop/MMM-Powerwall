@@ -662,7 +662,7 @@ Module.register("MMM-Powerwall", {
 				this.teslaAggregates &&
 				this.twcConsumption <= this.teslaAggregates.load.instant_power )
 			{
-				this.flows = this.attributeFlows(this.teslaAggregates, self.twcConsumption);
+				this.flows = this.attributeFlows(this.teslaAggregates, this.twcConsumption);
 				await this.updateData();
 			}
 			else if( this.twcConsumption > this.teslaAggregates.load.instant_power ) {
