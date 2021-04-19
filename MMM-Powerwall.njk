@@ -39,6 +39,9 @@
         {%- elif graph == "Grid" -%}
             <div class="MMM-Powerwall grid-grid">
                 <img src="modules/MMM-Powerwall/images/tower.png" style="grid-area:icon; max-height: 100px">
+                <div class="MMM-Powerwall overlay fa-lg" style="grid-area: icon;transform: translate(79%, 61%)">
+                    <i class="fas" id="{{id}}-GridIcon"></i>
+                </div>
                 <div class="MMM-Powerwall small bright text grid-direction" id="{{id}}-GridDirection"></div>
                 <div class="MMM-Powerwall vflexbox grid-number">
                     <div class="big grid text spaced" id="{{id}}-GridInOut"></div>
