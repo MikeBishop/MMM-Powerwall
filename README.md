@@ -32,6 +32,9 @@ var config = {
 ```
 You will need to restart the MagicMirror process to load the node_helper.
 
+Authentication depends on Python, due to issues with Node and Raspberry Pi.
+Make sure you have Python and requests installed:  `sudo apt install python3 python3-requests`
+
 **Do not forget to run `npm install` after updating the module; new dependencies
 are being introduced because of Tesla's new authentication model.**
 
@@ -115,4 +118,4 @@ In addition to any commiters to the repo, the following have helped figure certa
 
 - @ngardiner's work on TWCManager is amazing, and the car charging could not be tracked without it
 - @Kemmey provided initial code for interacting with the compositor
-- Access to Tesla's v3 authentication endpoint adapted from @jorenvandeweyer's implementation
+- Access to Tesla's v3 authentication endpoint adapted from [enode-engineering/tesla-oauth2](https://github.com/enode-engineering/tesla-oauth2)
