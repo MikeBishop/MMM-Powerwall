@@ -244,9 +244,9 @@ Module.register("MMM-Powerwall", {
 
 	updatePowerHistory: function() {
 		if( this.callsToEnable.power ) {
+			this.Log("Requesting power history data");
 			this.sendDataRequestNotification("UpdatePowerHistory");
 			if( this.twcEnabled ) {
-				this.Log("Requesting power history data");
 				this.sendSocketNotification("UpdateChargeHistory", {
 					twcManagerIP: this.config.twcManagerIP,
 					twcManagerPort: this.config.twcManagerPort,
