@@ -658,6 +658,9 @@ Module.register("MMM-Powerwall", {
 								changed = true;
 							}
 						}
+						if( "plugged_in" in payload || "charger_power" in payload ) {
+							await this.inferTwcFromVehicles();
+						}
 
 						if( changed && statusFor === this.vehicleInFocus ) {
 							await this.drawStatusForVehicle(statusFor, this.numCharging, false);
