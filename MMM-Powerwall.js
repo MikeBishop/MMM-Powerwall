@@ -610,6 +610,61 @@ Module.register("MMM-Powerwall", {
 					}
 				}
 				break;
+			case "VehicleUpdate":
+				if( payload.username === this.config.teslaAPIUsername ) {
+					let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
+					let changed = false;
+					if( statusFor ) {
+						this.doTimeout("vehicle", () => self.updateVehicleData(), this.config.cloudUpdateInterval);
+						const map = {
+							"geofence": ["geofence"],
+							"latitude": ["drive", "location", 0],
+							"longitude": ["drive", "location", 1],
+							"shift_state": ["drive", "gear"],
+							"speed": ["drive", "speed"],
+							"battery_level": ["charge", "soc"],
+							"usable_battery_level": ["charge", "usable_soc"],
+							"charge_limit_soc": ["charge", "limit"],
+							"charger_power": ["charge", "power"],
+							"time_to_full_charge": ["charge", "time"]
+						};
+
+						for( const value in payload ) {
+							if( value in map ) {
+								let path = map[value];
+								let node = statusFor;
+								while( path.length > 1 && node ) {
+									node = node[path.shift()];
+								}
+								if( node[path[0]] != payload[value] ) {
+									node[path[0]] = payload[value];
+									changed = true;
+								}
+							}
+						}
+						if( "plugged_in" in payload ) {
+							var newVal
+							if( !payload.plugged_in ) {
+								newVal = "Disconnected";
+							}
+							else if (statusFor.charge.power > 0) {
+								newVal = "Charging";
+							}
+							else {
+								newVal = "Not Charging";
+							}
+							if( statusFor.charge.state != newVal ) {
+								statusFor.charge.state = newVal;
+								changed = true;
+							}
+						}
+
+						if( changed && statusFor === this.vehicleInFocus ) {
+							await this.drawStatusForVehicle(statusFor, this.numCharging, false);
+						}
+					}
+				}
+				break;
 			case "GridStatus":
 				if( payload.ip === this.config.powerwallIP ) {
 					this.gridStatus = payload.gridStatus;
@@ -875,6 +930,9 @@ Module.register("MMM-Powerwall", {
 		if( statusFor.drive.location ) {
 			if( this.isHome(statusFor.drive.location) ) {
 				vars["LOCATION"] = this.translate("at_home");
+			}
+			else if (statusFor.geofence) {
+				vars["LOCATION"] = this.translate("at_geofence", {GEOFENCE: statusFor.geofence});
 			}
 			else if (statusFor.namedLocation && statusFor.locationText &&
 				this.isSameLocation(statusFor.namedLocation, statusFor.drive.location)) {

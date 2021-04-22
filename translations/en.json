@@ -30,6 +30,7 @@
     "not_charging": "{NAME} is {LOCATION} and not charging",
       "_comment": "...where {LOCATION} is one of:",
         "at_home": "at home",
+        "at_geofence": "at {GEOFENCE}",
         "elsewhere": "in {TOWN}",
 
     "completion_time": "Finishing in {DAYS}{LISTSEP1}{HOURS}{LISTSEP2}{MINUTES}",

@@ -282,7 +282,6 @@ module.exports = NodeHelper.create({
 							"longitude",
 							"shift_state",
 							"speed",
-							"sentry_mode",
 							"odometer",
 							"battery_level",
 							"usable_battery_level",
@@ -344,7 +343,7 @@ module.exports = NodeHelper.create({
 									vehicle.timeout = null;
 
 									accumulator.username = username;
-									accumulator.ID = vehicle.ID;
+									accumulator.ID = vehicle.id;
 
 									self.sendSocketNotification("VehicleUpdate", accumulator);
 								}, 500);
