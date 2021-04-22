@@ -11,6 +11,8 @@ const GRID = { key: "grid", color: "#CACECF", color_trans: "rgba(202, 206, 207, 
 const HOUSE = { key: "house", color: "#09A9E6", color_trans: "rgba(9, 169, 230, 0.7)" };
 const CAR = { key: "car", color: "#B91413", color_trans: "rgba(185, 20, 19, 0.7)" };
 
+const MI_KM_FACTOR = 1.609344;
+
 const REQUIRED_CALLS = {
 	CarCharging: ["local", "vehicle"],
 	PowerwallSelfPowered: ["local", "energy", "selfConsumption"],
@@ -626,38 +628,37 @@ Module.register("MMM-Powerwall", {
 							"usable_battery_level": ["charge", "usable_soc"],
 							"charge_limit_soc": ["charge", "limit"],
 							"charger_power": ["charge", "power"],
-							"time_to_full_charge": ["charge", "time"]
+							"time_to_full_charge": ["charge", "time"],
+							"plugged_in": ["charge", "power"]
+						};
+						const transform = {
+							"plugged_in": (plugged_in) => 
+								plugged_in ?
+									statusFor.charge.power > 0 ?
+										"Charging" : "Not Charging" :
+									"Disconnected",
+							"speed": (speed_in_kph) => speed_in_kph / MI_KM_FACTOR,
+
 						};
 
 						for( const value in payload ) {
 							if( value in map ) {
 								let path = map[value];
 								let node = statusFor;
+								let newVal = payload[value];
+								if( value in transform ) {
+									newVal = transform[value](newVal)
+								}
 								while( path.length > 1 && node ) {
 									node = node[path.shift()];
 								}
-								if( node[path[0]] != payload[value] ) {
-									node[path[0]] = payload[value];
+								if( node[path[0]] != newVal) {
+									node[path[0]] = newVal;
 									changed = true;
 								}
 							}
 						}
-						if( "plugged_in" in payload ) {
-							var newVal
-							if( !payload.plugged_in ) {
-								newVal = "Disconnected";
-							}
-							else if (statusFor.charge.power > 0) {
-								newVal = "Charging";
-							}
-							else {
-								newVal = "Not Charging";
-							}
-							if( statusFor.charge.state != newVal ) {
-								statusFor.charge.state = newVal;
-								changed = true;
-							}
-						}
+
 						if( "plugged_in" in payload || "charger_power" in payload ) {
 							await this.inferTwcFromVehicles();
 						}
@@ -999,7 +1000,7 @@ Module.register("MMM-Powerwall", {
 					}
 					else {
 						// Convert to kph, since API reports mph
-						number = statusFor.drive.speed * 1.609344;
+						number = statusFor.drive.speed * MI_KM_FACTOR;
 					}
 
 					this.updateNode(consumptionId, number, unit, "", animate);
