@@ -276,6 +276,48 @@ module.exports = NodeHelper.create({
 				try {
 					var client = await mqtt.connectAsync(tm.url, tm.options);
 					this.mqttClients[username].client = client;
+					client.on("message", async (topic, message) => {
+						if (topic.startsWith(namespace)) {
+							message = message.toString();
+							[id, value] = topic.slice(namespace.length).split('/');
+							this.log("Teslamate MQTT: " + [id, value, message].join(", "));
+							if (!tm.vehicles) {
+								tm.vehicles = {}
+							}
+							if (!(id in tm.vehicles)) {
+								if (!vehicleDetective[id]) {
+									vehicleDetective[id] = {};
+								}
+								vehicleDetective[id][value] = message;
+
+								if (self.vehicles[username] &&
+									vehicleDetective[id].display_name &&
+									vehicleDetective[id].odometer
+								) {
+									// We have enough to try looking
+									for (let vehicle of self.vehicles[username]) {
+										if (vehicle.display_name == vehicleDetective[id].display_name &&
+											Math.abs(vehicle.odometer - vehicleDetective[id].odometer) < Math.min(100, .01 * vehicle.odometer)
+										) {
+											for (const val in vehicleDetective[id]) {
+												this.updateVehicleData(username, vehicle, val, vehicleDetective[id][val])
+											}
+											delete vehicle.accumulator;
+											tm.vehicles[id] = vehicle;
+											break;
+										}
+									}
+								}
+							}
+
+							if (id in tm.vehicles) {
+								// Get the info needed to update cache
+								let vehicle = tm.vehicles[id];
+								this.updateVehicleData(username, vehicle, value, message);
+							}
+						}
+					});
+
 					await client.subscribe(
 						[
 							"display_name",
@@ -293,7 +335,10 @@ module.exports = NodeHelper.create({
 							"charger_voltage",
 							"charger_actual_current",
 							"time_to_full_charge",
-						].map(topic => namespace + "+/" + topic)
+						].map(topic => namespace + "+/" + topic),
+						{
+							rh: 1
+						}
 					);
 				}
 				catch (e) {
@@ -302,47 +347,6 @@ module.exports = NodeHelper.create({
 
 				let vehicleDetective = {};
 				let self = this;
-				client.on("message", async (topic, message) => {
-					if (topic.startsWith(namespace)) {
-						message = message.toString();
-						[id, value] = topic.slice(namespace.length).split('/');
-						this.log("Teslamate MQTT: " + [id, value, message].join(", "));
-						if (!tm.vehicles) {
-							tm.vehicles = {}
-						}
-						if (!(id in tm.vehicles)) {
-							if (!vehicleDetective[id]) {
-								vehicleDetective[id] = {};
-							}
-							vehicleDetective[id][value] = message;
-
-							if (self.vehicles[username] &&
-								vehicleDetective[id].display_name &&
-								vehicleDetective[id].odometer
-							) {
-								// We have enough to try looking
-								for (let vehicle of self.vehicles[username]) {
-									if (vehicle.display_name == vehicleDetective[id].display_name &&
-										Math.abs(vehicle.odometer - vehicleDetective[id].odometer) < Math.min(100, .01 * vehicle.odometer)
-									) {
-										for (const val in vehicleDetective[id]) {
-											this.updateVehicleData(username, vehicle, val, vehicleDetective[id][val])
-										}
-										delete vehicle.accumulator;
-										tm.vehicles[id] = vehicle;
-										break;
-									}
-								}
-							}
-						}
-
-						if (id in tm.vehicles) {
-							// Get the info needed to update cache
-							let vehicle = tm.vehicles[id];
-							this.updateVehicleData(username, vehicle, value, message);
-						}
-					}
-				});
 			}
 		});
 
