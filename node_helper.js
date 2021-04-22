@@ -16,6 +16,8 @@ const bodyParser = require('./../../node_modules/body-parser');
 const spawn = require("await-spawn");
 const mqtt = require("async-mqtt");
 
+const MI_KM_FACTOR = 1.609344;
+
 module.exports = NodeHelper.create({
 
 	start: async function () {
@@ -277,6 +279,7 @@ module.exports = NodeHelper.create({
 					await client.subscribe(
 						[
 							"display_name",
+							"state",
 							"geofence",
 							"latitude",
 							"longitude",
@@ -287,7 +290,8 @@ module.exports = NodeHelper.create({
 							"usable_battery_level",
 							"plugged_in",
 							"charge_limit_soc",
-							"charger_power",
+							"charger_voltage",
+							"charger_actual_current",
 							"time_to_full_charge",
 						].map(topic => namespace + "+/" + topic)
 					);
@@ -302,11 +306,12 @@ module.exports = NodeHelper.create({
 					if (topic.startsWith(namespace)) {
 						message = message.toString();
 						[id, value] = topic.slice(namespace.length).split('/');
+						this.log("Teslamate MQTT: " + [id, value, message].join(", "));
 						if (!tm.vehicles) {
 							tm.vehicles = {}
 						}
 						if (!(id in tm.vehicles)) {
-							if( !vehicleDetective[id] ) {
+							if (!vehicleDetective[id]) {
 								vehicleDetective[id] = {};
 							}
 							vehicleDetective[id][value] = message;
@@ -318,9 +323,12 @@ module.exports = NodeHelper.create({
 								// We have enough to try looking
 								for (let vehicle of self.vehicles[username]) {
 									if (vehicle.display_name == vehicleDetective[id].display_name &&
-										Math.abs(vehicle.odometer - vehicleDetective[id].odometer) < Math.min(100, .01*vehicle.odometer)
+										Math.abs(vehicle.odometer - vehicleDetective[id].odometer) < Math.min(100, .01 * vehicle.odometer)
 									) {
-										vehicle.accumulator = vehicleDetective[id]
+										for (const val in vehicleDetective[id]) {
+											this.updateVehicleData(username, vehicle, val, vehicleDetective[id][val])
+										}
+										delete vehicle.accumulator;
 										tm.vehicles[id] = vehicle;
 										break;
 									}
@@ -329,25 +337,9 @@ module.exports = NodeHelper.create({
 						}
 
 						if (id in tm.vehicles) {
-							// Get the info needed to send an update
+							// Get the info needed to update cache
 							let vehicle = tm.vehicles[id];
-							if (!vehicle.accumulator) {
-								// This probably should never happen
-								vehicle.accumulator = {};
-							}
-							vehicle.accumulator[value] = message;
-							if (!vehicle.timeout) {
-								vehicle.timeout = setTimeout(() => {
-									let accumulator = vehicle.accumulator;
-									vehicle.accumulator = {};
-									vehicle.timeout = null;
-
-									accumulator.username = username;
-									accumulator.ID = vehicle.id;
-
-									self.sendSocketNotification("VehicleUpdate", accumulator);
-								}, 500);
-							}
+							this.updateVehicleData(username, vehicle, value, message);
 						}
 					}
 				});
@@ -440,6 +432,61 @@ module.exports = NodeHelper.create({
 				await fs.writeFile(this.localPwFile, JSON.stringify(fileContents));
 			}
 			catch (e) { }
+		}
+	},
+
+	updateVehicleData: function (username, vehicle, topic, message) {
+
+		let cached = this.vehicleData[username][vehicle.id].lastResult
+		this.vehicleData[username][vehicle.id].lastUpdate = Date.now();
+		const transform = {
+			"plugged_in": (plugged_in) =>
+				["charging_state", plugged_in ?
+					cached.state === "charging" ?
+						"Charging" : "Not Charging" :
+					"Disconnected"
+				],
+			"speed": (speed_in_kph) => ["speed", speed_in_kph / MI_KM_FACTOR],
+		};
+		const map = {
+			"geofence": [],
+			"state": [],
+			"latitude": ["drive_state"],
+			"longitude": ["drive_state"],
+			"shift_state": ["drive_state"],
+			"speed": ["drive_state"],
+			"battery_level": ["charge_state"],
+			"usable_battery_level": ["charge_state"],
+			"charge_limit_soc": ["charge_state"],
+			"charger_voltage": ["charge_state"],
+			"charger_actual_current": ["charge_state"],
+			"time_to_full_charge": ["charge_state"],
+			"charging_state": ["charge_state"]
+		};
+
+		if (topic in transform) {
+			[topic, message] = transform[topic](message);
+		}
+
+		if (topic in map) {
+			let path = map[topic];
+			let node = cached;
+			while (path.length > 0 && node) {
+				node = node[path.shift()];
+			}
+			if (node[topic] != message) {
+				node[topic] = message;
+				let self = this;
+				if (!vehicle.timeout) {
+					vehicle.timeout = setTimeout(() => {
+						vehicle.timeout = null;
+						self.sendVehicleData(
+							username, vehicle.id, "mqtt",
+							self.vehicleData[username][vehicle.id].lastResult
+						);
+					}, 500);
+				}
+			}
 		}
 	},
 
@@ -1074,39 +1121,13 @@ module.exports = NodeHelper.create({
 		}
 
 		if (dataValid(data)) {
-			let power = data.charge_state.charger_actual_current * data.charge_state.charger_voltage;
 			let odometer = data.vehicle_state.odometer;
-			if( data.gui_settings.gui_distance_units === "mi/hr" ) {
+			if (data.gui_settings.gui_distance_units === "mi/hr") {
 				odometer *= 1.609344;
 			}
 			(this.vehicles[username].find(vehicle => vehicle.id == vehicleID) ||
 				{}).odometer = odometer;
-			this.sendSocketNotification("VehicleData", {
-				username: username,
-				ID: vehicleID,
-				state: state,
-				sentry: data.vehicle_state.sentry_mode,
-				drive: {
-					speed: data.drive_state.speed,
-					units: data.gui_settings.gui_distance_units,
-					gear: data.drive_state.shift_state,
-					location: [data.drive_state.latitude, data.drive_state.longitude]
-				},
-				charge: {
-					state: data.charge_state.charging_state,
-					soc: data.charge_state.battery_level,
-					usable_soc: data.charge_state.usable_battery_level,
-					limit: data.charge_state.charge_limit_soc,
-					power: power,
-					time: data.charge_state.time_to_full_charge
-				},
-				config: {
-					car_type: data.vehicle_config.car_type,
-					option_codes: data.option_codes,
-					exterior_color: data.vehicle_config.exterior_color,
-					wheel_type: data.vehicle_config.wheel_type
-				}
-			});
+			this.sendVehicleData(username, vehicleID, state, data);
 		}
 		else {
 			// Car fails to wake and we have no cached data.  Send a sparse response.
@@ -1138,5 +1159,36 @@ module.exports = NodeHelper.create({
 			});
 
 		}
+	},
+
+	sendVehicleData: function (username, vehicleID, state, data) {
+		this.sendSocketNotification("VehicleData", {
+			username: username,
+			ID: vehicleID,
+			state: state,
+			geofence: data.geofence,
+			sentry: data.vehicle_state.sentry_mode,
+			drive: {
+				speed: data.drive_state.speed,
+				units: data.gui_settings.gui_distance_units,
+				gear: data.drive_state.shift_state,
+				location: [data.drive_state.latitude, data.drive_state.longitude]
+			},
+			charge: {
+				state: data.charge_state.charging_state,
+				soc: data.charge_state.battery_level,
+				usable_soc: data.charge_state.usable_battery_level,
+				limit: data.charge_state.charge_limit_soc,
+				power: data.charge_state.charger_actual_current * data.charge_state.charger_voltage,
+				time: data.charge_state.time_to_full_charge
+			},
+			config: {
+				car_type: data.vehicle_config.car_type,
+				option_codes: data.option_codes,
+				exterior_color: data.vehicle_config.exterior_color,
+				wheel_type: data.vehicle_config.wheel_type
+			}
+		});
+
 	}
 });

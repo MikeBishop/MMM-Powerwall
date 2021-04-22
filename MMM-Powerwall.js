@@ -602,6 +602,7 @@ Module.register("MMM-Powerwall", {
 					}
 					statusFor.drive = payload.drive;
 					statusFor.charge = payload.charge;
+					statusFor.geofence = payload.geofence
 					await this.inferTwcFromVehicles();
 
 					if( !this.vehicleInFocus ) {
@@ -609,63 +610,6 @@ Module.register("MMM-Powerwall", {
 					}
 					else if( statusFor === this.vehicleInFocus ) {
 						await this.drawStatusForVehicle(statusFor, this.numCharging, false);
-					}
-				}
-				break;
-			case "VehicleUpdate":
-				if( payload.username === this.config.teslaAPIUsername ) {
-					let statusFor = (this.vehicles || []).find(vehicle => vehicle.id == payload.ID);
-					let changed = false;
-					if( statusFor ) {
-						this.doTimeout("vehicle", () => self.updateVehicleData(), this.config.cloudUpdateInterval);
-						const map = {
-							"geofence": ["geofence"],
-							"latitude": ["drive", "location", 0],
-							"longitude": ["drive", "location", 1],
-							"shift_state": ["drive", "gear"],
-							"speed": ["drive", "speed"],
-							"battery_level": ["charge", "soc"],
-							"usable_battery_level": ["charge", "usable_soc"],
-							"charge_limit_soc": ["charge", "limit"],
-							"charger_power": ["charge", "power"],
-							"time_to_full_charge": ["charge", "time"],
-							"plugged_in": ["charge", "power"]
-						};
-						const transform = {
-							"plugged_in": (plugged_in) => 
-								plugged_in ?
-									statusFor.charge.power > 0 ?
-										"Charging" : "Not Charging" :
-									"Disconnected",
-							"speed": (speed_in_kph) => speed_in_kph / MI_KM_FACTOR,
-
-						};
-
-						for( const value in payload ) {
-							if( value in map ) {
-								let path = map[value];
-								let node = statusFor;
-								let newVal = payload[value];
-								if( value in transform ) {
-									newVal = transform[value](newVal)
-								}
-								while( path.length > 1 && node ) {
-									node = node[path.shift()];
-								}
-								if( node[path[0]] != newVal) {
-									node[path[0]] = newVal;
-									changed = true;
-								}
-							}
-						}
-
-						if( "plugged_in" in payload || "charger_power" in payload ) {
-							await this.inferTwcFromVehicles();
-						}
-
-						if( changed && statusFor === this.vehicleInFocus ) {
-							await this.drawStatusForVehicle(statusFor, this.numCharging, false);
-						}
 					}
 				}
 				break;
