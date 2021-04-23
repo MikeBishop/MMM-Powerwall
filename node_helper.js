@@ -276,6 +276,10 @@ module.exports = NodeHelper.create({
 				try {
 					var client = await mqtt.connectAsync(tm.url, tm.options);
 					this.mqttClients[username].client = client;
+
+					let vehicleDetective = {};
+					let self = this;
+
 					client.on("message", async (topic, message) => {
 						if (topic.startsWith(namespace)) {
 							message = message.toString();
@@ -344,9 +348,6 @@ module.exports = NodeHelper.create({
 				catch (e) {
 					this.log("Failed to subscribe to Teslamate events;" + e.toString());
 				}
-
-				let vehicleDetective = {};
-				let self = this;
 			}
 		});
 
@@ -439,18 +440,31 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	updateVehicleData: function (username, vehicle, topic, message) {
+	updateVehicleData: function (username, vehicle, mqttTopic, mqttMessage) {
 
 		let cached = this.vehicleData[username][vehicle.id].lastResult
 		this.vehicleData[username][vehicle.id].lastUpdate = Date.now();
 		const transform = {
 			"plugged_in": (plugged_in) =>
-				["charging_state", plugged_in ?
-					cached.state === "charging" ?
+				[["charging_state", plugged_in ?
+					cached.charge_state.time_to_full_charge > 0 ?
 						"Charging" : "Not Charging" :
 					"Disconnected"
-				],
-			"speed": (speed_in_kph) => ["speed", speed_in_kph / MI_KM_FACTOR],
+				]],
+			"speed": (speed_in_kph) => [["speed", speed_in_kph / MI_KM_FACTOR]],
+			"state": (state) => {
+				let result = [["state", state]];
+				if (state === "charging") {
+					result.push(["charging_state", "Charging"]);
+				}
+				else if (cached.charge_state.charger_voltage > 0) {
+					result.push(["charging_state", "Not Charging"]);
+				}
+				else {
+					result.push(["charging_state", "Disconnected"]);
+				}
+				return result;
+			},
 		};
 		const map = {
 			"geofence": [],
@@ -468,27 +482,33 @@ module.exports = NodeHelper.create({
 			"charging_state": ["charge_state"]
 		};
 
-		if (topic in transform) {
-			[topic, message] = transform[topic](message);
+		var updates;
+		if (mqttTopic in transform) {
+			updates = transform[mqttTopic](mqttMessage);
+		}
+		else {
+			updates = [[mqttTopic, mqttMessage]];
 		}
 
-		if (topic in map) {
-			let path = map[topic];
-			let node = cached;
-			while (path.length > 0 && node) {
-				node = node[path.shift()];
-			}
-			if (node[topic] != message) {
-				node[topic] = message;
-				let self = this;
-				if (!vehicle.timeout) {
-					vehicle.timeout = setTimeout(() => {
-						vehicle.timeout = null;
-						self.sendVehicleData(
-							username, vehicle.id, "mqtt",
-							self.vehicleData[username][vehicle.id].lastResult
-						);
-					}, 500);
+		for (const [topic, message] of updates) {
+			if (topic in map) {
+				let path = map[topic];
+				let node = cached;
+				while (path.length > 0 && node) {
+					node = node[path.shift()];
+				}
+				if (node[topic] != message) {
+					node[topic] = message;
+					let self = this;
+					if (!vehicle.timeout) {
+						vehicle.timeout = setTimeout(() => {
+							vehicle.timeout = null;
+							self.sendVehicleData(
+								username, vehicle.id, "mqtt",
+								self.vehicleData[username][vehicle.id].lastResult
+							);
+						}, 500);
+					}
 				}
 			}
 		}
