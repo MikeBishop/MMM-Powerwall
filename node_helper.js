@@ -447,24 +447,22 @@ module.exports = NodeHelper.create({
 		const transform = {
 			"plugged_in": (plugged_in) =>
 				[["charging_state", plugged_in ?
-					cached.charge_state.time_to_full_charge > 0 ?
+					cached.charge_state.charger_voltage > 50 ?
 						"Charging" : "Not Charging" :
 					"Disconnected"
 				]],
-			"speed": (speed_in_kph) => [["speed", speed_in_kph / MI_KM_FACTOR]],
-			"state": (state) => {
-				let result = [["state", state]];
-				if (state === "charging") {
-					result.push(["charging_state", "Charging"]);
-				}
-				else if (cached.charge_state.charger_voltage > 0) {
-					result.push(["charging_state", "Not Charging"]);
-				}
-				else {
-					result.push(["charging_state", "Disconnected"]);
-				}
-				return result;
-			},
+			"speed": (speed_in_kph) => [
+				["speed", speed_in_kph / MI_KM_FACTOR],
+				[ speed_in_kph > 0 ? "charging_state" : "skip_me", "Disconnected" ]
+			],
+			"state": (state) => [
+				["state", state],
+				state === "charging" ?
+					["charging_state", "Charging"] :
+				cached.charge_state.charger_voltage > 0 ?
+					["charging_state", "Not Charging"] :
+					["charging_state", "Disconnected"]
+			],
 		};
 		const map = {
 			"geofence": [],
