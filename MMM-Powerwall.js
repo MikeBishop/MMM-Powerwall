@@ -586,7 +586,12 @@ Module.register("MMM-Powerwall", {
 						// let it try to sleep.
 						statusFor.deferUntil = Date.now() + 30*60*1000;
 					}
-					else {
+					else if
+					(
+						["D", "R"].includes(payload.drive.gear) ||
+						payload.sentry ||
+						payload.charge.power > 0
+					) {
 						delete statusFor.deferUntil;
 					}
 
