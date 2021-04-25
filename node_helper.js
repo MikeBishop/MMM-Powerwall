@@ -453,15 +453,15 @@ module.exports = NodeHelper.create({
 				]],
 			"speed": (speed_in_kph) => [
 				["speed", speed_in_kph / MI_KM_FACTOR],
-				[ speed_in_kph > 0 ? "charging_state" : "skip_me", "Disconnected" ]
+				[speed_in_kph > 0 ? "charging_state" : "skip_me", "Disconnected"]
 			],
 			"state": (state) => [
 				["state", state],
 				state === "charging" ?
 					["charging_state", "Charging"] :
-				cached.charge_state.charger_voltage > 0 ?
-					["charging_state", "Not Charging"] :
-					["charging_state", "Disconnected"]
+					cached.charge_state.charger_voltage > 0 ?
+						["charging_state", "Not Charging"] :
+						["charging_state", "Disconnected"]
 			],
 		};
 		const map = {
@@ -505,7 +505,7 @@ module.exports = NodeHelper.create({
 								username, vehicle.id, "mqtt",
 								self.vehicleData[username][vehicle.id].lastResult
 							);
-						}, 500);
+						}, 250);
 					}
 				}
 			}
