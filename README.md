@@ -54,6 +54,7 @@ are being introduced because of Tesla's new authentication model.**
 | `cloudUpdateInterval` | *Optional* How often (in milliseconds) to poll Tesla API<br>Default 300000 milliseconds (five minutes)
 | `home`                | *Optional* Coordinates (`[lat, lon]`) of your home; used to indicate when car is at home and to get sunrise/sunset times
 | `debug`               | *Optional* Enables additional debug output to the browser tools Console and to stderr on the MM, useful for troubleshooting
+| `teslamate`           | *Optional* See below
 
 ### Graphs
 
@@ -101,6 +102,27 @@ so you can remove the password from your `config.js` file afterward if desired.
 
 Neither the password nor the tokens are sent anywhere except from the
 node_helper to the Tesla API.  Feel free to verify this in the code.
+
+### Teslamate Integration
+
+If you have installed [Teslamate](https://github.com/adriankumpf/teslamate), it
+exposes an MQTT server with information about monitored Tesla vehicles.  To
+make the best use of this integration:
+
+- Your mosquitto instance should have the options `persistence true` and a 
+  `persistence_location` configured.
+- Either set `allow_anonymous true` or provide a username and password below.
+
+The `teslamate` configuration option is an object with the following fields:
+
+| Option        | Description
+|-------------- |-----------
+| `url`         | *Required* URL to access the Mosquitto server
+| `namespace`   | *Optional* If you have configured a custom namespace (with MQTT_NAMESPACE), supply it here
+| `options`     | *Optional* If you need to pass any [options](https://github.com/mqttjs/MQTT.js/#client) to the MQTT client, supply them here.
+
+The Teslamate connection will be associated with the Tesla account supplied
+in the same config.
 
 ## Dependencies and Acknowledgements
 

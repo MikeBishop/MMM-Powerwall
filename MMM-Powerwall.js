@@ -11,6 +11,8 @@ const GRID = { key: "grid", color: "#CACECF", color_trans: "rgba(202, 206, 207, 
 const HOUSE = { key: "house", color: "#09A9E6", color_trans: "rgba(9, 169, 230, 0.7)" };
 const CAR = { key: "car", color: "#B91413", color_trans: "rgba(185, 20, 19, 0.7)" };
 
+const MI_KM_FACTOR = 1.609344;
+
 const REQUIRED_CALLS = {
 	CarCharging: ["local", "vehicle"],
 	PowerwallSelfPowered: ["local", "energy", "selfConsumption"],
@@ -601,6 +603,7 @@ Module.register("MMM-Powerwall", {
 					}
 					statusFor.drive = payload.drive;
 					statusFor.charge = payload.charge;
+					statusFor.geofence = payload.geofence
 					await this.inferTwcFromVehicles();
 
 					if (!this.vehicleInFocus) {
@@ -876,6 +879,9 @@ Module.register("MMM-Powerwall", {
 			if (this.isHome(statusFor.drive.location)) {
 				vars["LOCATION"] = this.translate("at_home");
 			}
+			else if (statusFor.geofence) {
+				vars["LOCATION"] = this.translate("at_geofence", { GEOFENCE: statusFor.geofence });
+			}
 			else if (statusFor.namedLocation && statusFor.locationText &&
 				this.isSameLocation(statusFor.namedLocation, statusFor.drive.location)) {
 				vars["LOCATION"] = this.translate("elsewhere", { TOWN: statusFor.locationText });
@@ -938,7 +944,7 @@ Module.register("MMM-Powerwall", {
 					}
 					else {
 						// Convert to kph, since API reports mph
-						number = statusFor.drive.speed * 1.609344;
+						number = statusFor.drive.speed * MI_KM_FACTOR;
 					}
 
 					this.updateNode(consumptionId, number, unit, "", animate);

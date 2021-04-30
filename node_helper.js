@@ -14,10 +14,13 @@ const nunjucks = require("./../../vendor/node_modules/nunjucks");
 const { check, validationResult, matchedData } = require('express-validator');
 const bodyParser = require('./../../node_modules/body-parser');
 const spawn = require("await-spawn");
+const mqtt = require("async-mqtt");
+
+const MI_KM_FACTOR = 1.609344;
 
 module.exports = NodeHelper.create({
 
-	start: async function() {
+	start: async function () {
 		this.twcStatus = {};
 		this.twcVINs = {};
 		this.chargeHistory = {};
@@ -29,6 +32,7 @@ module.exports = NodeHelper.create({
 		this.storm = {};
 		this.vehicles = {};
 		this.vehicleData = {};
+		this.mqttClients = {};
 		this.powerHistory = {};
 		this.filenames = [];
 		this.lastUpdate = 0;
@@ -36,7 +40,7 @@ module.exports = NodeHelper.create({
 		this.thisConfigs = [];
 		this.tokenFile = path.resolve(__dirname + "/tokens.json");
 		this.localPwFile = path.resolve(__dirname + "/localpw.json");
-		this.template =	null;
+		this.template = null;
 
 		await this.loadTranslation("en");
 		await this.combineConfig();
@@ -44,8 +48,8 @@ module.exports = NodeHelper.create({
 		await this.createAuthPage();
 	},
 
-	createAuthPage: async function() {
-		this.expressApp.get("/MMM-Powerwall/auth", (req,res) => {
+	createAuthPage: async function () {
+		this.expressApp.get("/MMM-Powerwall/auth", (req, res) => {
 			res.send(
 				nunjucks.render(__dirname + "/auth.njk", {
 					translations: this.translation,
@@ -68,16 +72,16 @@ module.exports = NodeHelper.create({
 				.withMessage(this.translation.needpassword)
 				.trim(),
 			check("mfa")
-				.optional( {
+				.optional({
 					checkFalsy: true
 				})
-				.isNumeric( {no_symbols: true })
+				.isNumeric({ no_symbols: true })
 				.withMessage(this.translation.invalidmfa)
-		], async (req,res) => {
+		], async (req, res) => {
 			var errors = validationResult(req).mapped();
 
 			if (Object.keys(errors).length == 0) {
-				try{
+				try {
 					await this.doTeslaApiLogin(
 						req.body["username"],
 						req.body["password"],
@@ -88,7 +92,7 @@ module.exports = NodeHelper.create({
 				catch (e) {
 					let message = this.translation.authFailed;
 					let target = "general";
-					switch(e.code) {
+					switch (e.code) {
 						case 2:
 							// Invalid credentials
 							message = this.translation.invalidpassword;
@@ -113,7 +117,7 @@ module.exports = NodeHelper.create({
 						msg: message,
 						param: target != "mfa" ? "password" : target,
 						location: target == "general" ? "body" : target
-					};	
+					};
 				}
 			}
 			return res.send(
@@ -132,7 +136,7 @@ module.exports = NodeHelper.create({
 				.notEmpty()
 				.withMessage(this.translation.needpassword)
 				.trim()
-		], async (req,res) => {
+		], async (req, res) => {
 			var errors = validationResult(req).mapped();
 
 			if (Object.keys(errors).length == 0) {
@@ -150,15 +154,15 @@ module.exports = NodeHelper.create({
 						let fileContents = {};
 						try {
 							fileContents = JSON.parse(
-									await fs.readFile(this.localPwFile)
+								await fs.readFile(this.localPwFile)
 							);
 						}
-						catch {}
+						catch { }
 						fileContents[req.body["ip"]] = req.body["password"];
 						try {
 							await fs.writeFile(this.localPwFile, JSON.stringify(fileContents));
 						}
-						catch {}
+						catch { }
 					});
 				await thisPowerwall.login(req.body["password"]);
 			}
@@ -178,11 +182,11 @@ module.exports = NodeHelper.create({
 
 	},
 
-	combineConfig: async function() {
+	combineConfig: async function () {
 		// function copied from MichMich (MIT)
 		var defaults = require(__dirname + "/../../js/defaults.js");
 		var configFilename = path.resolve(__dirname + "/../../config/config.js");
-		if (typeof(global.configuration_file) !== "undefined") {
+		if (typeof (global.configuration_file) !== "undefined") {
 			configFilename = global.configuration_file;
 		}
 
@@ -205,7 +209,7 @@ module.exports = NodeHelper.create({
 		this.loadTranslation(this.configOnHd.language);
 	},
 
-	loadTranslation: async function(language) {
+	loadTranslation: async function (language) {
 		var self = this;
 
 		try {
@@ -215,20 +219,20 @@ module.exports = NodeHelper.create({
 				)
 			));
 		}
-		catch {}
+		catch { }
 	},
 
-	configureAccounts: async function() {
+	configureAccounts: async function () {
 		let fileContents = {};
 		try {
 			fileContents = JSON.parse(
-					await fs.readFile(this.tokenFile)
+				await fs.readFile(this.tokenFile)
 			);
 		}
-		catch(e) {
+		catch (e) {
 		}
 
-		if( Object.keys(fileContents).length >= 1 ) {
+		if (Object.keys(fileContents).length >= 1) {
 			this.log("Read Tesla API tokens from file");
 
 			this.teslaApiAccounts = {
@@ -247,13 +251,13 @@ module.exports = NodeHelper.create({
 			let username = config.teslaAPIUsername;
 			let password = config.teslaAPIPassword;
 
-			if( !this.teslaApiAccounts[username] ) {
+			if (!this.teslaApiAccounts[username]) {
 				this.teslaApiAccounts[username] = null;
-				if( password ) {
+				if (password) {
 					try {
 						await this.doTeslaApiLogin(username, password);
 					}
-					catch(e) {
+					catch (e) {
 						this.log("Failed to log in to Tesla API; is MFA enabled?");
 					}
 				}
@@ -261,13 +265,97 @@ module.exports = NodeHelper.create({
 					this.log("Missing both Tesla password and access tokens for " + username);
 				}
 			}
+
+			// Set up Teslamate MQTT connection associated with account
+			if (username && !this.mqttClients[username] && config.teslamate) {
+				let tm = config.teslamate;
+				let namespace = "teslamate/" +
+					(tm.namespace ? tm.namespace + "/" : "") +
+					"cars/";
+				this.mqttClients[username] = tm;
+				try {
+					var client = await mqtt.connectAsync(tm.url, tm.options);
+					this.mqttClients[username].client = client;
+
+					let vehicleDetective = {};
+					let self = this;
+
+					client.on("message", async (topic, message) => {
+						if (topic.startsWith(namespace)) {
+							message = message.toString();
+							[id, value] = topic.slice(namespace.length).split('/');
+							this.log("Teslamate MQTT: " + [id, value, message].join(", "));
+							if (!tm.vehicles) {
+								tm.vehicles = {}
+							}
+							if (!(id in tm.vehicles)) {
+								if (!vehicleDetective[id]) {
+									vehicleDetective[id] = {};
+								}
+								vehicleDetective[id][value] = message;
+
+								if (self.vehicles[username] &&
+									vehicleDetective[id].display_name &&
+									vehicleDetective[id].odometer
+								) {
+									// We have enough to try looking
+									for (let vehicle of self.vehicles[username]) {
+										if (vehicle.display_name == vehicleDetective[id].display_name &&
+											Math.abs(vehicle.odometer - vehicleDetective[id].odometer) < Math.min(100, .01 * vehicle.odometer)
+										) {
+											for (const val in vehicleDetective[id]) {
+												this.updateVehicleData(username, vehicle, val, vehicleDetective[id][val])
+											}
+											delete vehicle.accumulator;
+											tm.vehicles[id] = vehicle;
+											break;
+										}
+									}
+								}
+							}
+
+							if (id in tm.vehicles) {
+								// Get the info needed to update cache
+								let vehicle = tm.vehicles[id];
+								this.updateVehicleData(username, vehicle, value, message);
+							}
+						}
+					});
+
+					await client.subscribe(
+						[
+							"display_name",
+							"state",
+							"geofence",
+							"latitude",
+							"longitude",
+							"shift_state",
+							"speed",
+							"odometer",
+							"battery_level",
+							"usable_battery_level",
+							"plugged_in",
+							"charge_limit_soc",
+							"charger_voltage",
+							"charger_actual_current",
+							"time_to_full_charge",
+						].map(topic => namespace + "+/" + topic),
+						{
+							rh: 1
+						}
+					);
+				}
+				catch (e) {
+					this.log("Failed to subscribe to Teslamate events;" + e.toString());
+				}
+			}
 		});
 
 		await self.doTeslaApiTokenUpdate();
 
 		for (const username in this.teslaApiAccounts) {
-			if( this.checkTeslaCredentials(username) ) {
-				if( !this.vehicles[username]) {
+			if (this.checkTeslaCredentials(username)) {
+				if (!this.vehicles[username]) {
 					// See if there are any cars on the account.
 					this.vehicles[username] = await this.doTeslaApiGetVehicleList(username);
 				}
@@ -277,25 +365,25 @@ module.exports = NodeHelper.create({
 		// Now do Powerwalls
 		try {
 			fileContents = JSON.parse(
-					await fs.readFile(this.localPwFile)
+				await fs.readFile(this.localPwFile)
 			);
 		}
-		catch(e) {
+		catch (e) {
 			fileContents = {};
 		}
 
 		let changed = false;
-		for( const config of this.thisConfigs ) {
+		for (const config of this.thisConfigs) {
 			let powerwallIP = config.powerwallIP;
 			let powerwallPassword = config.powerwallPassword || fileContents[powerwallIP];
 
 			let thisPowerwall = this.powerwallAccounts[powerwallIP];
-			if( !thisPowerwall ) {
+			if (!thisPowerwall) {
 				thisPowerwall = new powerwall.Powerwall(powerwallIP);
 				thisPowerwall.
 					on("error", error => {
 						self.log(powerwallIP + " error: " + error);
-						if( !thisPowerwall.authenticated ) {
+						if (!thisPowerwall.authenticated) {
 							self.sendSocketNotification("ReconfigurePowerwall", {
 								ip: powerwallIP,
 							});
@@ -328,10 +416,10 @@ module.exports = NodeHelper.create({
 				this.powerwallAccounts[powerwallIP] = thisPowerwall;
 			}
 
-			if( !thisPowerwall.authenticated ) {
-				if( powerwallPassword ) {
+			if (!thisPowerwall.authenticated) {
+				if (powerwallPassword) {
 					await thisPowerwall.login(powerwallPassword);
-					if( thisPowerwall.authenticated && fileContents[powerwallIP] != powerwallPassword ) {
+					if (thisPowerwall.authenticated && fileContents[powerwallIP] != powerwallPassword) {
 						fileContents[powerwallIP] = powerwallPassword;
 						changed = true;
 					}
@@ -344,11 +432,83 @@ module.exports = NodeHelper.create({
 			}
 		}
 
-		if( changed ) {
+		if (changed) {
 			try {
 				await fs.writeFile(this.localPwFile, JSON.stringify(fileContents));
 			}
-			catch (e) {}
+			catch (e) { }
+		}
+	},
+
+	updateVehicleData: function (username, vehicle, mqttTopic, mqttMessage) {
+
+		let cached = this.vehicleData[username][vehicle.id].lastResult
+		this.vehicleData[username][vehicle.id].lastUpdate = Date.now();
+		const transform = {
+			"plugged_in": (plugged_in) =>
+				[["charging_state", plugged_in ?
+					cached.charge_state.charger_voltage > 50 ?
+						"Charging" : "Not Charging" :
+					"Disconnected"
+				]],
+			"speed": (speed_in_kph) => [
+				["speed", speed_in_kph / MI_KM_FACTOR],
+				[speed_in_kph > 0 ? "charging_state" : "skip_me", "Disconnected"]
+			],
+			"state": (state) => [
+				["state", state],
+				state === "charging" ?
+					["charging_state", "Charging"] :
+					cached.charge_state.charger_voltage > 0 ?
+						["charging_state", "Not Charging"] :
+						["charging_state", "Disconnected"]
+			],
+		};
+		const map = {
+			"geofence": [],
+			"state": [],
+			"latitude": ["drive_state"],
+			"longitude": ["drive_state"],
+			"shift_state": ["drive_state"],
+			"speed": ["drive_state"],
+			"battery_level": ["charge_state"],
+			"usable_battery_level": ["charge_state"],
+			"charge_limit_soc": ["charge_state"],
+			"charger_voltage": ["charge_state"],
+			"charger_actual_current": ["charge_state"],
+			"time_to_full_charge": ["charge_state"],
+			"charging_state": ["charge_state"]
+		};
+
+		var updates;
+		if (mqttTopic in transform) {
+			updates = transform[mqttTopic](mqttMessage);
+		}
+		else {
+			updates = [[mqttTopic, mqttMessage]];
+		}
+
+		for (const [topic, message] of updates) {
+			if (topic in map) {
+				let path = map[topic];
+				let node = cached;
+				while (path.length > 0 && node) {
+					node = node[path.shift()];
+				}
+				if (node[topic] != message) {
+					node[topic] = message;
+					let self = this;
+					if (!vehicle.timeout) {
+						vehicle.timeout = setTimeout(() => {
+							vehicle.timeout = null;
+							self.sendVehicleData(
+								username, vehicle.id, "mqtt",
+								self.vehicleData[username][vehicle.id].lastResult
+							);
+						}, 250);
+					}
+				}
+			}
 		}
 	},
 
@@ -360,7 +520,7 @@ module.exports = NodeHelper.create({
 	 * argument notification string - The identifier of the noitication.
 	 * argument payload mixed - The payload of the notification.
 	 */
-	socketNotificationReceived: async function(notification, payload) {
+	socketNotificationReceived: async function (notification, payload) {
 		const self = this;
 
 		this.log(notification + JSON.stringify(payload));
@@ -370,8 +530,8 @@ module.exports = NodeHelper.create({
 			let siteID = payload.siteID;
 			await this.configureAccounts();
 
-			if( username && this.checkTeslaCredentials(username) ) {
-				if( !siteID ) {
+			if (username && this.checkTeslaCredentials(username)) {
+				if (!siteID) {
 					this.log("Attempting to infer siteID");
 					siteID = await this.inferSiteID(username);
 					this.log("Found siteID " + siteID);
@@ -387,15 +547,15 @@ module.exports = NodeHelper.create({
 		}
 		else if (notification === "UpdateLocal") {
 			let ip = payload.powerwallIP;
-			if( ip in this.powerwallAccounts ) {
+			if (ip in this.powerwallAccounts) {
 				let pwPromise = this.powerwallAccounts[ip].update(payload.updateInterval);
 
 				ip = payload.twcManagerIP;
 				let port = payload.twcManagerPort;
-				if( ip ) {
+				if (ip) {
 					this.initializeCache(this.twcStatus, ip);
 					this.initializeCache(this.twcVINs, ip);
-					if( this.twcStatus[ip].lastUpdate + (payload.updateInterval || 0) < Date.now() ) {
+					if (this.twcStatus[ip].lastUpdate + (payload.updateInterval || 0) < Date.now()) {
 						await self.updateTWCManager(ip, port);
 					}
 					else {
@@ -413,18 +573,18 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			if( username && !this.checkTeslaCredentials(username) ) {
+			if (username && !this.checkTeslaCredentials(username)) {
 				return;
 			}
 
-			if( siteID ) {
+			if (siteID) {
 				this.initializeCache(this.storm, username, siteID);
 			}
 			else {
 				return;
 			}
 
-			if( this.storm[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+			if (this.storm[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetStormWatch(username, siteID);
 			}
 			else {
@@ -439,18 +599,18 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			if( username && !this.checkTeslaCredentials(username) ) {
+			if (username && !this.checkTeslaCredentials(username)) {
 				return;
 			}
 
-			if( siteID ) {
+			if (siteID) {
 				this.initializeCache(this.energy, username, siteID);
 			}
 			else {
 				return;
 			}
 
-			if( this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+			if (this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetEnergy(username, siteID);
 			}
 			else {
@@ -465,18 +625,18 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			if( username && !this.checkTeslaCredentials(username) ) {
+			if (username && !this.checkTeslaCredentials(username)) {
 				return;
 			}
 
-			if( siteID ) {
+			if (siteID) {
 				this.initializeCache(this.selfConsumption, username, siteID);
 			}
 			else {
 				return;
 			}
 
-			if( this.selfConsumption[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+			if (this.selfConsumption[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetSelfConsumption(username, siteID);
 			}
 			else {
@@ -491,11 +651,11 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let siteID = payload.siteID;
 
-			if( username && !this.checkTeslaCredentials(username) ) {
+			if (username && !this.checkTeslaCredentials(username)) {
 				return;
 			}
 
-			if( siteID ) {
+			if (siteID) {
 				this.initializeCache(this.powerHistory, username, siteID);
 				this.initializeCache(this.backup, username, siteID);
 			}
@@ -503,7 +663,7 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			if( this.powerHistory[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+			if (this.powerHistory[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetPowerHistory(username, siteID);
 			}
 			else {
@@ -513,7 +673,7 @@ module.exports = NodeHelper.create({
 					powerHistory: this.powerHistory[username][siteID].lastResult
 				});
 			}
-			if( this.backup[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+			if (this.backup[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.doTeslaApiGetBackupHistory(username, siteID);
 			}
 			else {
@@ -531,7 +691,7 @@ module.exports = NodeHelper.create({
 
 			this.initializeCache(this.chargeHistory, twcManagerIP);
 
-			if( this.chargeHistory[twcManagerIP].lastUpdate + payload.updateInterval < Date.now()) {
+			if (this.chargeHistory[twcManagerIP].lastUpdate + payload.updateInterval < Date.now()) {
 				await self.updateTWCHistory(twcManagerIP, twcManagerPort);
 			}
 			else {
@@ -545,11 +705,11 @@ module.exports = NodeHelper.create({
 			let username = payload.username;
 			let vehicleID = payload.vehicleID;
 
-			if( username && !this.checkTeslaCredentials(username) ) {
+			if (username && !this.checkTeslaCredentials(username)) {
 				return;
 			}
 
-			if( vehicleID ) {
+			if (vehicleID) {
 				this.initializeCache(this.vehicleData, username, vehicleID);
 			}
 			else {
@@ -557,13 +717,13 @@ module.exports = NodeHelper.create({
 			}
 
 			let useCache = !(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
-				<= Date.now() );
+				<= Date.now());
 			this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
 		}
 	},
 
-	checkTeslaCredentials: function(username) {
-		if( !this.teslaApiAccounts[username] /*|| this.teslaApiAccounts[username].refresh_failures > 3*/ ) {
+	checkTeslaCredentials: function (username) {
+		if (!this.teslaApiAccounts[username] /*|| this.teslaApiAccounts[username].refresh_failures > 3*/) {
 			this.sendSocketNotification("ReconfigureTeslaAPI", {
 				teslaAPIUsername: username
 			});
@@ -574,15 +734,15 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	initializeCache: function(node, ...rest) {
+	initializeCache: function (node, ...rest) {
 		let lastKey = rest.pop();
-		for( let key of rest) {
-			if( !node[key] ) {
+		for (let key of rest) {
+			if (!node[key]) {
 				node[key] = {};
 			}
 			node = node[key];
 		}
-		if( !node[lastKey] ) {
+		if (!node[lastKey]) {
 			node[lastKey] = {
 				lastUpdate: 0,
 				lastResult: null
@@ -590,23 +750,23 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	updateCache: function(data, node, keys, time=null, target="lastResult") {
-		if( !time ) {
+	updateCache: function (data, node, keys, time = null, target = "lastResult") {
+		if (!time) {
 			time = Date.now();
 		}
-		if( keys && !Array.isArray(keys) ) {
+		if (keys && !Array.isArray(keys)) {
 			keys = [keys];
 		}
 		let lastKey = keys.pop();
-		for( let key of keys) {
+		for (let key of keys) {
 			node = node[key];
 		}
 		node[lastKey].lastUpdate = time;
 		node[lastKey][target] = data;
 	},
 
-	doTeslaApiGetStormWatch: async function(username, siteID) {
-		if( username && siteID ) {
+	doTeslaApiGetStormWatch: async function (username, siteID) {
+		if (username && siteID) {
 			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
 			let cloudStatus = await this.doTeslaApi(url, username, null, siteID, this.storm);
 
@@ -618,7 +778,7 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	updateTWCManager: async function(twcManagerIP, twcManagerPort) {
+	updateTWCManager: async function (twcManagerIP, twcManagerPort) {
 		let url = "http://" + twcManagerIP + ":" + twcManagerPort + "/api/getStatus";
 		let success = true;
 		let now = Date.now();
@@ -630,22 +790,22 @@ module.exports = NodeHelper.create({
 			success = false;
 		}
 
-		if( success && result.ok ) {
+		if (success && result.ok) {
 			var status = await result.json();
 			var vins = [];
-			if( status.carsCharging > 0 ) {
+			if (status.carsCharging > 0) {
 				url = "http://" + twcManagerIP + ":" + twcManagerPort + "/api/getSlaveTWCs";
 
 				try {
 					result = await fetch(url);
 				}
-				catch {}
+				catch { }
 
-				if ( result.ok ) {
+				if (result.ok) {
 					let slaves = await result.json();
 					for (let slaveID in slaves) {
 						let slave = slaves[slaveID];
-						if( slave.currentVIN ) {
+						if (slave.currentVIN) {
 							vins.push(slave.currentVIN);
 						}
 					}
@@ -668,7 +828,7 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	updateTWCHistory: async function(twcManagerIP, twcManagerPort) {
+	updateTWCHistory: async function (twcManagerIP, twcManagerPort) {
 		let url = "http://" + twcManagerIP + ":" + twcManagerPort + "/api/getHistory";
 		let success = true;
 		let now = Date.now();
@@ -680,7 +840,7 @@ module.exports = NodeHelper.create({
 			success = false;
 		}
 
-		if( success && result.ok ) {
+		if (success && result.ok) {
 			var history = await result.json();
 			this.updateCache(history, this.chargeHistory, twcManagerIP, now);
 			this.sendSocketNotification("ChargeHistory", {
@@ -690,13 +850,13 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApiLogin: async function(username, password, mfa) {
+	doTeslaApiLogin: async function (username, password, mfa) {
 		let args = [
 			path.resolve(__dirname + "/tesla.py"),
 			username,
 			password
 		];
-		if( mfa ) {
+		if (mfa) {
 			args.push(mfa);
 		}
 		let tokenBL = await spawn("python3", args);
@@ -706,18 +866,18 @@ module.exports = NodeHelper.create({
 		await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
 	},
 
-	inferSiteID: async function(username) {
+	inferSiteID: async function (username) {
 		url = "https://owner-api.teslamotors.com/api/1/products";
 
 		this.log("Fetching products list");
 		let response = await this.doTeslaApi(url, username);
-		if( !Array.isArray(response) ) {
+		if (!Array.isArray(response)) {
 			return null;
 		}
 
 		let siteIDs = response.filter(
-			product =>(product.battery_type === "ac_powerwall")
-			).map(product => product.energy_site_id);
+			product => (product.battery_type === "ac_powerwall")
+		).map(product => product.energy_site_id);
 
 		if (siteIDs.length === 1) {
 			this.log("Inferred site ID " + siteIDs[0]);
@@ -732,16 +892,16 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	log: function(message) {
-		if( this.debug ) {
+	log: function (message) {
+		if (this.debug) {
 			console.log("MMM-Powerwall: " + message);
 		}
 	},
 
-	doTeslaApiTokenUpdate: async function(username=null) {
+	doTeslaApiTokenUpdate: async function (username = null) {
 		let accountsToCheck = [username];
-		if( !username ) {
-			if( Date.now() < this.lastUpdate + 3600000 ) {
+		if (!username) {
+			if (Date.now() < this.lastUpdate + 3600000) {
 				// Only check for expired tokens hourly
 				return;
 			}
@@ -751,24 +911,24 @@ module.exports = NodeHelper.create({
 			accountsToCheck = Object.keys(this.teslaApiAccounts);
 		}
 
-		for( const username of accountsToCheck ) {
+		for (const username of accountsToCheck) {
 			let tokens = this.teslaApiAccounts[username];
-			if( tokens && (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
+			if (tokens && (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
 				try {
 					let args = [
 						path.resolve(__dirname + "/refresh.py"),
 						tokens.refresh_token
-					];			
+					];
 					let tokenBL = await spawn("python3", args);
 					this.log("Refreshed Tesla API tokens")
 					this.teslaApiAccounts[username] = JSON.parse(tokenBL.toString());
 					await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
 					continue;
 				}
-				catch (e) {}
+				catch (e) { }
 
 				// Refresh failed here
-				if( (Date.now() / 1000) > (tokens.created_at + tokens.expires_in)) {
+				if ((Date.now() / 1000) > (tokens.created_at + tokens.expires_in)) {
 					// Token is expired; abandon it and try password authentication
 					delete this.teslaApiAccounts[username]
 					this.checkTeslaCredentials(username);
@@ -783,13 +943,13 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApi: async function(url, username, id_key=null,
-			deviceID=null, cache_node=null, event_name=null,
-			response_key=null, event_key=null) {
+	doTeslaApi: async function (url, username, id_key = null,
+		deviceID = null, cache_node = null, event_name = null,
+		response_key = null, event_key = null) {
 		let result = {};
 		let now = Date.now();
 
-		if( !this.teslaApiAccounts[username] ) {
+		if (!this.teslaApiAccounts[username]) {
 			this.log("Called doTeslaApi() without credentials!")
 			return {};
 		}
@@ -809,15 +969,15 @@ module.exports = NodeHelper.create({
 			return null;
 		}
 
-		if( result.ok ) {
+		if (result.ok) {
 			let json = await result.json();
-			this.log(url + " returned " + JSON.stringify(json).substring(0,150));
+			this.log(url + " returned " + JSON.stringify(json).substring(0, 150));
 			let response = json.response;
 			if (response_key) {
 				response = response[response_key];
 			}
 
-			if( event_name && id_key && event_key ) {
+			if (event_name && id_key && event_key) {
 				let event = {
 					username: username,
 					[id_key]: deviceID,
@@ -826,11 +986,11 @@ module.exports = NodeHelper.create({
 				this.sendSocketNotification(event_name, event);
 			}
 
-			if( response && cache_node && deviceID ) {
-				if( !cache_node[username] ) {
+			if (response && cache_node && deviceID) {
+				if (!cache_node[username]) {
 					cache_node[username] = {};
 				}
-				if( !cache_node[username][deviceID] ) {
+				if (!cache_node[username][deviceID]) {
 					cache_node[username][deviceID] = {};
 				}
 				this.updateCache(response, cache_node, [username, deviceID], now);
@@ -845,47 +1005,48 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApiGetEnergy: async function(username, siteID) {
+	doTeslaApiGetEnergy: async function (username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=energy";
 		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy");
 	},
 
-	doTeslaApiGetPowerHistory: async function(username, siteID) {
+	doTeslaApiGetPowerHistory: async function (username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=power";
 		await this.doTeslaApi(url, username, "siteID", siteID, this.powerHistory, "PowerHistory", "time_series", "powerHistory");
 	},
 
-	doTeslaApiGetBackupHistory: async function(username, siteID) {
+	doTeslaApiGetBackupHistory: async function (username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=backup";
 		await this.doTeslaApi(url, username, "siteID", siteID, this.backup, "Backup", "events", "backup");
 	},
 
-	doTeslaApiGetSelfConsumption: async function(username, siteID) {
+	doTeslaApiGetSelfConsumption: async function (username, siteID) {
 		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=self_consumption&period=day";
 		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption");
 	},
 
-	doTeslaApiGetVehicleList: async function(username) {
+	doTeslaApiGetVehicleList: async function (username) {
 		url = "https://owner-api.teslamotors.com/api/1/vehicles";
 		let response = await this.doTeslaApi(url, username);
-		
+
 		// response is an array of vehicle objects.  Don't need all the properties.
-		if( Array.isArray(response) ) {
+		if (Array.isArray(response)) {
 			return response.map(
-				function(vehicle) {
+				function (vehicle) {
 					return {
 						id: vehicle.id_s,
 						vin: vehicle.vin,
 						display_name: vehicle.display_name
-					}});
+					}
+				});
 		}
 		else {
 			return [];
 		}
 	},
 
-	doTeslaApiCommand: async function(url, username, body) {
-		if( !this.teslaApiAccounts[username] ) {
+	doTeslaApiCommand: async function (url, username, body) {
+		if (!this.teslaApiAccounts[username]) {
 			this.log("Called doTeslaApiCommand() without credentials!")
 			return {};
 		}
@@ -904,7 +1065,7 @@ module.exports = NodeHelper.create({
 			return {};
 		}
 
-		if( result.ok ) {
+		if (result.ok) {
 			let json = await result.json();
 			this.log(JSON.stringify(json));
 			let response = json.response;
@@ -923,7 +1084,7 @@ module.exports = NodeHelper.create({
 		});
 	},
 
-	doTeslaApiWakeVehicle: async function(username, vehicleID) {
+	doTeslaApiWakeVehicle: async function (username, vehicleID) {
 		let timeout = 5000;
 		let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/wake_up";
 		let state = "initial";
@@ -931,30 +1092,30 @@ module.exports = NodeHelper.create({
 		do {
 			let response = await this.doTeslaApiCommand(url, username);
 			state = response.state;
-			if( response.state !== "online") {
-				if( timeout > 20000 ) {
+			if (response.state !== "online") {
+				if (timeout > 20000) {
 					break;
 				}
 				await this.delay(timeout);
 				timeout *= 2;
 			}
-		} while( state != "online" );
+		} while (state != "online");
 
 		return state === "online";
 	},
 
-	doTeslaApiGetVehicleData: async function(username, vehicleID, useCached) {
+	doTeslaApiGetVehicleData: async function (username, vehicleID, useCached) {
 		// Slightly more complicated; involves calling multiple APIs
 		let state = "cached";
 		const forceWake = !(this.vehicleData[username][vehicleID].lastResult);
-		if( !useCached || forceWake ) {
+		if (!useCached || forceWake) {
 			let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
 			let response = await this.doTeslaApi(url, username);
-			if( response ) {
+			if (response) {
 				state = response.state;
 				if (state !== "online" && forceWake &&
 					await this.doTeslaApiWakeVehicle(username, vehicleID)) {
-						state = "online";
+					state = "online";
 				}
 			}
 			else {
@@ -964,52 +1125,31 @@ module.exports = NodeHelper.create({
 
 		let dataValid = data => data &&
 			["vehicle_state", "drive_state", "gui_settings", "charge_state", "vehicle_config"].
-			every(
-				key => key in data
-			);
+				every(
+					key => key in data
+				);
 
 		var data = null;
-		if( state === "online" ) {
+		if (state === "online") {
 			// Get vehicle state
 			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/vehicle_data";
 			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
 
-		if( !dataValid(data) ) {
+		if (!dataValid(data)) {
 			// Car is asleep and either can't wake or we aren't asking
 			data = this.vehicleData[username][vehicleID].lastResult;
 			state = "cached";
 		}
 
-		if( dataValid(data) )
-		{
-			let power = data.charge_state.charger_actual_current * data.charge_state.charger_voltage;
-			this.sendSocketNotification("VehicleData", {
-				username: username,
-				ID: vehicleID,
-				state: state,
-				sentry: data.vehicle_state.sentry_mode,
-				drive: {
-					speed: data.drive_state.speed,
-					units: data.gui_settings.gui_distance_units,
-					gear: data.drive_state.shift_state,
-					location: [data.drive_state.latitude, data.drive_state.longitude]
-				},
-				charge: {
-					state: data.charge_state.charging_state,
-					soc: data.charge_state.battery_level,
-					usable_soc: data.charge_state.usable_battery_level,
-					limit: data.charge_state.charge_limit_soc,
-					power: power,
-					time: data.charge_state.time_to_full_charge
-				},
-				config: {
-					car_type: data.vehicle_config.car_type,
-					option_codes: data.option_codes,
-					exterior_color: data.vehicle_config.exterior_color,
-					wheel_type: data.vehicle_config.wheel_type
-				}
-			});
+		if (dataValid(data)) {
+			let odometer = data.vehicle_state.odometer;
+			if (data.gui_settings.gui_distance_units === "mi/hr") {
+				odometer *= 1.609344;
+			}
+			(this.vehicles[username].find(vehicle => vehicle.id == vehicleID) ||
+				{}).odometer = odometer;
+			this.sendVehicleData(username, vehicleID, state, data);
 		}
 		else {
 			// Car fails to wake and we have no cached data.  Send a sparse response.
@@ -1041,5 +1181,36 @@ module.exports = NodeHelper.create({
 			});
 
 		}
+	},
+
+	sendVehicleData: function (username, vehicleID, state, data) {
+		this.sendSocketNotification("VehicleData", {
+			username: username,
+			ID: vehicleID,
+			state: state,
+			geofence: data.geofence,
+			sentry: data.vehicle_state.sentry_mode,
+			drive: {
+				speed: data.drive_state.speed,
+				units: data.gui_settings.gui_distance_units,
+				gear: data.drive_state.shift_state,
+				location: [data.drive_state.latitude, data.drive_state.longitude]
+			},
+			charge: {
+				state: data.charge_state.charging_state,
+				soc: data.charge_state.battery_level,
+				usable_soc: data.charge_state.usable_battery_level,
+				limit: data.charge_state.charge_limit_soc,
+				power: data.charge_state.charger_actual_current * data.charge_state.charger_voltage,
+				time: data.charge_state.time_to_full_charge
+			},
+			config: {
+				car_type: data.vehicle_config.car_type,
+				option_codes: data.option_codes,
+				exterior_color: data.vehicle_config.exterior_color,
+				wheel_type: data.vehicle_config.wheel_type
+			}
+		});
+
 	}
 });

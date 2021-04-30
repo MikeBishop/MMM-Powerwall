@@ -30,6 +30,7 @@
     "not_charging": "{NAME} ist hier {LOCATION} und lädt nicht",
       "_comment": "...wobei {LOCATION} ist entweder:",
         "at_home": "zuhause",
+        "at_geofence": "bei {GEOFENCE}",
         "elsewhere": "in {TOWN}",
 
     "completion_time": "Abgeschlossen in {DAYS}{LISTSEP1}{HOURS}{LISTSEP2}{MINUTES}",
