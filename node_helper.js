@@ -445,12 +445,14 @@ module.exports = NodeHelper.create({
 		let cached = this.vehicleData[username][vehicle.id].lastResult
 		this.vehicleData[username][vehicle.id].lastUpdate = Date.now();
 		const transform = {
-			"plugged_in": (plugged_in) =>
-				[["charging_state", plugged_in ?
+			"plugged_in": (plugged_in) => [
+				["charging_state", plugged_in === "true" ?
 					cached.charge_state.charger_voltage > 50 ?
 						"Charging" : "Not Charging" :
 					"Disconnected"
-				]],
+				],
+				["plugged_in", plugged_in === "true" ]
+			],
 			"speed": (speed_in_kph) => [
 				["speed", speed_in_kph / MI_KM_FACTOR],
 				[speed_in_kph > 0 ? "charging_state" : "skip_me", "Disconnected"]
@@ -459,7 +461,9 @@ module.exports = NodeHelper.create({
 				["state", state],
 				state === "charging" ?
 					["charging_state", "Charging"] :
-					cached.charge_state.charger_voltage > 0 ?
+					("plugged_in" in cached.charge_state ?
+						cached.charge_state.plugged_in :
+						cached.charge_state.charging_state != "Disconnected" ) ?
 						["charging_state", "Not Charging"] :
 						["charging_state", "Disconnected"]
 			],
@@ -477,7 +481,8 @@ module.exports = NodeHelper.create({
 			"charger_voltage": ["charge_state"],
 			"charger_actual_current": ["charge_state"],
 			"time_to_full_charge": ["charge_state"],
-			"charging_state": ["charge_state"]
+			"charging_state": ["charge_state"],
+			"plugged_in": ["charge_state"]
 		};
 
 		var updates;
