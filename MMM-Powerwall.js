@@ -1928,8 +1928,8 @@ Module.register("MMM-Powerwall", {
 						case "solar":
 						case "battery":
 						case "grid":
-						case "car":
 							return filter(sample[entry.key + "_power"]);
+						case "car":
 						case "house":
 							// Positive
 							let housePlusCar =
@@ -1937,10 +1937,14 @@ Module.register("MMM-Powerwall", {
 								sample.battery_power +
 								sample.grid_power;
 							if (Math.abs(sample.car_power) > housePlusCar) {
-								return filter(-1 * housePlusCar);
+								// TWC claims to have delivered more power than 
+								// Powerwall says house+car used in this period.
+								//
+								// Allocate everything to car charging, but this is still a bug.
+								return filter(entry.key == "car" ? -1 * housePlusCar : 0);
 							}
 							else {
-								return filter(-1 * (housePlusCar + sample.car_power));
+								return filter(entry.key == "car" ? sample.car_power : -1 * (housePlusCar + sample.car_power));
 							}
 						default:
 							return 0;
