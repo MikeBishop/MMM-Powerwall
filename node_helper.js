@@ -451,7 +451,7 @@ module.exports = NodeHelper.create({
 						"Charging" : "Not Charging" :
 					"Disconnected"
 				],
-				["plugged_in", plugged_in === "true" ]
+				["plugged_in", plugged_in === "true"]
 			],
 			"speed": (speed_in_kph) => [
 				["speed", speed_in_kph / MI_KM_FACTOR],
@@ -463,9 +463,15 @@ module.exports = NodeHelper.create({
 					["charging_state", "Charging"] :
 					("plugged_in" in cached.charge_state ?
 						cached.charge_state.plugged_in :
-						cached.charge_state.charging_state != "Disconnected" ) ?
+						cached.charge_state.charging_state != "Disconnected") ?
 						["charging_state", "Not Charging"] :
 						["charging_state", "Disconnected"]
+			],
+			"charger_voltage": (voltage) => [
+				["charger_voltage", voltage],
+				["charging_state",
+					voltage > 50 ? "Charging" :
+						cached.charge_state.charging_state]
 			],
 		};
 		const map = {
