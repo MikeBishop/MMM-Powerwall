@@ -930,6 +930,10 @@ Module.register("MMM-Powerwall", {
 			// No data
 			statusText = this.translate("unavailable", vars)
 			consumptionVisible = false;
+			let self = this;
+			setTimeout(() => {
+				self.updateVehicleData(30000);
+			}, 30000);
 		}
 		else {
 			// Cars not charging on TWCManager; show current instead
