@@ -447,7 +447,9 @@ module.exports = NodeHelper.create({
 		const transform = {
 			"plugged_in": (plugged_in) => [
 				["charging_state", plugged_in === "true" ?
-					cached.charge_state.charger_voltage > 50 ?
+					(cached.charge_state.time_to_full_charge &&
+						(cached.charge_state.time_to_full_charge > 0)
+					) ?
 						"Charging" : "Not Charging" :
 					"Disconnected"
 				],
@@ -467,10 +469,10 @@ module.exports = NodeHelper.create({
 						["charging_state", "Not Charging"] :
 						["charging_state", "Disconnected"]
 			],
-			"charger_voltage": (voltage) => [
-				["charger_voltage", voltage],
+			"time_to_full_charge": (time) => [
+				["time_to_full_charge", time],
 				["charging_state",
-					voltage > 50 ? "Charging" :
+					(time && (time > 0)) ? "Charging" :
 						cached.charge_state.charging_state]
 			],
 		};
