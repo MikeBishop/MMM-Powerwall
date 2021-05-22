@@ -5,11 +5,11 @@
  * MIT Licensed.
  */
 
-const SOLAR = { key: "solar", color: "gold", color_trans: "rgba(255, 215, 0, 0.7)" };
-const POWERWALL = { key: "battery", color: "#0BC60B", color_trans: "rgba(11, 198, 11, 0.7)" };
-const GRID = { key: "grid", color: "#CACECF", color_trans: "rgba(202, 206, 207, 0.7)" };
-const HOUSE = { key: "house", color: "#09A9E6", color_trans: "rgba(9, 169, 230, 0.7)" };
-const CAR = { key: "car", color: "#B91413", color_trans: "rgba(185, 20, 19, 0.7)" };
+const SOLAR = { key: "solar", color: "gold" };
+const POWERWALL = { key: "battery", color: "#0BC60B" };
+const GRID = { key: "grid", color: "#8B979B" };
+const HOUSE = { key: "house", color: "#09A9E6" };
+const CAR = { key: "car", color: "#B91413" };
 
 const MI_KM_FACTOR = 1.609344;
 
@@ -429,7 +429,7 @@ Module.register("MMM-Powerwall", {
 						await this.updateData();
 					}
 
-					if (payload.status.carsCharging > 0 && this.vehicles) {
+					if (this.flows && payload.status.carsCharging > 0 && this.vehicles) {
 						// Charging at least one car
 						let charging = this.flows.sinks.car.total;
 						this.updateNode(this.identifier + "-CarConsumption", charging, "W");
