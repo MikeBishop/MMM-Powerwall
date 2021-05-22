@@ -5,7 +5,7 @@
  * MIT Licensed.
  */
 
-const SOLAR = { key: "solar", color: "gold" };
+const SOLAR = { key: "solar", color: "#ffc40c" };
 const POWERWALL = { key: "battery", color: "#0BC60B" };
 const GRID = { key: "grid", color: "#8B979B" };
 const HOUSE = { key: "house", color: "#09A9E6" };
