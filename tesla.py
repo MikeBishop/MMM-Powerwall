@@ -13,19 +13,24 @@ import requests
 
 MAX_ATTEMPTS = 7
 CLIENT_ID = "81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384"
-UA = "Mozilla/5.0 (Linux; Android 10; Pixel 3 Build/QQ2A.200305.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/85.0.4183.81 Mobile Safari/537.36"
-X_TESLA_USER_AGENT = "TeslaApp/3.10.9-433/adff2e065/android/10"
+# UA = "Mozilla/5.0 (Linux; Android 10; Pixel 3 Build/QQ2A.200305.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/85.0.4183.81 Mobile Safari/537.36"
+# X_TESLA_USER_AGENT = "TeslaApp/3.10.9-433/adff2e065/android/10"
+UA = "PostmanRuntime/7.26.10"
 
 
 def gen_params():
     verifier_bytes = os.urandom(86)
     code_verifier = base64.urlsafe_b64encode(verifier_bytes).rstrip(b"=")
-    code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier).digest()).rstrip(b"=")
+    code_challenge = base64.urlsafe_b64encode(
+        hashlib.sha256(code_verifier).digest()
+    ).rstrip(b"=")
     state = base64.urlsafe_b64encode(os.urandom(16)).rstrip(b"=").decode("utf-8")
     return code_verifier, code_challenge, state
 
+
 def vprint(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
+
 
 def login(args):
     email, password = args.email, args.password
@@ -33,7 +38,7 @@ def login(args):
 
     headers = {
         "User-Agent": UA,
-        "x-tesla-user-agent": X_TESLA_USER_AGENT,
+        # "x-tesla-user-agent": X_TESLA_USER_AGENT,
         "X-Requested-With": "com.teslamotors.tesla",
     }
 
@@ -54,7 +59,9 @@ def login(args):
     )
 
     session = requests.Session()
-    resp = session.get("https://auth.tesla.com/oauth2/v3/authorize", headers=headers, params=params)
+    resp = session.get(
+        "https://auth.tesla.com/oauth2/v3/authorize", headers=headers, params=params
+    )
 
     if "<title>" not in resp.text:
         vprint("JS in login page")
@@ -62,7 +69,9 @@ def login(args):
     else:
         # response is ok, contains csrf and transaction_id
         csrf = re.search(r'name="_csrf".+value="([^"]+)"', resp.text).group(1)
-        transaction_id = re.search(r'name="transaction_id".+value="([^"]+)"', resp.text).group(1)
+        transaction_id = re.search(
+            r'name="transaction_id".+value="([^"]+)"', resp.text
+        ).group(1)
 
     # Step 2: Obtain an authorization code
     data = {
@@ -106,7 +115,8 @@ def login(args):
 
     if is_mfa:
         resp = session.get(
-            f"https://auth.tesla.com/oauth2/v3/authorize/mfa/factors?transaction_id={transaction_id}", headers=headers,
+            f"https://auth.tesla.com/oauth2/v3/authorize/mfa/factors?transaction_id={transaction_id}",
+            headers=headers,
         )
         # {
         #     "data": [
@@ -128,8 +138,16 @@ def login(args):
         if args.passcode:
             factor_id = resp.json()["data"][0]["id"]
 
-            data = {"transaction_id": transaction_id, "factor_id": factor_id, "passcode": args.passcode}
-            resp = session.post("https://auth.tesla.com/oauth2/v3/authorize/mfa/verify", headers=headers, json=data)
+            data = {
+                "transaction_id": transaction_id,
+                "factor_id": factor_id,
+                "passcode": args.passcode,
+            }
+            resp = session.post(
+                "https://auth.tesla.com/oauth2/v3/authorize/mfa/verify",
+                headers=headers,
+                json=data,
+            )
             vprint(resp.text)
             # {
             #     "data": {
@@ -144,7 +162,11 @@ def login(args):
             #         "updatedAt": "2020-12-09T03:26:31.000Z",
             #     }
             # }
-            if "error" in resp.text or not resp.json()["data"]["approved"] or not resp.json()["data"]["valid"]:
+            if (
+                "error" in resp.text
+                or not resp.json()["data"]["approved"]
+                or not resp.json()["data"]["valid"]
+            ):
                 vprint("Invalid MFA passcode")
                 sys.exit(4)
 
@@ -170,10 +192,15 @@ def login(args):
             sys.exit(3)
 
     # Step 3: Exchange authorization code for bearer token
-    code = parse_qs(resp.headers["location"])["https://auth.tesla.com/void/callback?code"]
+    code = parse_qs(resp.headers["location"])[
+        "https://auth.tesla.com/void/callback?code"
+    ]
     vprint("Code -", code)
 
-    headers = {"user-agent": UA, "x-tesla-user-agent": X_TESLA_USER_AGENT}
+    headers = {
+        "user-agent": UA,
+        #"x-tesla-user-agent": X_TESLA_USER_AGENT
+    }
     payload = {
         "grant_type": "authorization_code",
         "client_id": "ownerapi",
@@ -182,7 +209,9 @@ def login(args):
         "redirect_uri": "https://auth.tesla.com/void/callback",
     }
 
-    resp = session.post("https://auth.tesla.com/oauth2/v3/token", headers=headers, json=payload)
+    resp = session.post(
+        "https://auth.tesla.com/oauth2/v3/token", headers=headers, json=payload
+    )
     access_token = resp.json()["access_token"]
     refresh_token = resp.json()["refresh_token"]
 
@@ -192,7 +221,9 @@ def login(args):
         "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
         "client_id": CLIENT_ID,
     }
-    resp = session.post("https://owner-api.teslamotors.com/oauth/token", headers=headers, json=payload)
+    resp = session.post(
+        "https://owner-api.teslamotors.com/oauth/token", headers=headers, json=payload
+    )
 
     # Return tokens
     tokens = resp.json()
@@ -204,7 +235,13 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("email", type=str, help="Tesla account email")
     parser.add_argument("password", type=str, help="Tesla account password")
-    parser.add_argument("passcode", type=str, default=None, nargs="?", help="Passcode generated by your authenticator app")
+    parser.add_argument(
+        "passcode",
+        type=str,
+        default=None,
+        nargs="?",
+        help="Passcode generated by your authenticator app",
+    )
 
     args = parser.parse_args()
     login(args)
