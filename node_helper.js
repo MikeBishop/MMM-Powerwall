@@ -417,7 +417,7 @@ module.exports = NodeHelper.create({
 						self.sendSocketNotification("Operation", {
 							ip: powerwallIP,
 							mode: operation.real_mode,
-							reserve: operation.backup_reserve_percent
+							reserve: Math.max(( operation.backup_reserve_percent - .05 ) / .95, 0)
 						});
 					});
 				this.powerwallAccounts[powerwallIP] = thisPowerwall;
