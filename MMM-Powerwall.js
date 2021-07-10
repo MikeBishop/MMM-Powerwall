@@ -617,7 +617,8 @@ Module.register("MMM-Powerwall", {
 			case "GridStatus":
 				if (payload.ip === this.config.powerwallIP) {
 					this.gridStatus = payload.gridStatus;
-					this.updateData();
+					// Update will run soon enough
+					//this.updateData();
 				}
 				break;
 			case "StormWatch":
@@ -641,6 +642,20 @@ Module.register("MMM-Powerwall", {
 					}
 					if (this.powerHistory) {
 						this.updatePowerLine();
+					}
+				}
+			case "Operation":
+				if (payload.ip === this.config.powerwallIP) {
+					let identifier = this.identifier + "-reserve";
+					if( payload.mode === "backup" ) {
+						this.makeNodeInvisible(identifier);
+					}
+					else {
+						let targetNode = document.getElementById(identifier);
+						this.makeNodeVisible(identifier);
+						if( targetNode ) {
+							targetNode.style.bottom = payload.reserve + "%";
+						}
 					}
 				}
 			default:
