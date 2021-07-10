@@ -90,7 +90,8 @@ module.exports = {
             const requestTypes = [
                 ["aggregates", this.urlBase + '/api/meters/aggregates', result => result.data],
                 ["soe", this.urlBase + "/api/system_status/soe", result => (result.data.percentage - 5) / .95],
-                ["grid", this.urlBase + "/api/system_status/grid_status", result => result.data.grid_status]
+                ["grid", this.urlBase + "/api/system_status/grid_status", result => result.data.grid_status],
+                ["operation", this.urlBase + "/api/operation", result => result.data]
             ];
 
             if( now - this.lastUpdate < interval ) {
@@ -123,7 +124,7 @@ module.exports = {
                         needAuth = true;
                     }
                     else {
-                        this.emit("error", "aggregates failed: " + e.toString());
+                        this.emit("error", name + " failed: " + e.toString());
                         success = false;
                     }
                 }
