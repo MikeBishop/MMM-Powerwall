@@ -114,11 +114,9 @@
 }
 
 .meter-level {
-    border-bottom: 2px solid #0BC60B;
+    border-bottom: 2px solid white;
     width: 80%;
     position: absolute;
-    height: 2px;
-    background: black;
     display: none;
 }
 
