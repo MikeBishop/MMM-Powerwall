@@ -211,9 +211,9 @@ Module.register("MMM-Powerwall", {
 
 	getScripts: function () {
 		return [
-			this.file("node_modules/chart.js/dist/Chart.bundle.js"),
+			this.file("node_modules/chart.js/dist/chart.min.js"),
 			this.file("node_modules/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js"),
-			"https://cdn.jsdelivr.net/gh/mill1000/chartjs-plugin-annotation@v0.5.8/chartjs-plugin-annotation.min.js",
+			this.file("node_modules/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"),
 		];
 	},
 
@@ -647,13 +647,13 @@ Module.register("MMM-Powerwall", {
 			case "Operation":
 				if (payload.ip === this.config.powerwallIP) {
 					let identifier = this.identifier + "-reserve";
-					if( payload.mode === "backup" ) {
+					if (payload.mode === "backup") {
 						this.makeNodeInvisible(identifier);
 					}
 					else {
 						let targetNode = document.getElementById(identifier);
 						this.makeNodeVisible(identifier);
-						if( targetNode ) {
+						if (targetNode) {
 							targetNode.style.bottom = payload.reserve + "%";
 						}
 					}
