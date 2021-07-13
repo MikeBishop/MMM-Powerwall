@@ -15,6 +15,7 @@
     "chartjs-plugin-datalabels": "^2.0.0",
     "express-validator": "^6.9.2",
     "moment": "^2.29.1",
+    "glob-parent": ">=5.1.2",
     "node-fetch": "^2.6.1",
     "querystring": "^0.2.0"
   },
