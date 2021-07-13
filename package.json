@@ -12,6 +12,7 @@
     "chart.js": "2.9.4",
     "chartjs-plugin-datalabels": "^0.7.0",
     "express-validator": "^6.9.2",
+    "glob-parent": ">=5.1.2",
     "node-fetch": "^2.6.1",
     "querystring": "^0.2.0"
   },
