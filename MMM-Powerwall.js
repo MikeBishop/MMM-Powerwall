@@ -211,9 +211,11 @@ Module.register("MMM-Powerwall", {
 
 	getScripts: function () {
 		return [
-			this.file("node_modules/chart.js/dist/chart.min.js"),
+			this.file("node_modules/chart.js/dist/chart.js"),
 			this.file("node_modules/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js"),
 			this.file("node_modules/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"),
+			this.file("node_modules/moment/moment.js"),
+			this.file("node_modules/chartjs-adapter-moment/dist/chartjs-adapter-moment.min.js"),
 		];
 	},
 
@@ -823,7 +825,7 @@ Module.register("MMM-Powerwall", {
 			let lastMidnight = new Date().setHours(0, 0, 0, 0);
 			let newData = this.processPowerHistory();
 
-			if (powerLine.options.scales.xAxes[0].ticks.min == lastMidnight
+			if (powerLine.options.scales.xAxis.min == lastMidnight
 				&& powerLine.data && powerLine.data.datasets.length == newData.datasets.length) {
 				powerLine.data.labels = newData.labels;
 				for (let i = 0; i < newData.datasets.length; i++) {
@@ -831,8 +833,8 @@ Module.register("MMM-Powerwall", {
 				}
 			}
 			else {
-				powerLine.options.scales.xAxes[0].ticks.min = lastMidnight;
-				powerLine.options.scales.xAxes[0].ticks.max = new Date().setHours(24, 0, 0, 0);
+				powerLine.options.scales.xAxis.min = lastMidnight;
+				powerLine.options.scales.xAxis.max = new Date().setHours(24, 0, 0, 0);
 				powerLine.data = newData;
 			}
 
@@ -1599,22 +1601,20 @@ Module.register("MMM-Powerwall", {
 		this.Log("Rebuilding graphs");
 		var self = this;
 
-		Chart.helpers.merge(Chart.defaults.global, {
-			responsive: true,
-			maintainAspectRatio: true,
-			legend: {
-				display: false
-			},
-			aspectRatio: 1.12,
+		Chart.register(ChartDataLabels);
+		Chart.helpers.merge(Chart.defaults, {
 			elements: {
 				arc: {
 					borderWidth: 0
 				}
 			},
-			tooltips: {
-				enabled: false
-			},
 			plugins: {
+				legend: {
+					display: false
+				},
+				tooltip: {
+					enabled: false
+				},
 				datalabels: {
 					color: "white",
 					textAlign: "center",
@@ -1639,6 +1639,13 @@ Module.register("MMM-Powerwall", {
 				}
 			}
 		});
+		for (i of [Chart.overrides.doughnut, Chart.overrides.pie]) {
+			Chart.helpers.merge(i, {
+				responsive: true,
+				maintainAspectRatio: true,
+				aspectRatio: 1.12
+			});
+		}
 
 		for (const oldChart in this.charts) {
 			this.charts[oldChart].destroy();
@@ -1754,7 +1761,7 @@ Module.register("MMM-Powerwall", {
 					]
 				},
 				options: {
-					cutoutPercentage: 60
+					cutout: "60%"
 				}
 			});
 			this.charts.selfConsumption = selfConsumptionDoughnut;
@@ -1765,7 +1772,7 @@ Module.register("MMM-Powerwall", {
 			let data = this.dataTotals();
 			// Horizontal bar chart here
 			let energyBar = new Chart(myCanvas, {
-				type: 'horizontalBar',
+				type: 'bar',
 				data: {
 					labels: DISPLAY_ALL.map(entry => this.translate(entry.key)),
 					datasets: [{
@@ -1776,6 +1783,7 @@ Module.register("MMM-Powerwall", {
 					}]
 				},
 				options: {
+					indexAxis: 'y',
 					// Elements options apply to all of the options unless overridden in a dataset
 					// In this case, we are setting the border of each horizontal bar to be 2px wide
 					elements: {
@@ -1806,31 +1814,30 @@ Module.register("MMM-Powerwall", {
 						}
 					},
 					scales: {
-						xAxes: [{
-							id: 'xAxis',
+						xAxis: {
+							beginAtZero: true,
 							ticks: {
-								beginAtZero: true,
 								callback: function (value, index, values) {
 									if (value % 1000 == 0) {
 										return Math.abs(value) / 1000;
 									}
 								},
-								fontColor: "white",
+								color: "white",
 								precision: 0,
-								suggestedMax: 1000,
-								suggestedMin: -1000
 							},
-							scaleLabel: {
+							suggestedMax: 1000,
+							suggestedMin: -1000,
+							title: {
 								display: true,
-								labelString: this.translate("energybar_label"),
-								fontColor: "white"
+								text: this.translate("energybar_label"),
+								color: "white"
 							}
-						}],
-						yAxes: [{
+						},
+						yAxis: {
 							ticks: {
-								fontColor: "white"
+								color: "white"
 							}
-						}]
+						}
 					}
 				}
 			});
@@ -1844,8 +1851,6 @@ Module.register("MMM-Powerwall", {
 				type: 'line',
 				data: data,
 				options: {
-					// Elements options apply to all of the options unless overridden in a dataset
-					// In this case, we are setting the border of each horizontal bar to be 2px wide
 					elements: {
 						point: {
 							radius: 0
@@ -1875,17 +1880,16 @@ Module.register("MMM-Powerwall", {
 						}
 					},
 					scales: {
-						xAxes: [{
-							id: 'xAxis',
+						xAxis: {
 							type: "time",
+							min: new Date().setHours(0, 0, 0, 0),
+							max: new Date().setHours(24, 0, 0, 0),
 							ticks: {
-								min: new Date().setHours(0, 0, 0, 0),
-								max: new Date().setHours(24, 0, 0, 0),
-								fontColor: "white",
+								color: "white",
 								autoSkipPadding: 10
 							}
-						}],
-						yAxes: [{
+						},
+						yAxis: {
 							type: "linear",
 							ticks: {
 								callback: function (value, index, values) {
@@ -1893,16 +1897,16 @@ Module.register("MMM-Powerwall", {
 										return Math.abs(value) / 1000;
 									}
 								},
-								fontColor: "white",
+								color: "white",
 								precision: 0
 							},
-							scaleLabel: {
+							title: {
 								display: true,
-								labelString: this.translate("powerline_label"),
-								fontColor: "white"
+								text: this.translate("powerline_label"),
+								color: "white"
 							},
 							stacked: true
-						}]
+						}
 					}
 				}
 			});
@@ -1976,7 +1980,6 @@ Module.register("MMM-Powerwall", {
 
 			let process_dataset = (entry, filter) => {
 				return {
-					backgroundColor: entry.color,
 					borderColor: entry.color,
 					borderWidth: 1,
 					order: {
@@ -1986,6 +1989,11 @@ Module.register("MMM-Powerwall", {
 						battery: 4,
 						grid: 5
 					}[entry.key],
+					fill: {
+						target: "origin",
+						above: entry.color,
+						below: entry.color
+					},
 					data: datapoints.
 						map(sample => {
 							let val = entryVal(sample, entry, filter);
