@@ -113,6 +113,13 @@
     transition: height 1s;
 }
 
+.meter-level {
+    border-bottom: 2px solid white;
+    width: 80%;
+    position: absolute;
+    display: none;
+}
+
 .meter-horizontal {
     height:97%;
     margin: 1px;

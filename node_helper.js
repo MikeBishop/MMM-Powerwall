@@ -412,7 +412,17 @@ module.exports = NodeHelper.create({
 							ip: powerwallIP,
 							gridStatus: grid
 						});
-					})
+					}).
+					on("operation", operation => {
+						self.sendSocketNotification("Operation", {
+							ip: powerwallIP,
+							mode: operation.real_mode,
+							reserve: Math.max(
+								Math.round(( operation.backup_reserve_percent - 5 ) / .95),
+								0
+							)
+						});
+					});
 				this.powerwallAccounts[powerwallIP] = thisPowerwall;
 			}
 
