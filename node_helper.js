@@ -746,7 +746,7 @@ module.exports = NodeHelper.create({
 	},
 
 	checkTeslaCredentials: function (username) {
-		if (!this.teslaApiAccounts[username] /*|| this.teslaApiAccounts[username].refresh_failures > 3*/) {
+		if (!this.teslaApiAccounts[username] || this.teslaApiAccounts[username].refresh_failures > 3) {
 			this.sendSocketNotification("ReconfigureTeslaAPI", {
 				teslaAPIUsername: username
 			});
