@@ -15,12 +15,14 @@ const { check, validationResult, matchedData } = require('express-validator');
 const bodyParser = require('./../../node_modules/body-parser');
 const spawn = require("await-spawn");
 const mqtt = require("async-mqtt");
+const mutex = require("async-mutex").Mutex;
 
 const MI_KM_FACTOR = 1.609344;
 
 module.exports = NodeHelper.create({
 
 	start: async function () {
+		this.messageMutex = {};
 		this.twcStatus = {};
 		this.twcVINs = {};
 		this.chargeHistory = {};
@@ -544,10 +546,19 @@ module.exports = NodeHelper.create({
 	 * argument payload mixed - The payload of the notification.
 	 */
 	socketNotificationReceived: async function (notification, payload) {
+		let self = this;
+		if( !this.messageMutex[notification] ) {
+			this.messageMutex[notification] = new mutex();
+		}
+		await this.messageMutex[notification].runExclusive(
+			async () => await self.socketNotificationReceivedInner(notification,payload)
+		);
+	},
+
+	socketNotificationReceivedInner: async function(notification, payload) {
 		const self = this;
 
 		this.log(notification + JSON.stringify(payload));
-
 		if (notification === "Configure-TeslaAPI") {
 			let username = payload.teslaAPIUsername;
 			let siteID = payload.siteID;

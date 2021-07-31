@@ -94,7 +94,7 @@ module.exports = {
 
         update(interval) {
             if( !this.updateTask ) {
-                this.updateTask = updateInner(interval).then(
+                this.updateTask = this.updateInner(interval).then(
                     () => {
                         this.updateTask = null;
                     }

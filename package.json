@@ -7,6 +7,7 @@
   "license": "MIT",
   "dependencies": {
     "async-mqtt": "^2.6.1",
+    "async-mutex": "^0.3.1",
     "await-spawn": "^4.0.1",
     "axios": "^0.21.1",
     "chart.js": "^3.4.1",
