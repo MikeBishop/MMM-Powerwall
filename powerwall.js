@@ -7,6 +7,7 @@ const unauthenticated_agent = new Https.Agent({
 });
 var toughcookie = require('tough-cookie');
 var events = require('events');
+const { updateFunctionExpression } = require('typescript');
 const CLIENT_ID = '81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384';
 
 module.exports = {
@@ -43,27 +44,41 @@ module.exports = {
             this.history = {};
             this.password = null;
             this.cookieTimeout = 0;
+            this.loginTask = null;
+            this.delayTask = Promise.resolve();
+            this.updateTask = null;
         }
 
         async login(password) {
             let res;
+            await this.delayTask;
             try {
-                res = await this.http.post(this.urlBase + '/api/login/Basic',
-                    {
-                        username: "customer",
-                        password: password,
-                        "force_sm_off": false
-                    },
-                    {
-                        headers: {
-                            'Content-Type': 'application/json'
+                if( !this.loginTask ) {
+                    this.loginTask = this.http.post(this.urlBase + '/api/login/Basic',
+                        {
+                            username: "customer",
+                            password: password,
+                            "force_sm_off": false
+                        },
+                        {
+                            headers: {
+                                'Content-Type': 'application/json'
+                            }
                         }
-                    }
-                );
+                    );
+                }
+                res = await this.loginTask;
             }
             catch (e) {
                 this.authenticated = false;
+                if( e.response && e.response.status === 429 ) {
+                    this.delayTask = new Promise(resolve => setInterval(resolve, 30000));
+                    return await this.login(password);
+                }
                 return this.emit('error', 'login failed: ' + e.toString());
+            }
+            finally {
+                this.loginTask = null;
             }
             if (res.status === 200) {
                 this.authenticated = true;
@@ -77,7 +92,18 @@ module.exports = {
             }
         }
 
-        async update(interval) {
+        update(interval) {
+            if( !this.updateTask ) {
+                this.updateTask = updateInner(interval).then(
+                    () => {
+                        this.updateTask = null;
+                    }
+                );
+            }
+            return this.updateTask;
+        }
+
+        async updateInner(interval) {
             if( this.authenticated == false ) {
                 return this.emit('error', 'not authenticated');
             }
