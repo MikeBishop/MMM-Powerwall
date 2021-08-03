@@ -105,7 +105,10 @@ module.exports = {
 
         async updateInner(interval) {
             if( this.authenticated == false ) {
-                return this.emit('error', 'not authenticated');
+                await this.login(this.password);
+                if( this.authenticated == false ) {
+                    return this.emit('error', 'not authenticated');
+                }
             }
 
             let now = Date.now();
@@ -148,6 +151,7 @@ module.exports = {
                 catch (e) {
                     if( e.response != undefined && e.response.status == 401 && this.password ) {
                         needAuth = true;
+                        this.authenticated = false;
                     }
                     else {
                         this.emit("error", name + " failed: " + e.toString());
@@ -157,8 +161,8 @@ module.exports = {
             }
 
             if( needAuth ) {
-                this.login(this.password);
-                this.update(interval);
+                await this.login(this.password);
+                await this.updateInner(interval);
             }
         }
     }

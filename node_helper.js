@@ -428,19 +428,18 @@ module.exports = NodeHelper.create({
 				this.powerwallAccounts[powerwallIP] = thisPowerwall;
 			}
 
-			if (!thisPowerwall.authenticated) {
-				if (powerwallPassword) {
-					await thisPowerwall.login(powerwallPassword);
-					if (thisPowerwall.authenticated && fileContents[powerwallIP] != powerwallPassword) {
-						fileContents[powerwallIP] = powerwallPassword;
-						changed = true;
-					}
+			if (!thisPowerwall.authenticated && powerwallPassword) {
+				await thisPowerwall.login(powerwallPassword);
+				if (thisPowerwall.authenticated && fileContents[powerwallIP] != powerwallPassword) {
+					fileContents[powerwallIP] = powerwallPassword;
+					changed = true;
 				}
-				else {
-					self.sendSocketNotification("ReconfigurePowerwall", {
-						ip: powerwallIP,
-					});
-				}
+			}
+
+			if(!thisPowerwall.authenticated) {
+				self.sendSocketNotification("ReconfigurePowerwall", {
+					ip: powerwallIP,
+				});
 			}
 		}
 
