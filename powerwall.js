@@ -2,13 +2,11 @@
 var axios = require('axios');
 const Https = require("https");
 const unauthenticated_agent = new Https.Agent({
-	rejectUnauthorized: false,
+    rejectUnauthorized: false,
     keepAlive: true,
 });
 var toughcookie = require('tough-cookie');
 var events = require('events');
-const { updateFunctionExpression } = require('typescript');
-const CLIENT_ID = '81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384';
 
 module.exports = {
     Powerwall: class extends events.EventEmitter {
@@ -17,11 +15,8 @@ module.exports = {
             this.urlBase = "https://" + host;
             this.jar = new toughcookie.CookieJar();
             this.http = axios.create({
-                maxRedirects: 0,
-                validateStatus: (status) => {
-                    return (status >= 200 && status < 300) || status === 302;
-                },
                 httpsAgent: unauthenticated_agent,
+                timeout: 5000,
             });
             this.authenticated = false;
             this.http.interceptors.request.use(config => {
@@ -49,36 +44,40 @@ module.exports = {
             this.updateTask = null;
         }
 
-        async login(password) {
+        login(password) {
+            let self = this;
+            if (!this.loginTask || this.password != password) {
+                this.loginTask = this.loginInner(password).then(
+                    () => { self.loginTask = null; }
+                );
+            }
+            return this.loginTask;
+        }
+
+        async loginInner(password) {
             let res;
             await this.delayTask;
             try {
-                if( !this.loginTask ) {
-                    this.loginTask = this.http.post(this.urlBase + '/api/login/Basic',
-                        {
-                            username: "customer",
-                            password: password,
-                            "force_sm_off": false
-                        },
-                        {
-                            headers: {
-                                'Content-Type': 'application/json'
-                            }
+                res = await this.http.post(this.urlBase + '/api/login/Basic',
+                    {
+                        username: "customer",
+                        password: password,
+                        "force_sm_off": false
+                    },
+                    {
+                        headers: {
+                            'Content-Type': 'application/json'
                         }
-                    );
-                }
-                res = await this.loginTask;
+                    }
+                );
             }
             catch (e) {
                 this.authenticated = false;
-                if( e.response && e.response.status === 429 ) {
-                    this.delayTask = new Promise(resolve => setInterval(resolve, 30000));
-                    return await this.login(password);
+                if (e.response && e.response.status === 429) {
+                    this.delayTask = new Promise(resolve => setTimeout(resolve, 30000));
+                    return await this.loginInner(password);
                 }
                 return this.emit('error', 'login failed: ' + e.toString());
-            }
-            finally {
-                this.loginTask = null;
             }
             if (res.status === 200) {
                 this.authenticated = true;
@@ -93,7 +92,7 @@ module.exports = {
         }
 
         update(interval) {
-            if( !this.updateTask ) {
+            if (!this.updateTask) {
                 this.updateTask = this.updateInner(interval).then(
                     () => {
                         this.updateTask = null;
@@ -104,15 +103,15 @@ module.exports = {
         }
 
         async updateInner(interval) {
-            if( this.authenticated == false ) {
+            if (this.authenticated == false) {
                 await this.login(this.password);
-                if( this.authenticated == false ) {
+                if (this.authenticated == false) {
                     return this.emit('error', 'not authenticated');
                 }
             }
 
             let now = Date.now();
-            if( now > this.cookieTimeout && this.password ) {
+            if (now > this.cookieTimeout && this.password) {
                 this.login(this.password)
             }
 
@@ -123,15 +122,15 @@ module.exports = {
                 ["operation", this.urlBase + "/api/operation", result => result.data]
             ];
 
-            if( now - this.lastUpdate < interval ) {
-                for( const [name, url, mapping] of requestTypes ) {
+            if (now - this.lastUpdate < interval) {
+                for (const [name, url, mapping] of requestTypes) {
                     this.emit(name, this.history[name]);
                 }
                 return;
             }
 
             let requests = {};
-            for( const [name, url, mapping] of requestTypes ) {
+            for (const [name, url, mapping] of requestTypes) {
                 try {
                     requests[name] = this.http.get(url);
                 }
@@ -141,7 +140,7 @@ module.exports = {
             }
 
             let needAuth = false;
-            for( const [name, url, mapping] of requestTypes) {
+            for (const [name, url, mapping] of requestTypes) {
                 try {
                     let result = await requests[name];
                     let data = mapping(result);
@@ -149,7 +148,7 @@ module.exports = {
                     this.history[name] = data;
                 }
                 catch (e) {
-                    if( e.response != undefined && e.response.status == 401 && this.password ) {
+                    if (e.response != undefined && e.response.status == 401 && this.password) {
                         needAuth = true;
                         this.authenticated = false;
                     }
@@ -160,7 +159,7 @@ module.exports = {
                 }
             }
 
-            if( needAuth ) {
+            if (needAuth) {
                 await this.login(this.password);
                 await this.updateInner(interval);
             }
