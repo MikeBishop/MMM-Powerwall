@@ -154,7 +154,6 @@ module.exports = {
                     }
                     else {
                         this.emit("error", name + " failed: " + e.toString());
-                        success = false;
                     }
                 }
             }
