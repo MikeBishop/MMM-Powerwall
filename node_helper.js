@@ -420,7 +420,7 @@ module.exports = NodeHelper.create({
 							ip: powerwallIP,
 							mode: operation.real_mode,
 							reserve: Math.max(
-								Math.round(( operation.backup_reserve_percent - 5 ) / .95),
+								Math.round((operation.backup_reserve_percent - 5) / .95),
 								0
 							)
 						});
@@ -803,11 +803,13 @@ module.exports = NodeHelper.create({
 			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
 			let cloudStatus = await this.doTeslaApi(url, username, null, siteID, this.storm);
 
-			this.sendSocketNotification("StormWatch", {
-				username: username,
-				siteID: siteID,
-				storm: cloudStatus.storm_mode_active
-			});
+			if (cloudStatus) {
+				this.sendSocketNotification("StormWatch", {
+					username: username,
+					siteID: siteID,
+					storm: cloudStatus.storm_mode_active
+				});
+			}
 		}
 	},
 
