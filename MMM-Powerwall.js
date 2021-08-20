@@ -215,7 +215,7 @@ Module.register("MMM-Powerwall", {
 			this.file("node_modules/chart.js/dist/chart.js"),
 			this.file("node_modules/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js"),
 			this.file("node_modules/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"),
-			this.file("node_modules/moment/moment.js"),
+			"moment.js",
 			this.file("node_modules/chartjs-adapter-moment/dist/chartjs-adapter-moment.min.js"),
 		];
 	},
