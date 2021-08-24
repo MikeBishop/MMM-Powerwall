@@ -528,7 +528,7 @@ module.exports = NodeHelper.create({
 								username, vehicle.id, "mqtt",
 								self.vehicleData[username][vehicle.id].lastResult
 							);
-						}, 250);
+						}, 1000);
 					}
 				}
 			}
