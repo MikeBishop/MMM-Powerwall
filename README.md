@@ -47,7 +47,7 @@ are being introduced because of Tesla's new authentication model.**
 | `teslaAPIUsername`    | *Recommended* Username for your Tesla account
 | `teslaAPIPassword`    | *Optional* Password for your Tesla account; see below for more options
 | `siteID`              | *Optional* if your Tesla account has exactly one energy site; required if multiple are present
-| `twcManagerIP`        | *Optional* IP address or hostname of TWCManager instance; if omitted, Car Charging will not be displayed
+| `twcManagerIP`        | *Optional* IP address or hostname of TWCManager instance; if omitted, Tesla API data will be used
 | `twcManagerPort`      | *Optional* port of TWCManager's web interface; default is `8080`
 | `graphs`              | *Optional* Array of tiles to show. Possible values are described below; default is all
 | `localUpdateInterval` | *Optional* How often (in milliseconds) to poll local endpoints (Powerwall and TWCManager)<br>Default 10000 milliseconds (10 seconds)
