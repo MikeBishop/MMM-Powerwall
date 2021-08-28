@@ -25,9 +25,10 @@
     </select>
     {% else %}
     <input class="input" id="{{field}}" name="{{field}}" type="
-      {{- "password" if field == "password" else "text" -}}
-      " maxlength="
-      {{- 6 if field == "mfa" else 30 -}}
+      {{- "password" if field == "password" else "text" }}
+      {%- if field == "mfa" -%}
+      " maxlength="6
+      {%- endif -%}
       " value="{{ data[field] }}">
     {% endif %}
 
