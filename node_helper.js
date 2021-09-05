@@ -67,68 +67,73 @@ module.exports = NodeHelper.create({
 				.isEmail()
 				.withMessage(this.translation.needusername)
 				.trim(),
-			check("password")
+			check("token")
 				.notEmpty()
-				.withMessage(this.translation.needpassword)
+				.withMessage(this.translation.needtoken)
 				.trim(),
-			check("mfa")
+			check("refresh-token")
 				.optional({
 					checkFalsy: true
 				})
-				.isNumeric({ no_symbols: true })
-				.withMessage(this.translation.invalidmfa)
+				.trim()
 		], async (req, res) => {
 			var errors = validationResult(req).mapped();
 
 			if (Object.keys(errors).length == 0) {
-				try {
-					await this.doTeslaApiLogin(
-						req.body["username"],
-						req.body["password"],
-						req.body["mfa"]
-					);
-					return res.redirect("../..");
+				let username = req.body["username"];
+				if( req.body["refresh_token"] ) {
+						try {
+							// If we have a refresh token, refresh immediately
+							// so we know the validity period.
+							this.teslaApiAccounts[username] = await this.doTeslaApiTokenRefresh(req.body["refresh_token"]);
+						}
+						catch {
+							errors["refresh_token"] = {
+								value: "",
+								msg: this.translation.invalidtoken,
+								param: "refresh_token",
+								location: "refresh_token"
+							};
+						}
 				}
-				catch (e) {
-					let message = this.translation.authFailed;
-					let target = "general";
-					switch (e.code) {
-						case 2:
-							// Invalid credentials
-							message = this.translation.invalidpassword;
-							target = "password";
-							break;
-						case 4:
-							// Invalid passcode
-							message = this.translation.invalidmfa;
-							target = "mfa";
-							break;
-						case 5:
-							// Need passcode
-							message = this.translation.needmfa;
-							target = "mfa";
-							break;
-						default:
-							// Some other error; leave the defaults
-							break;
-					}
-					errors[target] = {
-						value: "",
-						msg: message,
-						param: target != "mfa" ? "password" : target,
-						location: target == "general" ? "body" : target
+				else {
+					// Current token only
+					this.teslaApiAccounts[username] = {
+						access_token: req.body["token"],
+						token_type: "bearer",
+						expires_in: 3888000,
+						created_at: Date.now() / 1000
 					};
+					url = "https://owner-api.teslamotors.com/api/1/products";
+
+					this.log("Checking token validity");
+					let response = await this.doTeslaApi(url, username);
+					if (!Array.isArray(response)) {
+						errors["token"] = {
+							value: "",
+							msg: this.translation.invalidtoken,
+							param: "token",
+							location: "token"
+						};
+
+					}
 				}
 			}
-			return res.send(
+			if (Object.keys(errors).length == 0) {
+				// Successfully got token(s)
+				await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
+				return res.redirect("../..");
+			}
+			else {
+				return res.send(
 				nunjucks.render(__dirname + "/auth.njk", {
 					translations: this.translation,
 					errors: errors,
 					data: req.body,
 					configUsers: Object.keys(this.teslaApiAccounts),
 					configIPs: Object.keys(this.powerwallAccounts),
-				})
-			);
+				}));
+			}
 		});
 
 		this.expressApp.post("/MMM-Powerwall/authLocal", [
@@ -253,17 +258,7 @@ module.exports = NodeHelper.create({
 
 			if (!this.teslaApiAccounts[username]) {
 				this.teslaApiAccounts[username] = null;
-				if (password) {
-					try {
-						await this.doTeslaApiLogin(username, password);
-					}
-					catch (e) {
-						this.log("Failed to log in to Tesla API; is MFA enabled?");
-					}
-				}
-				else {
-					this.log("Missing both Tesla password and access tokens for " + username);
-				}
+				this.log("Missing access tokens for " + username);
 			}
 
 			// Set up Teslamate MQTT connection associated with account
@@ -875,22 +870,6 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApiLogin: async function (username, password, mfa) {
-		let args = [
-			path.resolve(__dirname + "/tesla.py"),
-			username,
-			password
-		];
-		if (mfa) {
-			args.push(mfa);
-		}
-		let tokenBL = await spawn("python3", args);
-
-		this.log("Got Tesla API tokens")
-		this.teslaApiAccounts[username] = JSON.parse(tokenBL.toString());
-		await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
-	},
-
 	inferSiteID: async function (username) {
 		url = "https://owner-api.teslamotors.com/api/1/products";
 
@@ -940,13 +919,7 @@ module.exports = NodeHelper.create({
 			let tokens = this.teslaApiAccounts[username];
 			if (tokens && (Date.now() / 1000) > tokens.created_at + (tokens.expires_in / 3)) {
 				try {
-					let args = [
-						path.resolve(__dirname + "/refresh.py"),
-						tokens.refresh_token
-					];
-					let tokenBL = await spawn("python3", args);
-					this.log("Refreshed Tesla API tokens")
-					this.teslaApiAccounts[username] = JSON.parse(tokenBL.toString());
+					this.teslaApiAccounts[username] = await this.doTeslaApiTokenRefresh(tokens.refresh_token);
 					await fs.writeFile(this.tokenFile, JSON.stringify(this.teslaApiAccounts));
 					continue;
 				}
@@ -966,6 +939,16 @@ module.exports = NodeHelper.create({
 				}
 			}
 		}
+	},
+
+	doTeslaApiTokenRefresh: async function (token) {
+		let args = [
+			path.resolve(__dirname + "/refresh.py"),
+			token
+		];
+		let tokenBL = await spawn("python3", args);
+		this.log("Refreshed Tesla API tokens")
+		return JSON.parse(tokenBL.toString());
 	},
 
 	doTeslaApi: async function (url, username, id_key = null,
