@@ -45,7 +45,6 @@ are being introduced because of Tesla's new authentication model.**
 | `powerwallIP`         | *Required* IP address of the Powerwall endpoint to query
 | `powerwallPassword`   | *Optional* Password for local Powerwall endpoint
 | `teslaAPIUsername`    | *Recommended* Username for your Tesla account
-| `teslaAPIPassword`    | *Optional* Password for your Tesla account; see below for more options
 | `siteID`              | *Optional* if your Tesla account has exactly one energy site; required if multiple are present
 | `twcManagerIP`        | *Optional* IP address or hostname of TWCManager instance; if omitted, Tesla API data will be used
 | `twcManagerPort`      | *Optional* port of TWCManager's web interface; default is `8080`
@@ -79,22 +78,23 @@ requests made to either local or cloud endpoints.
 
 This module relies on being able to access your Powerwall both locally and via
 the Tesla API.  On older firmware versions, the local endpoint interactions
-required no authentication; this changed in 20.49.0. To authenticate to either
-API, you have two options:
+required no authentication; this changed in 20.49.0. There are two
+authentication paths:
 
-- **Sign in via the module. (Recommended)**
-  After installing the module, visit `/MMM-Powerwall/auth` on your MagicMirror
-  HTTP port, e.g. `http://192.168.0.52:8080/MMM-Powerwall/auth`.  You can sign
-  in with your username and password to each account.  The module will cache
-  tokens for the Tesla API, but needs to retain the actual password for the
-  local API. It is NOT RECOMMENDED that these be the same password.  If signing
-  in this way, you only need to include your username and Powerwall IP in the
-  module configuration.
+- **Sign in via the module. (Recommended)** After installing the module, visit
+  `/MMM-Powerwall/auth` on your MagicMirror HTTP port, e.g.
+  `http://192.168.0.52:8080/MMM-Powerwall/auth`.  You can provide tokens for the
+  Tesla API (links to apps which can help are on that page) and/or the password
+  for your Powerwall's local API.  The module will cache tokens for the Tesla
+  API, but needs to retain the actual password for the local API. It is NOT
+  RECOMMENDED that this be the same password used for your Tesla account.  If
+  signing in this way, you only need to include your username and Powerwall IP
+  in the module configuration.
 
-- **Include your passwords in the module configuration.**
+- **Include your passwords in the module configuration. (Local only)**
   Note that the client downloads `config.js` during load, so anything in your
   config file passes unencrypted over the network (unless you've set up TLS).
-  This method also does not work with the Tesla API if MFA is enabled.
+  This method also does not work with the Tesla API.
 
 The module will generate `tokens.json` (for the Tesla API) and `localpw.json`
 (for the local Powerwall) after the first successful load with the password(s),
@@ -111,7 +111,7 @@ make the best use of this integration:
 
 - Your mosquitto instance should have the options `persistence true` and a 
   `persistence_location` configured.
-- Either set `allow_anonymous true` or provide a username and password below.
+- Either set `allow_anonymous true` or provide a username and password in options.
 
 The `teslamate` configuration option is an object with the following fields:
 
