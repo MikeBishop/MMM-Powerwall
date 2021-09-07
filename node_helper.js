@@ -71,7 +71,7 @@ module.exports = NodeHelper.create({
 				.notEmpty()
 				.withMessage(this.translation.needtoken)
 				.trim(),
-			check("refresh-token")
+			check("refresh_token")
 				.optional({
 					checkFalsy: true
 				})
