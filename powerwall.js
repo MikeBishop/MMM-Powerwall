@@ -51,6 +51,9 @@ module.exports = {
                     () => { self.loginTask = null; }
                 );
             }
+            else {
+                this.emit("debug", "Login already in progress; deferring to that attempt");
+            }
             return this.loginTask;
         }
 
@@ -58,6 +61,7 @@ module.exports = {
             let res;
             await this.delayTask;
             try {
+                this.emit("debug", "Beginning login attempt");
                 res = await this.http.post(this.urlBase + '/api/login/Basic',
                     {
                         username: "customer",
@@ -99,6 +103,9 @@ module.exports = {
                     }
                 );
             }
+            else {
+                this.emit("debug", "Update already in progress; deferring to that attempt");
+            }
             return this.updateTask;
         }
 
@@ -123,6 +130,7 @@ module.exports = {
             ];
 
             if (now - this.lastUpdate < interval) {
+                this.emit("debug", "Using cached data");
                 for (const [name, url, mapping] of requestTypes) {
                     this.emit(name, this.history[name]);
                 }
@@ -132,6 +140,7 @@ module.exports = {
             let requests = {};
             for (const [name, url, mapping] of requestTypes) {
                 try {
+                    this.emit("debug", "Requesting " + name);
                     requests[name] = this.http.get(url);
                 }
                 catch (e) {
@@ -148,7 +157,7 @@ module.exports = {
                     this.history[name] = data;
                 }
                 catch (e) {
-                    if (e.response != undefined && e.response.status == 401 && this.password) {
+                    if (e.response && e.response.status == 401 && this.password) {
                         needAuth = true;
                         this.authenticated = false;
                     }
@@ -159,6 +168,7 @@ module.exports = {
             }
 
             if (needAuth) {
+                this.emit("debug", "Tokens rejected; need to log in again");
                 await this.login(this.password);
                 await this.updateInner(interval);
             }

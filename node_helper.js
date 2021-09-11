@@ -386,6 +386,9 @@ module.exports = NodeHelper.create({
 							});
 						}
 					}).
+					on("debug", msg => {
+						self.log(powerwallIP + ": " + msg);
+					}).
 					on("login", () => {
 						this.log("Successfully logged into " + powerwallIP);
 						self.sendSocketNotification("PowerwallConfigured", {
