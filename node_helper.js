@@ -15,12 +15,14 @@ const { check, validationResult, matchedData } = require('express-validator');
 const bodyParser = require('./../../node_modules/body-parser');
 const spawn = require("await-spawn");
 const mqtt = require("async-mqtt");
+const mutex = require("async-mutex").Mutex;
 
 const MI_KM_FACTOR = 1.609344;
 
 module.exports = NodeHelper.create({
 
 	start: async function () {
+		this.messageMutex = {};
 		this.twcStatus = {};
 		this.twcVINs = {};
 		this.chargeHistory = {};
@@ -384,6 +386,9 @@ module.exports = NodeHelper.create({
 							});
 						}
 					}).
+					on("debug", msg => {
+						self.log(powerwallIP + ": " + msg);
+					}).
 					on("login", () => {
 						this.log("Successfully logged into " + powerwallIP);
 						self.sendSocketNotification("PowerwallConfigured", {
@@ -421,19 +426,18 @@ module.exports = NodeHelper.create({
 				this.powerwallAccounts[powerwallIP] = thisPowerwall;
 			}
 
-			if (!thisPowerwall.authenticated) {
-				if (powerwallPassword) {
-					await thisPowerwall.login(powerwallPassword);
-					if (thisPowerwall.authenticated && fileContents[powerwallIP] != powerwallPassword) {
-						fileContents[powerwallIP] = powerwallPassword;
-						changed = true;
-					}
+			if (!thisPowerwall.authenticated && powerwallPassword) {
+				await thisPowerwall.login(powerwallPassword);
+				if (thisPowerwall.authenticated && fileContents[powerwallIP] != powerwallPassword) {
+					fileContents[powerwallIP] = powerwallPassword;
+					changed = true;
 				}
-				else {
-					self.sendSocketNotification("ReconfigurePowerwall", {
-						ip: powerwallIP,
-					});
-				}
+			}
+
+			if(!thisPowerwall.authenticated) {
+				self.sendSocketNotification("ReconfigurePowerwall", {
+					ip: powerwallIP,
+				});
 			}
 		}
 
@@ -539,10 +543,19 @@ module.exports = NodeHelper.create({
 	 * argument payload mixed - The payload of the notification.
 	 */
 	socketNotificationReceived: async function (notification, payload) {
+		let self = this;
+		if( !this.messageMutex[notification] ) {
+			this.messageMutex[notification] = new mutex();
+		}
+		await this.messageMutex[notification].runExclusive(
+			async () => await self.socketNotificationReceivedInner(notification,payload)
+		);
+	},
+
+	socketNotificationReceivedInner: async function(notification, payload) {
 		const self = this;
 
 		this.log(notification + JSON.stringify(payload));
-
 		if (notification === "Configure-TeslaAPI") {
 			let username = payload.teslaAPIUsername;
 			let siteID = payload.siteID;

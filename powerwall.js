@@ -2,12 +2,11 @@
 var axios = require('axios');
 const Https = require("https");
 const unauthenticated_agent = new Https.Agent({
-	rejectUnauthorized: false,
+    rejectUnauthorized: false,
     keepAlive: true,
 });
 var toughcookie = require('tough-cookie');
 var events = require('events');
-const CLIENT_ID = '81527cff06843c8634fdc09e8ac0abefb46ac849f38fe1e431c2ef2106796384';
 
 module.exports = {
     Powerwall: class extends events.EventEmitter {
@@ -16,11 +15,8 @@ module.exports = {
             this.urlBase = "https://" + host;
             this.jar = new toughcookie.CookieJar();
             this.http = axios.create({
-                maxRedirects: 0,
-                validateStatus: (status) => {
-                    return (status >= 200 && status < 300) || status === 302;
-                },
                 httpsAgent: unauthenticated_agent,
+                timeout: 5000,
             });
             this.authenticated = false;
             this.http.interceptors.request.use(config => {
@@ -43,11 +39,29 @@ module.exports = {
             this.history = {};
             this.password = null;
             this.cookieTimeout = 0;
+            this.loginTask = null;
+            this.delayTask = Promise.resolve();
+            this.updateTask = null;
         }
 
-        async login(password) {
+        login(password) {
+            let self = this;
+            if (!this.loginTask || this.password != password) {
+                this.loginTask = this.loginInner(password).then(
+                    () => { self.loginTask = null; }
+                );
+            }
+            else {
+                this.emit("debug", "Login already in progress; deferring to that attempt");
+            }
+            return this.loginTask;
+        }
+
+        async loginInner(password) {
             let res;
+            await this.delayTask;
             try {
+                this.emit("debug", "Beginning login attempt");
                 res = await this.http.post(this.urlBase + '/api/login/Basic',
                     {
                         username: "customer",
@@ -63,6 +77,10 @@ module.exports = {
             }
             catch (e) {
                 this.authenticated = false;
+                if (e.response && e.response.status === 429) {
+                    this.delayTask = new Promise(resolve => setTimeout(resolve, 30000));
+                    return await this.loginInner(password);
+                }
                 return this.emit('error', 'login failed: ' + e.toString());
             }
             if (res.status === 200) {
@@ -77,13 +95,30 @@ module.exports = {
             }
         }
 
-        async update(interval) {
-            if( this.authenticated == false ) {
-                return this.emit('error', 'not authenticated');
+        update(interval) {
+            if (!this.updateTask) {
+                this.updateTask = this.updateInner(interval).then(
+                    () => {
+                        this.updateTask = null;
+                    }
+                );
+            }
+            else {
+                this.emit("debug", "Update already in progress; deferring to that attempt");
+            }
+            return this.updateTask;
+        }
+
+        async updateInner(interval) {
+            if (this.authenticated == false) {
+                await this.login(this.password);
+                if (this.authenticated == false) {
+                    return this.emit('error', 'not authenticated');
+                }
             }
 
             let now = Date.now();
-            if( now > this.cookieTimeout && this.password ) {
+            if (now > this.cookieTimeout && this.password) {
                 this.login(this.password)
             }
 
@@ -94,16 +129,18 @@ module.exports = {
                 ["operation", this.urlBase + "/api/operation", result => result.data]
             ];
 
-            if( now - this.lastUpdate < interval ) {
-                for( const [name, url, mapping] of requestTypes ) {
+            if (now - this.lastUpdate < interval) {
+                this.emit("debug", "Using cached data");
+                for (const [name, url, mapping] of requestTypes) {
                     this.emit(name, this.history[name]);
                 }
                 return;
             }
 
             let requests = {};
-            for( const [name, url, mapping] of requestTypes ) {
+            for (const [name, url, mapping] of requestTypes) {
                 try {
+                    this.emit("debug", "Requesting " + name);
                     requests[name] = this.http.get(url);
                 }
                 catch (e) {
@@ -112,7 +149,7 @@ module.exports = {
             }
 
             let needAuth = false;
-            for( const [name, url, mapping] of requestTypes) {
+            for (const [name, url, mapping] of requestTypes) {
                 try {
                     let result = await requests[name];
                     let data = mapping(result);
@@ -120,19 +157,20 @@ module.exports = {
                     this.history[name] = data;
                 }
                 catch (e) {
-                    if( e.response != undefined && e.response.status == 401 && this.password ) {
+                    if (e.response && e.response.status == 401 && this.password) {
                         needAuth = true;
+                        this.authenticated = false;
                     }
                     else {
                         this.emit("error", name + " failed: " + e.toString());
-                        success = false;
                     }
                 }
             }
 
-            if( needAuth ) {
-                this.login(this.password);
-                this.update(interval);
+            if (needAuth) {
+                this.emit("debug", "Tokens rejected; need to log in again");
+                await this.login(this.password);
+                await this.updateInner(interval);
             }
         }
     }
