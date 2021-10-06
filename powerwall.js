@@ -77,6 +77,7 @@ module.exports = {
             }
             catch (e) {
                 this.authenticated = false;
+                this.password = null;
                 if (e.response && e.response.status === 429) {
                     this.delayTask = new Promise(resolve => setTimeout(resolve, 30000));
                     return await this.loginInner(password);
@@ -110,11 +111,11 @@ module.exports = {
         }
 
         async updateInner(interval) {
-            if (this.authenticated == false) {
-                await this.login(this.password);
-                if (this.authenticated == false) {
-                    return this.emit('error', 'not authenticated');
-                }
+            if (!this.authenticated && this.password) {
+                    await this.login(this.password);
+            }
+            if (!this.authenticated) {
+                return this.emit('error', 'not authenticated');
             }
 
             let now = Date.now();
@@ -157,7 +158,7 @@ module.exports = {
                     this.history[name] = data;
                 }
                 catch (e) {
-                    if (e.response && e.response.status == 401 && this.password) {
+                    if (e.response && [401, 403].includes(e.response.status) && this.password) {
                         needAuth = true;
                         this.authenticated = false;
                     }
