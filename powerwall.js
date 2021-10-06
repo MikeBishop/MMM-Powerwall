@@ -95,7 +95,7 @@ module.exports = {
             }
             else {
                 this.password = null;
-                return this.emit("error", "login failed; " + res.toString());
+                return this.emit("error", "login failed; " + JSON.stringify(res.headers));
             }
         }
 
