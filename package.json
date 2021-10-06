@@ -18,7 +18,8 @@
     "glob-parent": ">=5.1.2",
     "moment": "^2.29.1",
     "node-fetch": "^2.6.1",
-    "querystring": "^0.2.0"
+    "querystring": "^0.2.0",
+    "tough-cookie": "^4.0.0"
   },
   "devDependencies": {
     "pseudoloc-js": "^1.2.2",
