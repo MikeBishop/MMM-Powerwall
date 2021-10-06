@@ -48,7 +48,10 @@ module.exports = {
             let self = this;
             if (!this.loginTask || this.password != password) {
                 this.loginTask = this.loginInner(password).then(
-                    () => { self.loginTask = null; }
+                    () => {
+                        self.loginTask = null;
+                        self.delayTask = new Promise(resolve => setTimeout(resolve, 30000));
+                    }
                 );
             }
             else {
