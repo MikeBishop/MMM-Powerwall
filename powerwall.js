@@ -27,14 +27,6 @@ module.exports = {
                 });
                 return config;
             });
-            this.http.interceptors.response.use(response => {
-                if (response.headers['set-cookie'] instanceof Array) {
-                    response.headers['set-cookie'].forEach(c => {
-                        this.jar.setCookie(toughcookie.Cookie.parse(c), response.config.url, () => { });
-                    });
-                }
-                return response;
-            });
             this.lastUpdate = 0;
             this.history = {};
             this.password = null;
@@ -88,15 +80,26 @@ module.exports = {
                 return this.emit('error', 'login failed: ' + e.toString());
             }
             if (res.status === 200) {
-                this.authenticated = true;
-                this.password = password;
-                this.cookieTimeout = Date.now() + (60 * 60 * 1000);
-                return this.emit('login');
+                let foundCookie = false;
+                if (res.headers['set-cookie'] instanceof Array) {
+                    res.headers['set-cookie'].forEach(c => {
+                        this.jar.setCookie(toughcookie.Cookie.parse(c), res.config.url, () => { });
+                        foundCookie = true;
+                    });
+                }
+                else {
+                    this.emit("debug", "Login response Set-Cookie header is a " + typeof res.headers["set-cookie"]);
+                }
+                if (foundCookie) {
+                    this.authenticated = true;
+                    this.password = password;
+                    this.cookieTimeout = Date.now() + (60 * 60 * 1000);
+                    return this.emit('login');
+                }
             }
-            else {
-                this.password = null;
-                return this.emit("error", "login failed; " + JSON.stringify(res.headers));
-            }
+
+            this.password = null;
+            return this.emit("error", "login failed; " + JSON.stringify(res.headers));
         }
 
         update(interval) {
