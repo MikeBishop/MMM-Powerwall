@@ -118,7 +118,7 @@ module.exports = {
 
         async updateInner(interval) {
             if (!this.authenticated && this.password) {
-                    await this.login(this.password);
+                await this.login(this.password);
             }
             if (!this.authenticated) {
                 return this.emit('error', 'not authenticated');
