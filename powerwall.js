@@ -27,14 +27,6 @@ module.exports = {
                 });
                 return config;
             });
-            this.http.interceptors.response.use(response => {
-                if (response.headers['set-cookie'] instanceof Array) {
-                    response.headers['set-cookie'].forEach(c => {
-                        this.jar.setCookie(toughcookie.Cookie.parse(c), response.config.url, () => { });
-                    });
-                }
-                return response;
-            });
             this.lastUpdate = 0;
             this.history = {};
             this.password = null;
@@ -48,7 +40,10 @@ module.exports = {
             let self = this;
             if (!this.loginTask || this.password != password) {
                 this.loginTask = this.loginInner(password).then(
-                    () => { self.loginTask = null; }
+                    () => {
+                        self.loginTask = null;
+                        self.delayTask = new Promise(resolve => setTimeout(resolve, 30000));
+                    }
                 );
             }
             else {
@@ -77,6 +72,7 @@ module.exports = {
             }
             catch (e) {
                 this.authenticated = false;
+                this.password = null;
                 if (e.response && e.response.status === 429) {
                     this.delayTask = new Promise(resolve => setTimeout(resolve, 30000));
                     return await this.loginInner(password);
@@ -84,15 +80,26 @@ module.exports = {
                 return this.emit('error', 'login failed: ' + e.toString());
             }
             if (res.status === 200) {
-                this.authenticated = true;
-                this.password = password;
-                this.cookieTimeout = Date.now() + (60 * 60 * 1000);
-                return this.emit('login');
+                let foundCookie = false;
+                if (res.headers['set-cookie'] instanceof Array) {
+                    res.headers['set-cookie'].forEach(c => {
+                        this.jar.setCookie(toughcookie.Cookie.parse(c), res.config.url, () => { });
+                        foundCookie = true;
+                    });
+                }
+                else {
+                    this.emit("debug", "Login response Set-Cookie header is a " + typeof res.headers["set-cookie"]);
+                }
+                if (foundCookie) {
+                    this.authenticated = true;
+                    this.password = password;
+                    this.cookieTimeout = Date.now() + (60 * 60 * 1000);
+                    return this.emit('login');
+                }
             }
-            else {
-                this.password = null;
-                return this.emit("error", "login failed; " + res.toString());
-            }
+
+            this.password = null;
+            return this.emit("error", "login failed; " + JSON.stringify(res.headers));
         }
 
         update(interval) {
@@ -110,11 +117,11 @@ module.exports = {
         }
 
         async updateInner(interval) {
-            if (this.authenticated == false) {
-                await this.login(this.password);
-                if (this.authenticated == false) {
-                    return this.emit('error', 'not authenticated');
-                }
+            if (!this.authenticated && this.password) {
+                    await this.login(this.password);
+            }
+            if (!this.authenticated) {
+                return this.emit('error', 'not authenticated');
             }
 
             let now = Date.now();
@@ -157,7 +164,7 @@ module.exports = {
                     this.history[name] = data;
                 }
                 catch (e) {
-                    if (e.response && e.response.status == 401 && this.password) {
+                    if (e.response && [401, 403].includes(e.response.status) && this.password) {
                         needAuth = true;
                         this.authenticated = false;
                     }
