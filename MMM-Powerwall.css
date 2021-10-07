@@ -118,6 +118,7 @@
     width: 80%;
     position: absolute;
     display: none;
+    transition: 1s ease bottom;
 }
 
 .meter-horizontal {
