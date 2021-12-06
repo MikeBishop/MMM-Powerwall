@@ -1898,7 +1898,13 @@ Module.register("MMM-Powerwall", {
 							ticks: {
 								callback: function (value, index, values) {
 									if (value % 1000 == 0) {
-										return Math.abs(value) / 1000;
+										value = Math.abs(value);
+										let result = value / 1000;
+										let clip = this.max;
+										if (clip && value >= clip) {
+											result = ">" + result;
+										}
+										return result;
 									}
 								},
 								color: "white",
