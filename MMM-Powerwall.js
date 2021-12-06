@@ -839,6 +839,9 @@ Module.register("MMM-Powerwall", {
 				powerLine.data = newData;
 			}
 
+			powerLine.options.scales.yAxis.max = newData.clip;
+			powerLine.options.scales.yAxis.min = -1 * newData.clip;
+
 			if (Array.isArray(this.backup)) {
 				let outages = this.backup;
 				if (this.gridOutageStart) {
@@ -1906,7 +1909,9 @@ Module.register("MMM-Powerwall", {
 								text: this.translate("powerline_label"),
 								color: "white"
 							},
-							stacked: true
+							stacked: true,
+							max: data.clip,
+							min: -1 * data.clip
 						}
 					}
 				}
@@ -2006,19 +2011,54 @@ Module.register("MMM-Powerwall", {
 								: null)
 				};
 			};
-			return {
+			let result = {
 				labels: datapoints.map(entry => entry.timestamp),
 				datasets: [
 					...DISPLAY_SOURCES.map(entry => process_dataset(entry, x => x > 0 ? x : 0)),
 					...DISPLAY_SINKS.map(entry => process_dataset(entry, x => x < 0 ? x : 0))
 				]
 			};
+			let posTotal = result.datasets.reduce(
+				(series, set) => series.map(
+					(element, index) => element + (set.data[index] > 0 ? set.data[index] : 0)
+				),
+				new Array(result.datasets[0].data.length).fill(0)
+			);
+			let mean = this.average(posTotal);
+			let stddev = this.stddev(posTotal);
+			let max = Math.max(...posTotal);
+			result.clip = max > (mean + 3 * stddev) ?
+				Math.ceil((mean + 2 * stddev) / 1000) * 1000 :
+				null;
+			return result;
 		}
 		else {
 			return {
 				labels: [],
-				datasets: []
+				datasets: [],
+				clip: null
 			}
+		}
+	},
+
+	average: function (array) {
+		if (Array.isArray(array) && array.length > 0) {
+			let total = array.reduce((sum, value) => sum + value, 0);
+			return total / array.length;
+		}
+		else {
+			return NaN;
+		}
+	},
+
+	stddev: function (array) {
+		if (Array.isArray(array) && array.length > 0) {
+			let mean = this.average(array);
+			let diffsq = array.map(value => Math.pow(value - mean, 2));
+			return Math.sqrt(this.average(diffsq));
+		}
+		else {
+			return NaN;
 		}
 	},
 
