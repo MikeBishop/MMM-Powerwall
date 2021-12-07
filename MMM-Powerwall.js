@@ -2030,12 +2030,14 @@ Module.register("MMM-Powerwall", {
 				),
 				new Array(result.datasets[0].data.length).fill(0)
 			);
-			let mean = this.average(posTotal);
-			let stddev = this.stddev(posTotal);
 			let max = Math.max(...posTotal);
-			result.clip = max > (mean + 3 * stddev) ?
-				Math.ceil((mean + 2 * stddev) / 1000) * 1000 :
-				null;
+			if (max >= 5000) {
+				let mean = this.average(posTotal);
+				let stddev = this.stddev(posTotal);
+				result.clip = max > (mean + 3 * stddev) ?
+					Math.ceil((mean + 2 * stddev) / 1000) * 1000 :
+					null;
+			}
 			return result;
 		}
 		else {
