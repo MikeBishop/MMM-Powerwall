@@ -1897,10 +1897,10 @@ Module.register("MMM-Powerwall", {
 							type: "linear",
 							ticks: {
 								callback: function (value, index, values) {
-									if (value % 1000 == 0) {
-										value = Math.abs(value);
+									let clip = this._userMax;
+									value = Math.abs(value);
+									if (value % 1000 == 0 || value == clip) {
 										let result = value / 1000;
-										let clip = this.max;
 										if (clip && value >= clip) {
 											result = ">" + result;
 										}
@@ -2034,9 +2034,10 @@ Module.register("MMM-Powerwall", {
 			if (max >= 5000) {
 				let mean = this.average(posTotal);
 				let stddev = this.stddev(posTotal);
-				result.clip = max > (mean + 3 * stddev) ?
-					Math.ceil((mean + 2 * stddev) / 1000) * 1000 :
-					null;
+				if (max > (mean + 3 * stddev)) {
+					let clipLimit = Math.max(...posTotal.filter(value => value <= (mean + 2 * stddev)));
+					result.clip = Math.ceil(clipLimit / 1000) * 1000;
+				}
 			}
 			return result;
 		}
