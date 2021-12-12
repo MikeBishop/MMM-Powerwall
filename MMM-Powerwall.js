@@ -2040,7 +2040,7 @@ Module.register("MMM-Powerwall", {
 					(value, index) => 
 						[...series].
 							sort((a, b) => a.order - b.order).
-							map(source => Math.abs(source.data.at(index))).
+							map(source => Math.abs(source.data[index])).
 							filter(e => e && e > 1).
 							slice(0,-1).
 							reduce((s,v) => s+v, 0)
@@ -2051,7 +2051,9 @@ Module.register("MMM-Powerwall", {
 						...exceptLastShown(sources),
 						...exceptLastShown(sinks)
 					);
-					result.clip = Math.ceil(clipLimit / 1000) * 1000;
+					if(max > clipLimit) {
+						result.clip = Math.ceil(clipLimit / 1000) * 1000;
+					}
 				}
 			}
 			return result;
