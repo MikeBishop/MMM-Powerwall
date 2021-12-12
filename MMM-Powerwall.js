@@ -2017,25 +2017,40 @@ Module.register("MMM-Powerwall", {
 								: null)
 				};
 			};
+			let sources = DISPLAY_SOURCES.map(entry => process_dataset(entry, x => x > 0 ? x : 0));
+			let sinks = DISPLAY_SINKS.map(entry => process_dataset(entry, x => x < 0 ? x : 0));
 			let result = {
 				labels: datapoints.map(entry => entry.timestamp),
 				datasets: [
-					...DISPLAY_SOURCES.map(entry => process_dataset(entry, x => x > 0 ? x : 0)),
-					...DISPLAY_SINKS.map(entry => process_dataset(entry, x => x < 0 ? x : 0))
+					...sources,
+					...sinks
 				]
 			};
-			let posTotal = result.datasets.reduce(
+			let posTotal = sources.reduce(
 				(series, set) => series.map(
-					(element, index) => element + (set.data[index] > 0 ? set.data[index] : 0)
+					(element, index) => element + set.data[index]
 				),
-				new Array(result.datasets[0].data.length).fill(0)
+				new Array(sources[0].data.length).fill(0)
 			);
 			let max = Math.max(...posTotal);
 			if (max >= 5000) {
 				let mean = this.average(posTotal);
 				let stddev = this.stddev(posTotal);
+				let exceptLastShown = series => posTotal.map(
+					(value, index) => 
+						[...series].
+							sort((a, b) => a.order - b.order).
+							map(source => Math.abs(source.data.at(index))).
+							filter(e => e && e > 1).
+							slice(0,-1).
+							reduce((s,v) => s+v, 0)
+				);
 				if (max > (mean + 3 * stddev)) {
-					let clipLimit = Math.max(...posTotal.filter(value => value <= (mean + 2 * stddev)));
+					let clipLimit = Math.max(
+						...posTotal.filter(value => value <= (mean + 2 * stddev)),
+						...exceptLastShown(sources),
+						...exceptLastShown(sinks)
+					);
 					result.clip = Math.ceil(clipLimit / 1000) * 1000;
 				}
 			}
