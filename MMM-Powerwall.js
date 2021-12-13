@@ -2036,23 +2036,28 @@ Module.register("MMM-Powerwall", {
 			if (max >= 5000) {
 				let mean = this.average(posTotal);
 				let stddev = this.stddev(posTotal);
-				let exceptLastShown = series => posTotal.map(
-					(value, index) => 
-						[...series].
-							sort((a, b) => a.order - b.order).
-							map(source => Math.abs(source.data[index])).
-							filter(e => e && e > 1).
-							slice(0,-1).
-							reduce((s,v) => s+v, 0)
-				);
+				let exceptLastShown = series => {
+					let copySeries = [...series].sort((a, b) => a.order - b.order);
+					return posTotal.map(
+						(value, index) => {
+							let exceptLast = copySeries.
+								map(source => Math.abs(source.data[index])).
+								filter(e => e && e > 1).
+								slice(0,-1).
+								reduce((s,v) => s+v, 0)
+							return exceptLast < .95 * value ? exceptLast : 0;
+						}
+					);
+				};
 				if (max > (mean + 3 * stddev)) {
 					let clipLimit = Math.max(
 						...posTotal.filter(value => value <= (mean + 2 * stddev)),
 						...exceptLastShown(sources),
 						...exceptLastShown(sinks)
 					);
+					clipLimit = Math.ceil(clipLimit / 1000) * 1000;
 					if(max > clipLimit) {
-						result.clip = Math.ceil(clipLimit / 1000) * 1000;
+						result.clip = clipLimit;
 					}
 				}
 			}
