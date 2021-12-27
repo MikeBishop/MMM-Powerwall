@@ -1827,7 +1827,7 @@ Module.register("MMM-Powerwall", {
 									}
 								},
 								color: "white",
-								precision: 0,
+								precision: -3,
 							},
 							suggestedMax: 1000,
 							suggestedMin: -1000,
@@ -1908,7 +1908,7 @@ Module.register("MMM-Powerwall", {
 									}
 								},
 								color: "white",
-								precision: 0
+								precision: -3
 							},
 							title: {
 								display: true,
@@ -2043,8 +2043,8 @@ Module.register("MMM-Powerwall", {
 							let exceptLast = copySeries.
 								map(source => Math.abs(source.data[index])).
 								filter(e => e && e > 1).
-								slice(0,-1).
-								reduce((s,v) => s+v, 0)
+								slice(0, -1).
+								reduce((s, v) => s + v, 0)
 							return exceptLast < .95 * value ? exceptLast : 0;
 						}
 					);
@@ -2053,10 +2053,11 @@ Module.register("MMM-Powerwall", {
 					let clipLimit = Math.max(
 						...posTotal.filter(value => value <= (mean + 2 * stddev)),
 						...exceptLastShown(sources),
-						...exceptLastShown(sinks)
+						...exceptLastShown(sinks),
+						posTotal[posTotal.length - 1]
 					);
 					clipLimit = Math.ceil(clipLimit / 1000) * 1000;
-					if(max > clipLimit) {
+					if (max > clipLimit) {
 						result.clip = clipLimit;
 					}
 				}
