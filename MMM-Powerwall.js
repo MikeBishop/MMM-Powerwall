@@ -2054,7 +2054,7 @@ Module.register("MMM-Powerwall", {
 						...posTotal.filter(value => value <= (mean + 2 * stddev)),
 						...exceptLastShown(sources),
 						...exceptLastShown(sinks),
-						posTotal[posTotal.length - 1]
+						...posTotal.slice(Math.max(posTotal.length - 5, 0))
 					);
 					clipLimit = Math.ceil(clipLimit / 1000) * 1000;
 					if (max > clipLimit) {
