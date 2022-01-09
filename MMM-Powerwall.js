@@ -839,6 +839,9 @@ Module.register("MMM-Powerwall", {
 				powerLine.data = newData;
 			}
 
+			powerLine.options.scales.yAxis.max = newData.clip;
+			powerLine.options.scales.yAxis.min = -1 * newData.clip;
+
 			if (Array.isArray(this.backup)) {
 				let outages = this.backup;
 				if (this.gridOutageStart) {
@@ -1894,8 +1897,14 @@ Module.register("MMM-Powerwall", {
 							type: "linear",
 							ticks: {
 								callback: function (value, index, values) {
-									if (value % 1000 == 0) {
-										return Math.abs(value) / 1000;
+									let clip = this._userMax;
+									value = Math.abs(value);
+									if (value % 1000 == 0 || value == clip) {
+										let result = value / 1000;
+										if (clip && value >= clip) {
+											result = ">" + result;
+										}
+										return result;
 									}
 								},
 								color: "white",
@@ -1906,7 +1915,9 @@ Module.register("MMM-Powerwall", {
 								text: this.translate("powerline_label"),
 								color: "white"
 							},
-							stacked: true
+							stacked: true,
+							max: data.clip,
+							min: -1 * data.clip
 						}
 					}
 				}
@@ -2006,19 +2017,79 @@ Module.register("MMM-Powerwall", {
 								: null)
 				};
 			};
-			return {
+			let sources = DISPLAY_SOURCES.map(entry => process_dataset(entry, x => x > 0 ? x : 0));
+			let sinks = DISPLAY_SINKS.map(entry => process_dataset(entry, x => x < 0 ? x : 0));
+			let result = {
 				labels: datapoints.map(entry => entry.timestamp),
 				datasets: [
-					...DISPLAY_SOURCES.map(entry => process_dataset(entry, x => x > 0 ? x : 0)),
-					...DISPLAY_SINKS.map(entry => process_dataset(entry, x => x < 0 ? x : 0))
+					...sources,
+					...sinks
 				]
 			};
+			let posTotal = sources.reduce(
+				(series, set) => series.map(
+					(element, index) => element + set.data[index]
+				),
+				new Array(sources[0].data.length).fill(0)
+			);
+			let max = Math.max(...posTotal);
+			if (max >= 5000) {
+				let mean = this.average(posTotal);
+				let stddev = this.stddev(posTotal);
+				let exceptLastShown = series => {
+					let copySeries = [...series].sort((a, b) => a.order - b.order);
+					return posTotal.map(
+						(value, index) => {
+							let exceptLast = copySeries.
+								map(source => Math.abs(source.data[index])).
+								filter(e => e && e > 1).
+								slice(0,-1).
+								reduce((s,v) => s+v, 0)
+							return exceptLast < .95 * value ? exceptLast : 0;
+						}
+					);
+				};
+				if (max > (mean + 3 * stddev)) {
+					let clipLimit = Math.max(
+						...posTotal.filter(value => value <= (mean + 2 * stddev)),
+						...exceptLastShown(sources),
+						...exceptLastShown(sinks)
+					);
+					clipLimit = Math.ceil(clipLimit / 1000) * 1000;
+					if(max > clipLimit) {
+						result.clip = clipLimit;
+					}
+				}
+			}
+			return result;
 		}
 		else {
 			return {
 				labels: [],
-				datasets: []
+				datasets: [],
+				clip: null
 			}
+		}
+	},
+
+	average: function (array) {
+		if (Array.isArray(array) && array.length > 0) {
+			let total = array.reduce((sum, value) => sum + value, 0);
+			return total / array.length;
+		}
+		else {
+			return NaN;
+		}
+	},
+
+	stddev: function (array) {
+		if (Array.isArray(array) && array.length > 0) {
+			let mean = this.average(array);
+			let diffsq = array.map(value => Math.pow(value - mean, 2));
+			return Math.sqrt(this.average(diffsq));
+		}
+		else {
+			return NaN;
 		}
 	},
 
