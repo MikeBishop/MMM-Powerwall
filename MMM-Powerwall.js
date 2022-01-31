@@ -2056,7 +2056,17 @@ Module.register("MMM-Powerwall", {
 						...exceptLastShown(sinks),
 						...posTotal.slice(Math.max(posTotal.length - 5, 0))
 					);
-					clipLimit = Math.ceil(clipLimit / 1000) * 1000;
+					let scaleFactor;
+					if (clipLimit > 10000) {
+						scaleFactor = 5000;
+					}
+					else if (clipLimit > 5000) {
+						scaleFactor = 2000;
+					}
+					else {
+						scaleFactor = 1000;
+					}
+					clipLimit = Math.ceil(clipLimit / scaleFactor) * scaleFactor;
 					if (max > clipLimit) {
 						result.clip = clipLimit;
 					}
