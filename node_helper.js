@@ -568,12 +568,16 @@ module.exports = NodeHelper.create({
 					this.log("Found siteID " + siteID);
 				}
 
-				siteInfo = await this.doTeslaApiGetSiteInfo(username, siteID);
+				let timezone = null;
+				let siteInfo = await this.doTeslaApiGetSiteInfo(username, siteID);
+				if( siteInfo ) {
+					timezone = siteInfo.installation_time_zone
+				}
 
 				this.sendSocketNotification("TeslaAPIConfigured", {
 					username: username,
 					siteID: siteID,
-					timezone: siteInfo.installation_time_zone,
+					timezone: timezone,
 					vehicles: this.vehicles[username]
 				});
 
