@@ -568,9 +568,16 @@ module.exports = NodeHelper.create({
 					this.log("Found siteID " + siteID);
 				}
 
+				let timezone = null;
+				let siteInfo = await this.doTeslaApiGetSiteInfo(username, siteID);
+				if( siteInfo ) {
+					timezone = siteInfo.installation_time_zone
+				}
+
 				this.sendSocketNotification("TeslaAPIConfigured", {
 					username: username,
 					siteID: siteID,
+					timezone: timezone,
 					vehicles: this.vehicles[username]
 				});
 
@@ -808,6 +815,13 @@ module.exports = NodeHelper.create({
 					storm: cloudStatus.storm_mode_active
 				});
 			}
+		}
+	},
+
+	doTeslaApiGetSiteInfo: function (username, siteID) {
+		if( username && siteID ) {
+			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/site_info";
+			return this.doTeslaApi(url, username);
 		}
 	},
 

@@ -69,6 +69,7 @@ Module.register("MMM-Powerwall", {
 	twcConsumption: 0,
 	teslaAPIEnabled: false,
 	teslaAggregates: null,
+	timezone: null,
 	flows: null,
 	historySeries: null,
 	callsToEnable: {},
@@ -215,8 +216,8 @@ Module.register("MMM-Powerwall", {
 			this.file("node_modules/chart.js/dist/chart.js"),
 			this.file("node_modules/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js"),
 			this.file("node_modules/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"),
-			"moment.js",
-			this.file("node_modules/chartjs-adapter-moment/dist/chartjs-adapter-moment.min.js"),
+			this.file("node_modules/luxon/build/global/luxon.min.js"),
+			this.file("node_modules/chartjs-adapter-luxon/dist/chartjs-adapter-luxon.min.js"),
 		];
 	},
 
@@ -353,7 +354,7 @@ Module.register("MMM-Powerwall", {
 						self.config.siteID = payload.siteID;
 					}
 					if (self.config.siteID === payload.siteID) {
-						self.teslaAPIEnabled = true;
+						this.timezone = payload.timezone;
 						this.updateEnergy();
 						this.updateAllCloudData();
 						this.scheduleCloudUpdate();
@@ -635,9 +636,9 @@ Module.register("MMM-Powerwall", {
 			case "Backup":
 				if (payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID) {
-					let lastMidnight = new Date().setHours(0, 0, 0, 0);
+					let lastMidnight = luxon.DateTime.local().setZone(this.timezone).startOf('day');
 					this.backup = payload.backup.filter(
-						outage => Date.parse(outage.timestamp) > lastMidnight
+						outage => luxon.DateTime.fromISO(outage.timestamp) > lastMidnight
 					);
 					if (this.gridStatus === "SystemGridConnected") {
 						// If the grid is up, this should include the most recent outage
@@ -823,10 +824,10 @@ Module.register("MMM-Powerwall", {
 	updatePowerLine: function () {
 		let powerLine = this.charts.powerLine;
 		if (powerLine) {
-			let lastMidnight = new Date().setHours(0, 0, 0, 0);
+			let lastMidnight = luxon.DateTime.local().setZone(this.timezone).startOf('day');
 			let newData = this.processPowerHistory();
 
-			if (powerLine.options.scales.xAxis.min == lastMidnight
+			if (powerLine.options.scales.xAxis.min == lastMidnight.toString()
 				&& powerLine.data && powerLine.data.datasets.length == newData.datasets.length) {
 				powerLine.data.labels = newData.labels;
 				for (let i = 0; i < newData.datasets.length; i++) {
@@ -834,8 +835,8 @@ Module.register("MMM-Powerwall", {
 				}
 			}
 			else {
-				powerLine.options.scales.xAxis.min = lastMidnight;
-				powerLine.options.scales.xAxis.max = new Date().setHours(24, 0, 0, 0);
+				powerLine.options.scales.xAxis.min = lastMidnight.toString();
+				powerLine.options.scales.xAxis.max = luxon.DateTime.local().setZone(this.timezone).endOf('day').toString();
 				powerLine.data = newData;
 			}
 
@@ -852,8 +853,8 @@ Module.register("MMM-Powerwall", {
 				}
 				powerLine.options.plugins.annotation.annotations = outages.map(
 					outage => {
-						let startDate = Date.parse(outage.timestamp);
-						let stopDate = startDate + outage.duration;
+						let startDate = luxon.DateTime.fromISO(outage.timestamp);
+						let stopDate = startDate.plus({milliseconds: outage.duration});
 						return {
 							type: 'box',
 							mode: 'vertical',
@@ -1470,9 +1471,9 @@ Module.register("MMM-Powerwall", {
 	cachedCarTotal: null,
 	carTotalToday: function () {
 		if (Array.isArray(this.chargeHistory) && !this.cachedCarTotal) {
-			let midnight = new Date().setHours(0, 0, 0, 0);
+			let midnight = luxon.DateTime.local().setZone(this.timezone).startOf('day');
 			this.cachedCarTotal = this.chargeHistory.filter(
-				entry => Date.parse(entry.timestamp) >= midnight
+				entry => luxon.DateTime.fromISO(entry.timestamp) >= midnight
 			).reduce((total, next) => total + next.charger_power / 12, 0)
 		}
 		return this.cachedCarTotal || 0;
@@ -1480,11 +1481,11 @@ Module.register("MMM-Powerwall", {
 	cachedCarYesterday: null,
 	carTotalYesterday: function () {
 		if (Array.isArray(this.chargeHistory) && !this.cachedCarYesterday) {
-			let prevMidnight = new Date().setHours(-24, 0, 0, 0);
-			let midnight = new Date().setHours(0, 0, 0, 0);
+			let midnight = luxon.DateTime.local().setZone(this.timezone).startOf('day');
+			let prevMidnight = midnight.minus({"days": 1});
 			this.cachedCarYesterday = this.chargeHistory.filter(
 				entry => {
-					let date = Date.parse(entry.timestamp);
+					let date = luxon.DateTime.fromISO(entry.timestamp);
 					return date >= prevMidnight && date < midnight;
 				}).reduce((total, next) => total + next.charger_power / 12, 0);
 		}
@@ -1886,8 +1887,8 @@ Module.register("MMM-Powerwall", {
 					scales: {
 						xAxis: {
 							type: "time",
-							min: new Date().setHours(0, 0, 0, 0),
-							max: new Date().setHours(24, 0, 0, 0),
+							min: luxon.DateTime.local().setZone(this.timezone).startOf('day').toString(),
+							max: luxon.DateTime.local().setZone(this.timezone).endOf('day').toString(),
 							ticks: {
 								color: "white",
 								autoSkipPadding: 10
@@ -1938,12 +1939,12 @@ Module.register("MMM-Powerwall", {
 		// }
 		if (this.powerHistory) {
 			let self = this;
-			let lastMidnight = new Date().setHours(0, 0, 0, 0);
+			let lastMidnight = luxon.DateTime.local().setZone(this.timezone).startOf('day');
 			let chargepoints = (this.chargeHistory || []).filter(
-				entry => Date.parse(entry.timestamp) >= lastMidnight
+				entry => luxon.DateTime.fromISO(entry.timestamp) >= lastMidnight
 			)
 			let datapoints = this.powerHistory.filter(
-				entry => Date.parse(entry.timestamp) >= lastMidnight
+				entry => luxon.DateTime.fromISO(entry.timestamp) >= lastMidnight
 			).map(function (entry, index) {
 				entry.charger_power = 0;
 				if (chargepoints[index]) {

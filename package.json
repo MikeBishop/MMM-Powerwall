@@ -11,7 +11,7 @@
     "await-spawn": "^4.0.1",
     "axios": "^0.21.2",
     "chart.js": "^3.4.1",
-    "chartjs-adapter-moment": "^1.0.0",
+    "chartjs-adapter-luxon": "^1",
     "chartjs-plugin-annotation": "^1.0.2",
     "chartjs-plugin-datalabels": "^2.0.0",
     "express-validator": "^6.12.0",
