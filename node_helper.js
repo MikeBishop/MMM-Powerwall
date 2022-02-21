@@ -7,7 +7,7 @@
 
 const NodeHelper = require("node_helper");
 const fs = require("fs").promises;
-const fetch = require("node-fetch");
+const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
 const powerwall = require("./powerwall");
 const path = require("path");
 const nunjucks = require("./../../vendor/node_modules/nunjucks");
