@@ -2046,7 +2046,7 @@ Module.register("MMM-Powerwall", {
 								filter(e => e && e > 1).
 								slice(0, -1).
 								reduce((s, v) => s + v, 0)
-							return exceptLast < .95 * value ? exceptLast : 0;
+							return exceptLast < .9 * value ? exceptLast : 0;
 						}
 					);
 				};
