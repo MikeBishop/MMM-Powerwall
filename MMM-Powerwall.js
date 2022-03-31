@@ -851,21 +851,31 @@ Module.register("MMM-Powerwall", {
 						duration: Date.now() - this.gridOutageStart
 					});
 				}
-				powerLine.options.plugins.annotation.annotations = outages.map(
-					outage => {
-						let startDate = luxon.DateTime.fromISO(outage.timestamp);
-						let stopDate = startDate.plus({milliseconds: outage.duration});
-						return {
-							type: 'box',
-							mode: 'vertical',
-							xScaleID: 'xAxis',
-							xMin: startDate,
-							xMax: stopDate,
-							backgroundColor: "rgba(255, 0, 0, 0.1)",
-							borderColor: "rgba(255,0,0,0.1)"
-						};
+				powerLine.options.plugins.annotation.annotations = [
+					...outages.map(
+						outage => {
+							return {
+								type: 'box',
+								xScaleID: 'xAxis',
+								xMin: outage.timestamp,
+								xMax: luxon.DateTime.fromISO(outage.timestamp).plus({milliseconds: outage.duration}).toISO(),
+								backgroundColor: "rgba(255, 0, 0, 0.1)",
+								borderColor: "rgba(255,0,0,0.1)"
+							};
+						}
+					),
+					{
+						type: 'line',
+						mode: 'vertical',
+						scaleID: 'xAxis',
+						value: 0,
+						borderColor: 'black',
+						borderWidth: 0.5,
+						label: {
+							enabled: false
+						}
 					}
-				);
+				];
 			}
 
 			powerLine.update();
@@ -1886,6 +1896,7 @@ Module.register("MMM-Powerwall", {
 					},
 					scales: {
 						xAxis: {
+							id: "xAxis",
 							type: "time",
 							min: luxon.DateTime.local().setZone(this.timezone).startOf('day').toString(),
 							max: luxon.DateTime.local().setZone(this.timezone).endOf('day').toString(),
@@ -1895,6 +1906,7 @@ Module.register("MMM-Powerwall", {
 							}
 						},
 						yAxis: {
+							id: "yAxis",
 							type: "linear",
 							ticks: {
 								callback: function (value, index, values) {
