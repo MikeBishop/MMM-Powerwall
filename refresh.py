@@ -31,21 +31,9 @@ def refresh(args):
     if not resp.ok:
         vprint("Refresh failed")
         sys.exit(1)    
-    access_token = resp.json()["access_token"]
-    refresh_token = resp.json()["refresh_token"]
-
-
-    # Step 4: Exchange bearer token for access token
-    headers["authorization"] = "bearer " + access_token
-    payload = {
-        "grant_type": "urn:ietf:params:oauth:grant-type:jwt-bearer",
-        "client_id": CLIENT_ID,
-    }
-    resp = session.post("https://owner-api.teslamotors.com/oauth/token", headers=headers, json=payload)
 
     # Return tokens
     tokens = resp.json()
-    tokens["refresh_token"] = refresh_token
     print(json.dumps(tokens))
 
 
