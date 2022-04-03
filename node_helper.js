@@ -975,7 +975,9 @@ module.exports = NodeHelper.create({
 		];
 		let tokenBL = await spawn("python3", args);
 		this.log("Refreshed Tesla API tokens")
-		return JSON.parse(tokenBL.toString());
+		token = JSON.parse(tokenBL.toString());
+		token.created_at = Date.now() / 1000;
+		return token;
 	},
 
 	doTeslaApi: async function (url, username, id_key = null,
