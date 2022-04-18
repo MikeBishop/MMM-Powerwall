@@ -1581,19 +1581,22 @@ Module.register("MMM-Powerwall", {
 
 		let riseset = {};
 		if ((!this.sunrise || !this.sunset) && this.config.home) {
-			let url = "https://api.sunrise-sunset.org/json?lat=" +
-				this.config.home[0] + "&lng=" + this.config.home[1] +
-				"&formatted=0&date=" +
-				[now.getFullYear(), now.getMonth() + 1, now.getDate()].join("-");
-			let result = await fetch(url);
-			if (result.ok) {
-				let response = await result.json();
-				for (const tag of ["sunrise", "sunset"]) {
-					if (response.results[tag]) {
-						riseset[tag] = Date.parse(response.results[tag]);
+			try {
+				let url = "https://api.sunrise-sunset.org/json?lat=" +
+					this.config.home[0] + "&lng=" + this.config.home[1] +
+					"&formatted=0&date=" +
+					[now.getFullYear(), now.getMonth() + 1, now.getDate()].join("-");
+				let result = await fetch(url);
+				if (result.ok) {
+					let response = await result.json();
+					for (const tag of ["sunrise", "sunset"]) {
+						if (response.results[tag]) {
+							riseset[tag] = Date.parse(response.results[tag]);
+						}
 					}
 				}
 			}
+			catch { }
 		}
 		this.sunrise = this.sunrise || riseset.sunrise || new Date().setHours(6, 0, 0, 0);
 		this.sunset = this.sunset || riseset.sunset || new Date().setHours(20, 30, 0, 0);
