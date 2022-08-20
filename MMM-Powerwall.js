@@ -903,7 +903,8 @@ Module.register("MMM-Powerwall", {
 		let picture = document.getElementById(this.identifier + "-Picture");
 		if (picture && statusFor.img) {
 			let ctx = picture.getContext('2d');
-			ctx.drawImage(statusFor.img, 0, 0);
+      		ctx.clearRect(0, 0, picture.width, picture.height);
+			ctx.drawImage(statusFor.img, 0, 0, 300, 300 / statusFor.img.width * statusFor.img.height);
 		}
 
 		// Determine location up-front, for later insertion
@@ -2283,7 +2284,7 @@ Module.register("MMM-Powerwall", {
 		let url = "https://static-assets.tesla.com/v1/compositor/?";
 		let params = [
 			"view=STUD_3QTR",
-			"size=300",
+			"size=400",
 			"bkba_opt=1"
 		];
 		let model_map = {
