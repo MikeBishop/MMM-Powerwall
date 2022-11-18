@@ -2307,7 +2307,9 @@ Module.register("MMM-Powerwall", {
 			"Performancewheel20": "W32P",
 			"Stiletto20": "W32P",
 			"AeroTurbine22": "WT22",
-			"Super21Gray": "WTSG"
+			"Super21Gray": "WTSG",
+			"Induction20Black": "WY20P",
+		    "Gemini19": "WY19B",
 		}, config.wheel_type, options);
 
 		this.substituteOptions({
@@ -2337,6 +2339,8 @@ Module.register("MMM-Powerwall", {
 			"SignatureBlue": "PMMB",
 			"MetallicBlue": "PMMB",
 			"SignatureRed": "PPSR",
+			"Quicksilver" : "PN00",
+			"MidnightCherryRed"  : "PR00",
 		}, config.exterior_color, options);
 
 		params.push("options=" + options.join(","));
