@@ -595,7 +595,7 @@ Module.register("MMM-Powerwall", {
 						delete statusFor.deferUntil;
 					}
 
-					if (!statusFor.img && payload.config.option_codes) {
+					if (!statusFor.img && payload.config.car_type) {
 						let image = new Image();
 						image.src = this.createCompositorUrl(payload.config);
 						image.onload = async function (ev) {
@@ -858,7 +858,7 @@ Module.register("MMM-Powerwall", {
 								type: 'box',
 								xScaleID: 'xAxis',
 								xMin: outage.timestamp,
-								xMax: luxon.DateTime.fromISO(outage.timestamp).plus({milliseconds: outage.duration}).toISO(),
+								xMax: luxon.DateTime.fromISO(outage.timestamp).plus({ milliseconds: outage.duration }).toISO(),
 								backgroundColor: "rgba(255, 0, 0, 0.1)",
 								borderColor: "rgba(255,0,0,0.1)"
 							};
@@ -903,7 +903,7 @@ Module.register("MMM-Powerwall", {
 		let picture = document.getElementById(this.identifier + "-Picture");
 		if (picture && statusFor.img) {
 			let ctx = picture.getContext('2d');
-      		ctx.clearRect(0, 0, picture.width, picture.height);
+			ctx.clearRect(0, 0, picture.width, picture.height);
 			ctx.drawImage(statusFor.img, 0, 0, 300, 300 / statusFor.img.width * statusFor.img.height);
 		}
 
@@ -1493,7 +1493,7 @@ Module.register("MMM-Powerwall", {
 	carTotalYesterday: function () {
 		if (Array.isArray(this.chargeHistory) && !this.cachedCarYesterday) {
 			let midnight = luxon.DateTime.local().setZone(this.timezone).startOf('day');
-			let prevMidnight = midnight.minus({"days": 1});
+			let prevMidnight = midnight.minus({ "days": 1 });
 			this.cachedCarYesterday = this.chargeHistory.filter(
 				entry => {
 					let date = luxon.DateTime.fromISO(entry.timestamp);
@@ -2294,7 +2294,10 @@ Module.register("MMM-Powerwall", {
 			"modely": "my"
 		};
 		params.push("model=" + model_map[config.car_type]);
-		let options = config.option_codes.split(",");
+		let options = [];
+		if (config.option_codes) {
+			options = config.option_codes.split(",");
+		}
 
 		this.substituteOptions({
 			"Pinwheel18": "W38B",
@@ -2309,7 +2312,7 @@ Module.register("MMM-Powerwall", {
 			"AeroTurbine22": "WT22",
 			"Super21Gray": "WTSG",
 			"Induction20Black": "WY20P",
-		    "Gemini19": "WY19B",
+			"Gemini19": "WY19B",
 		}, config.wheel_type, options);
 
 		this.substituteOptions({
@@ -2339,8 +2342,8 @@ Module.register("MMM-Powerwall", {
 			"SignatureBlue": "PMMB",
 			"MetallicBlue": "PMMB",
 			"SignatureRed": "PPSR",
-			"Quicksilver" : "PN00",
-			"MidnightCherryRed"  : "PR00",
+			"Quicksilver": "PN00",
+			"MidnightCherryRed": "PR00",
 		}, config.exterior_color, options);
 
 		params.push("options=" + options.join(","));
