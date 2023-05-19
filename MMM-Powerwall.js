@@ -434,9 +434,9 @@ Module.register("MMM-Powerwall", {
 						await this.updateData();
 					}
 
-					if (this.flows && payload.status.carsCharging > 0 && this.vehicles) {
+					let charging = this.flows.sinks.car.total;
+					if (this.flows && payload.status.carsCharging > 0 && this.vehicles && charging > 0) {
 						// Charging at least one car
-						let charging = this.flows.sinks.car.total;
 						this.updateNode(this.identifier + "-CarConsumption", charging, "W");
 
 						let vinsWeKnow = (payload.vins || []).filter(
