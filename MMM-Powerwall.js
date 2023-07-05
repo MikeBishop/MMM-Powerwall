@@ -234,8 +234,15 @@ Module.register("MMM-Powerwall", {
 		// requested on a recurring basis.  Recency affects the accuracy.
 		if (this.callsToEnable.energy &&
 			this.teslaAPIEnabled && this.config.siteID) {
-			this.Log("Requesting energy data");
-			this.sendDataRequestNotification("UpdateEnergy");
+			this.doTimeout(
+				"energy",
+				() => {
+					this.Log("Requesting energy data");
+					this.sendDataRequestNotification("UpdateEnergy");
+				},
+				0,
+				true
+			)
 		}
 	},
 
@@ -492,6 +499,8 @@ Module.register("MMM-Powerwall", {
 				if (payload.username === this.config.teslaAPIUsername &&
 					this.config.siteID == payload.siteID) {
 
+					this.clearTimeout("energy");
+
 					if (this.teslaAggregates) {
 						this.generateDaystart(payload);
 					}
@@ -710,9 +719,7 @@ Module.register("MMM-Powerwall", {
 	},
 
 	doTimeout: function (name, func, timeout, exempt = false) {
-		if (this.timeouts[name]) {
-			clearTimeout(this.timeouts[name].handle);
-		}
+		this.clearTimeout(name);
 		let delay = timeout + (Math.random() * 3000) - 500;
 		if (delay < 500) {
 			delay = 500;
@@ -725,6 +732,13 @@ Module.register("MMM-Powerwall", {
 		if (!this.suspended || exempt) {
 			this.timeouts[name].handle = setTimeout(() => func(), delay);
 		}
+	},
+
+	clearTimeout: function (name) {
+		if (this.timeouts[name]) {
+			clearTimeout(this.timeouts[name].handle);
+		}
+		delete this.timeouts[name]
 	},
 
 	checkTimeouts: function () {
@@ -974,7 +988,7 @@ Module.register("MMM-Powerwall", {
 			switch (statusFor.drive.gear) {
 				case "D":
 				case "R":
-					if( Date.now() - this.lastSpeedUpdate < 5000 ) {
+					if (Date.now() - this.lastSpeedUpdate < 5000) {
 						break;
 					}
 					statusText = this.translate("driving", vars);
