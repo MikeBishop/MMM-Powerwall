@@ -988,26 +988,24 @@ Module.register("MMM-Powerwall", {
 			switch (statusFor.drive.gear) {
 				case "D":
 				case "R":
-					if (Date.now() - this.lastSpeedUpdate < 5000) {
-						break;
-					}
 					statusText = this.translate("driving", vars);
-
-					unit = statusFor.drive.units;
-					if (unit === "mi/hr") {
-						number = statusFor.drive.speed;
-						unit = "mph"
-					}
-					else {
-						// Convert to kph, since API reports mph
-						number = statusFor.drive.speed * MI_KM_FACTOR;
-						unit = "kph"
-					}
-					this.lastSpeedUpdate = Date.now()
-
-					this.updateNode(consumptionId, number, unit, "", animate);
 					consumptionVisible = true;
 
+					if (Date.now() - this.lastSpeedUpdate >= 5000) {
+						unit = statusFor.drive.units;
+						if (unit === "mi/hr") {
+							number = statusFor.drive.speed;
+							unit = "mph"
+						}
+						else {
+							// Convert to kph, since API reports mph
+							number = statusFor.drive.speed * MI_KM_FACTOR;
+							unit = "kph"
+						}
+						this.lastSpeedUpdate = Date.now()
+
+						this.updateNode(consumptionId, number, unit, "", animate);
+					}
 					break;
 
 				default:
