@@ -1009,7 +1009,7 @@ module.exports = NodeHelper.create({
 		if (result.ok) {
 			try {
 				var json = await result.json();
-			this.log(url + " returned " + JSON.stringify(json).substring(0, 150));
+				this.log(url + " returned " + JSON.stringify(json).substring(0, 150));
 			}
 			catch (e) {
 				this.log(e);
@@ -1167,8 +1167,9 @@ module.exports = NodeHelper.create({
 			}
 		}
 
+		const REQ_FIELDS = ["vehicle_state", "drive_state", "gui_settings", "charge_state", "vehicle_config"];
 		let dataValid = data => data &&
-			["vehicle_state", "drive_state", "gui_settings", "charge_state", "vehicle_config"].
+			REQ_FIELDS.
 				every(
 					key => key in data
 				);
@@ -1177,6 +1178,7 @@ module.exports = NodeHelper.create({
 		if (state === "online") {
 			// Get vehicle state
 			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/vehicle_data";
+			url += "?" + [...REQ_FIELDS, "location_data"].join("%3B");
 			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
 
