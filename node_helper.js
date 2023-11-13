@@ -1007,8 +1007,15 @@ module.exports = NodeHelper.create({
 		}
 
 		if (result.ok) {
-			let json = await result.json();
+			try {
+				var json = await result.json();
 			this.log(url + " returned " + JSON.stringify(json).substring(0, 150));
+			}
+			catch (e) {
+				this.log(e);
+				return null;
+			}
+
 			let response = json.response;
 			if (response_key) {
 				response = response[response_key];
