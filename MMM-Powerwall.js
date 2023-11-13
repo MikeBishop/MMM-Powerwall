@@ -988,26 +988,24 @@ Module.register("MMM-Powerwall", {
 			switch (statusFor.drive.gear) {
 				case "D":
 				case "R":
-					if (Date.now() - this.lastSpeedUpdate < 5000) {
-						break;
-					}
 					statusText = this.translate("driving", vars);
-
-					unit = statusFor.drive.units;
-					if (unit === "mi/hr") {
-						number = statusFor.drive.speed;
-						unit = "mph"
-					}
-					else {
-						// Convert to kph, since API reports mph
-						number = statusFor.drive.speed * MI_KM_FACTOR;
-						unit = "kph"
-					}
-					this.lastSpeedUpdate = Date.now()
-
-					this.updateNode(consumptionId, number, unit, "", animate);
 					consumptionVisible = true;
 
+					if (Date.now() - this.lastSpeedUpdate >= 5000) {
+						unit = statusFor.drive.units;
+						if (unit === "mi/hr") {
+							number = statusFor.drive.speed;
+							unit = "mph"
+						}
+						else {
+							// Convert to kph, since API reports mph
+							number = statusFor.drive.speed * MI_KM_FACTOR;
+							unit = "kph"
+						}
+						this.lastSpeedUpdate = Date.now()
+
+						this.updateNode(consumptionId, number, unit, "", animate);
+					}
 					break;
 
 				default:
@@ -1125,8 +1123,8 @@ Module.register("MMM-Powerwall", {
 
 	isSameLocation: function (l1, l2) {
 		if (Array.isArray(l1) && Array.isArray(l2)) {
-			return Math.abs(l1[0] - l2[0]) < 0.0289 &&
-				Math.abs(l1[1] - l2[1]) < 0.0289;
+			return Math.abs(l1[0] - l2[0]) < 0.01 &&
+				Math.abs(l1[1] - l2[1]) < 0.01;
 		}
 		return null;
 	},
