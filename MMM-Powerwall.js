@@ -2332,6 +2332,7 @@ Module.register("MMM-Powerwall", {
 			"Super21Gray": "WTSG",
 			"Induction20Black": "WY20P",
 			"Gemini19": "WY19B",
+      "Pinwheel18CapKit": "W38B",
 		}, config.wheel_type, options);
 
 		this.substituteOptions({
