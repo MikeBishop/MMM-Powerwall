@@ -488,8 +488,8 @@ module.exports = NodeHelper.create({
 		const map = {
 			"geofence": [],
 			"state": [],
-			"latitude": ["drive_state"],
-			"longitude": ["drive_state"],
+			"active_route_latitude": ["drive_state"],
+			"active_route_longitude": ["drive_state"],
 			"shift_state": ["drive_state"],
 			"speed": ["drive_state"],
 			"battery_level": ["charge_state"],
@@ -1231,7 +1231,7 @@ module.exports = NodeHelper.create({
 				speed: data.drive_state.speed,
 				units: data.gui_settings.gui_distance_units,
 				gear: data.drive_state.shift_state,
-				location: [data.drive_state.latitude, data.drive_state.longitude]
+				location: [data.drive_state.active_route_latitude, data.drive_state.active_route_longitude]
 			},
 			charge: {
 				state: data.charge_state.charging_state,
