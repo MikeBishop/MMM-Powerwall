@@ -306,6 +306,7 @@ Module.register("MMM-Powerwall", {
 						vehicleID: vehicle.id,
 						updateInterval: timeout - 500
 					});
+					deferUntil = now + (timeout * .9);
 				}
 			}
 		}
@@ -1123,8 +1124,8 @@ Module.register("MMM-Powerwall", {
 
 	isSameLocation: function (l1, l2) {
 		if (Array.isArray(l1) && Array.isArray(l2)) {
-			return Math.abs(l1[0] - l2[0]) < 0.01 &&
-				Math.abs(l1[1] - l2[1]) < 0.01;
+			return Math.abs(l1[0] - l2[0]) < 0.03 &&
+				Math.abs(l1[1] - l2[1]) < 0.03;
 		}
 		return null;
 	},

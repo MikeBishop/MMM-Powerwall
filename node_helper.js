@@ -7,7 +7,7 @@
 
 const NodeHelper = require("node_helper");
 const fs = require("fs").promises;
-const fetch = (...args) => import('node-fetch').then(({default: fetch}) => fetch(...args));
+const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const powerwall = require("./powerwall");
 const path = require("path");
 const nunjucks = require("./../../vendor/node_modules/nunjucks");
@@ -83,20 +83,20 @@ module.exports = NodeHelper.create({
 
 			if (Object.keys(errors).length == 0) {
 				let username = req.body["username"];
-				if( req.body["refresh_token"] ) {
-						try {
-							// If we have a refresh token, refresh immediately
-							// so we know the validity period.
-							this.teslaApiAccounts[username] = await this.doTeslaApiTokenRefresh(req.body["refresh_token"]);
-						}
-						catch {
-							errors["refresh_token"] = {
-								value: "",
-								msg: this.translation.invalidtoken,
-								param: "refresh_token",
-								location: "refresh_token"
-							};
-						}
+				if (req.body["refresh_token"]) {
+					try {
+						// If we have a refresh token, refresh immediately
+						// so we know the validity period.
+						this.teslaApiAccounts[username] = await this.doTeslaApiTokenRefresh(req.body["refresh_token"]);
+					}
+					catch {
+						errors["refresh_token"] = {
+							value: "",
+							msg: this.translation.invalidtoken,
+							param: "refresh_token",
+							location: "refresh_token"
+						};
+					}
 				}
 				else {
 					// Current token only
@@ -128,13 +128,13 @@ module.exports = NodeHelper.create({
 			}
 			else {
 				return res.send(
-				nunjucks.render(__dirname + "/auth.njk", {
-					translations: this.translation,
-					errors: errors,
-					data: req.body,
-					configUsers: Object.keys(this.teslaApiAccounts),
-					configIPs: Object.keys(this.powerwallAccounts),
-				}));
+					nunjucks.render(__dirname + "/auth.njk", {
+						translations: this.translation,
+						errors: errors,
+						data: req.body,
+						configUsers: Object.keys(this.teslaApiAccounts),
+						configIPs: Object.keys(this.powerwallAccounts),
+					}));
 			}
 		});
 
@@ -434,7 +434,7 @@ module.exports = NodeHelper.create({
 				}
 			}
 
-			if(!thisPowerwall.authenticated) {
+			if (!thisPowerwall.authenticated) {
 				self.sendSocketNotification("ReconfigurePowerwall", {
 					ip: powerwallIP,
 				});
@@ -544,15 +544,15 @@ module.exports = NodeHelper.create({
 	 */
 	socketNotificationReceived: async function (notification, payload) {
 		let self = this;
-		if( !this.messageMutex[notification] ) {
+		if (!this.messageMutex[notification]) {
 			this.messageMutex[notification] = new mutex();
 		}
 		await this.messageMutex[notification].runExclusive(
-			async () => await self.socketNotificationReceivedInner(notification,payload)
+			async () => await self.socketNotificationReceivedInner(notification, payload)
 		);
 	},
 
-	socketNotificationReceivedInner: async function(notification, payload) {
+	socketNotificationReceivedInner: async function (notification, payload) {
 		const self = this;
 
 		this.log(notification + JSON.stringify(payload));
@@ -570,7 +570,7 @@ module.exports = NodeHelper.create({
 
 				let timezone = null;
 				let siteInfo = await this.doTeslaApiGetSiteInfo(username, siteID);
-				if( siteInfo ) {
+				if (siteInfo) {
 					timezone = siteInfo.installation_time_zone
 				}
 
@@ -819,7 +819,7 @@ module.exports = NodeHelper.create({
 	},
 
 	doTeslaApiGetSiteInfo: function (username, siteID) {
-		if( username && siteID ) {
+		if (username && siteID) {
 			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/site_info";
 			return this.doTeslaApi(url, username);
 		}
@@ -1178,7 +1178,7 @@ module.exports = NodeHelper.create({
 		if (state === "online") {
 			// Get vehicle state
 			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/vehicle_data";
-			url += "?" + [...REQ_FIELDS, "location_data"].join("%3B");
+			url += "?" + [...REQ_FIELDS, "location_data"].join(";");
 			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
 
@@ -1195,6 +1195,10 @@ module.exports = NodeHelper.create({
 			}
 			(this.vehicles[username].find(vehicle => vehicle.id == vehicleID) ||
 				{}).odometer = odometer;
+			if (!data.drive_state.longitude && data.drive_state.active_route_longitude) {
+				data.drive_state.longitude = data.drive_state.active_route_longitude;
+				data.drive_state.latitude = data.drive_state.active_route_latitude;
+			}
 			this.sendVehicleData(username, vehicleID, state, data);
 		}
 		else {
