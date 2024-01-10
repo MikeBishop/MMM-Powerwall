@@ -649,7 +649,7 @@ Module.register("MMM-Powerwall", {
 					this.config.siteID == payload.siteID) {
 					let lastMidnight = luxon.DateTime.local().setZone(this.timezone).startOf('day');
 					this.backup = payload.backup.filter(
-						outage => luxon.DateTime.fromISO(outage.timestamp) > lastMidnight
+						outage => luxon.DateTime.fromISO(outage.timestamp).plus({ milliseconds: outage.duration }) > lastMidnight
 					);
 					if (this.gridStatus === "SystemGridConnected") {
 						// If the grid is up, this should include the most recent outage
