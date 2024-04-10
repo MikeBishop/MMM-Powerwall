@@ -1178,7 +1178,7 @@ module.exports = NodeHelper.create({
 		if (state === "online") {
 			// Get vehicle state
 			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/vehicle_data";
-			url += "?" + [...REQ_FIELDS, "location_data"].join(";");
+			url += "?endpoints=" + [...REQ_FIELDS, "location_data"].join("%3B");
 			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
 

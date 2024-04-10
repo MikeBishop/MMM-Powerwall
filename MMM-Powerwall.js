@@ -924,7 +924,7 @@ Module.register("MMM-Powerwall", {
 		}
 
 		// Determine location up-front, for later insertion
-		if (statusFor.drive.location) {
+		if (statusFor.drive.location && statusFor.drive.location[0] && statusFor.drive.location[1]) {
 			if (this.isHome(statusFor.drive.location)) {
 				vars["LOCATION"] = this.translate("at_home");
 			}
