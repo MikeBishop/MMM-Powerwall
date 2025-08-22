@@ -62,6 +62,7 @@ Module.register("MMM-Powerwall", {
 		teslaAPIUsername: null,
 		teslaAPIPassword: null,
 		home: null,
+		powerlineClip: null,
 		debug: false
 	},
 	requiresVersion: "2.1.0", // Required version of MagicMirror
@@ -2070,7 +2071,7 @@ Module.register("MMM-Powerwall", {
 				new Array(sources[0].data.length).fill(0)
 			);
 			let max = Math.max(...posTotal);
-			if (max >= 5000) {
+			if (max >= 5000 && this.config.powerlineClip !== false) {
 				let mean = this.average(posTotal);
 				let stddev = this.stddev(posTotal);
 				let exceptLastShown = series => {
@@ -2089,10 +2090,14 @@ Module.register("MMM-Powerwall", {
 				if (max > (mean + 3 * stddev)) {
 					let clipLimit = Math.max(
 						...posTotal.filter(value => value <= (mean + 2 * stddev)),
-						...exceptLastShown(sources),
-						...exceptLastShown(sinks),
 						...posTotal.slice(Math.max(posTotal.length - 5, 0))
 					);
+					if (this.config.powerlineClip === null) {
+						clipLimit = Math.max(clipLimit,
+							...exceptLastShown(sources),
+							...exceptLastShown(sinks),
+						);
+					}
 					let scaleFactor;
 					if (clipLimit > 10000) {
 						scaleFactor = 5000;

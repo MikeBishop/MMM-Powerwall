@@ -53,6 +53,7 @@ are being introduced because of Tesla's new authentication model.**
 | `cloudUpdateInterval` | *Optional* How often (in milliseconds) to poll Tesla API<br>Default 300000 milliseconds (five minutes)
 | `home`                | *Optional* Coordinates (`[lat, lon]`) of your home; used to indicate when car is at home and to get sunrise/sunset times
 | `debug`               | *Optional* Enables additional debug output to the browser tools Console and to stderr on the MM, useful for troubleshooting
+| `powerlineClip`       | *Optional* Controls clipping behavior on PowerLine graph; see below for values
 | `teslamate`           | *Optional* See below
 
 ### Graphs
@@ -73,6 +74,18 @@ or even targeting different Powerwall systems.  All data is requested, cached,
 and distributed by the node_helper, so multiple instances referencing the same
 target will still update simultaneously and will not increase the volume of
 requests made to either local or cloud endpoints.
+
+#### PowerLine clipping
+
+The PowerLine graph automatically scales to your daily usage; extreme peaks can
+throw off this scaling. It can clip the extreme values to enable better view of
+the rest of the graph.
+
+Possible values:
+
+  - false - do not clip
+  - null/default - clip at most one category
+  - true - clip extremes
 
 ### Authentication
 
