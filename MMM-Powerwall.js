@@ -219,7 +219,7 @@ Module.register("MMM-Powerwall", {
 			this.file("node_modules/chartjs-plugin-datalabels/dist/chartjs-plugin-datalabels.min.js"),
 			this.file("node_modules/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"),
 			this.file("node_modules/luxon/build/global/luxon.min.js"),
-			this.file("node_modules/chartjs-adapter-luxon/dist/chartjs-adapter-luxon.min.js"),
+			this.file("node_modules/chartjs-adapter-luxon/dist/chartjs-adapter-luxon.umd.min.js"),
 		];
 	},
 
