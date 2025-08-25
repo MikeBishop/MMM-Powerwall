@@ -65,7 +65,7 @@ Module.register("MMM-Powerwall", {
 		powerlineClip: null,
 		debug: false
 	},
-	requiresVersion: "2.1.0", // Required version of MagicMirror
+	requiresVersion: "2.32.0", // Required version of MagicMirror
 	twcEnabled: null,
 	twcConsumption: 0,
 	teslaAPIEnabled: false,

@@ -10,7 +10,7 @@ const fs = require("fs").promises;
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const powerwall = require("./powerwall");
 const path = require("path");
-const nunjucks = require("./../../vendor/node_modules/nunjucks");
+const nunjucks = require("./../../node_modules/nunjucks");
 const { check, validationResult, matchedData } = require('express-validator');
 const bodyParser = require('./../../node_modules/body-parser');
 const spawn = require("await-spawn");
