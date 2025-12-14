@@ -779,7 +779,7 @@ module.exports = NodeHelper.create({
 
 			let useCache = !(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
 				<= Date.now());
-			this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
+			await this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
 		}
 	},
 
