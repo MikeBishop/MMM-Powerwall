@@ -895,7 +895,7 @@ Module.register("MMM-Powerwall", {
 				aggregatedTotals.grid_energy_exported_from_generator
 			);
 
-			console.log("MMM-Powerwall: Processed YESTERDAY data.");
+			console.log("MMM-Powerwall: Processed YESTERDAY's aggregated data.");
 
 		} else if (dataDateStr === todayYesterday.today) {
 			// --- TODAY'S LOGIC / FINAL CALCULATION ---
@@ -937,7 +937,7 @@ Module.register("MMM-Powerwall", {
 				}
 			};
 
-			console.log("MMM-Powerwall: Processed TODAY data and calculated dayStart.");
+			console.log("MMM-Powerwall: Processed TODAY's aggregated data and calculated dayStart.");
 
 		} else {
 			console.warn(`MMM-Powerwall: Received data date (${dataDateStr}) that is neither today nor yesterday. Ignoring.`);
