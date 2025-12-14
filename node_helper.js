@@ -660,23 +660,25 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			if (siteID) {
-				this.initializeCache(this.energy, username, siteID);
-			}
-			else {
-				return;
-			}
+			payload.dates.forEach(async date => {
+				if (siteID) {
+					this.initializeCache(this.energy, username, siteID, date);
+				}
+				else {
+					return;
+				}
 
-			if (this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
-				payload.dates.forEach(async date => await self.doTeslaApiGetEnergy(username, siteID, date));
-			}
-			else {
-				this.sendSocketNotification("EnergyData", {
-					username: username,
-					siteID: siteID,
-					energy: this.energy[username][siteID].lastResult
-				});
-			}
+				if (this.energy[username][siteID][date].lastUpdate + payload.updateInterval < Date.now()) {
+					await self.doTeslaApiGetEnergy(username, siteID, date);
+				}
+				else {
+					this.sendSocketNotification("EnergyData", {
+						username: username,
+						siteID: siteID,
+						energy: this.energy[username][siteID][date].lastResult
+					});
+				}
+			});
 		}
 		else if (notification === "UpdateSelfConsumption") {
 			let username = payload.username;
@@ -686,23 +688,25 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			if (siteID) {
-				this.initializeCache(this.selfConsumption, username, siteID);
-			}
-			else {
-				return;
-			}
+			payload.dates.forEach(async date => {
+				if (siteID) {
+					this.initializeCache(this.selfConsumption, username, siteID, date);
+				}
+				else {
+					return;
+				}
 
-			if (this.selfConsumption[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
-				payload.dates.forEach(async date => await self.doTeslaApiGetSelfConsumption(username, siteID, date));
-			}
-			else {
-				this.sendSocketNotification("SelfConsumption", {
-					username: username,
-					siteID: siteID,
-					selfConsumption: this.selfConsumption[username][siteID].lastResult
-				});
-			}
+				if (this.selfConsumption[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+					await self.doTeslaApiGetSelfConsumption(username, siteID, date);
+				}
+				else {
+					this.sendSocketNotification("SelfConsumption", {
+						username: username,
+						siteID: siteID,
+						selfConsumption: this.selfConsumption[username][siteID][date].lastResult
+					});
+				}
+			})
 		}
 		else if (notification === "UpdatePowerHistory") {
 			let username = payload.username;
@@ -1006,7 +1010,11 @@ module.exports = NodeHelper.create({
 
 	doTeslaApi: async function (url, username, id_key = null,
 		deviceID = null, cache_node = null, event_name = null,
-		response_key = null, event_key = null) {
+		response_key = null, event_key = null, cache_key = null) {
+			if(cache_key == null && username && deviceID) {
+				cache_key = [username, deviceID];
+			}
+
 		let result = {};
 		let now = Date.now();
 
@@ -1054,14 +1062,8 @@ module.exports = NodeHelper.create({
 				this.sendSocketNotification(event_name, event);
 			}
 
-			if (response && cache_node && deviceID) {
-				if (!cache_node[username]) {
-					cache_node[username] = {};
-				}
-				if (!cache_node[username][deviceID]) {
-					cache_node[username][deviceID] = {};
-				}
-				this.updateCache(response, cache_node, [username, deviceID], now);
+			if (response && cache_node && cache_key) {
+				this.updateCache(response, cache_node, cache_key, now);
 			}
 
 			return response;
@@ -1119,7 +1121,7 @@ module.exports = NodeHelper.create({
 		url = this.API_base + "/api/1/energy_sites/" + siteID +
 			"/calendar_history?period=day&kind=energy&start_date=" +
 			boundaries.startISO + "&end_date=" + boundaries.endISO;
-		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy");
+		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy", [username, siteID, date]);
 	},
 
 	doTeslaApiGetPowerHistory: async function (username, siteID) {
@@ -1140,7 +1142,7 @@ module.exports = NodeHelper.create({
 		url = this.API_base + "/api/1/energy_sites/" + siteID +
 			"/calendar_history?kind=self_consumption&period=day&start_date=" +
 			boundaries.startISO + "&end_date=" + boundaries.endISO;
-		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption");
+		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption", [username, siteID, date]);
 	},
 
 	doTeslaApiGetVehicleList: async function (username) {
