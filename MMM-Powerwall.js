@@ -11,6 +11,8 @@ const GRID = { key: "grid", color: "#8B979B" };
 const HOUSE = { key: "house", color: "#09A9E6" };
 const CAR = { key: "car", color: "#B91413" };
 
+const getDateKey = (ts) => ts.split('T')[0];
+
 const MI_KM_FACTOR = 1.609344;
 
 const REQUIRED_CALLS = {
@@ -84,7 +86,7 @@ Module.register("MMM-Powerwall", {
 	stormWatch: false,
 	dayStart: null,
 	dayMode: "day",
-	energyData: null,
+	energyData: [],
 	charts: {},
 	powerHistoryChanged: false,
 	selfConsumptionToday: [0, 0, 100],
@@ -249,10 +251,15 @@ Module.register("MMM-Powerwall", {
 
 	sendDataRequestNotification: function (notification) {
 		if (this.teslaAPIEnabled) {
+			const today = new Date();
+			const yesterday = new Date(today);
+			yesterday.setDate(yesterday.getDate() - 1);
+
 			this.sendSocketNotification(notification, {
 				username: this.config.teslaAPIUsername,
 				siteID: this.config.siteID,
-				updateInterval: this.config.cloudUpdateInterval - 500
+				updateInterval: this.config.cloudUpdateInterval - 500,
+				dates: [today.toISOString(), yesterday.toISOString()]
 			});
 		}
 	},
@@ -404,8 +411,8 @@ Module.register("MMM-Powerwall", {
 					}
 
 					if (this.energyData) {
-						this.generateDaystart(this.energyData);
-						this.energyData = null;
+						this.energyData.forEach(day => this.generateDaystart(day));
+						this.energyData = [];
 					}
 
 					if (needUpdate) {
@@ -505,9 +512,10 @@ Module.register("MMM-Powerwall", {
 
 					if (this.teslaAggregates) {
 						this.generateDaystart(payload);
+						this.energyData = [];
 					}
 					else {
-						this.energyData = payload
+						this.energyData.push(payload);
 					}
 					this.updateData();
 				}
@@ -532,32 +540,71 @@ Module.register("MMM-Powerwall", {
 					this.config.siteID == payload.siteID) {
 
 					this.scheduleCloudUpdate();
-					let yesterday = payload.selfConsumption[0];
-					let today = payload.selfConsumption[1];
-					this.selfConsumptionYesterday = [
-						yesterday.solar,
-						yesterday.battery,
-						100 - yesterday.solar - yesterday.battery
-					];
-					this.selfConsumptionToday = [
-						today.solar,
-						today.battery,
-						100 - today.solar - today.battery
-					];
-					this.updateNode(
-						this.identifier + "-SelfPoweredTotal",
-						Math.round(this.selfConsumptionToday[0]) + Math.round(this.selfConsumptionToday[1]),
-						"%"
-					);
-					this.updateNode(
-						this.identifier + "-SelfPoweredYesterday",
-						Math.round(this.selfConsumptionYesterday[0]) + Math.round(this.selfConsumptionYesterday[1]),
-						"% " + this.translate("yesterday")
-					);
-					let scChart = this.charts.selfConsumption
-					if (scChart) {
-						scChart.data.datasets[0].data = this.selfConsumptionToday;
-						scChart.update();
+
+					if (!payload.selfConsumption || payload.selfConsumption.length === 0) {
+						console.warn("MMM-Powerwall: Received empty selfConsumption payload.");
+						return;
+					}
+
+					const singleDayData = payload.selfConsumption[0]; // Get the single element
+					const dataDateStr = getDateKey(singleDayData.timestamp);
+
+					// Get today's and yesterday's date strings for comparison (based on current system time)
+					const todayYesterday = this.getTodayYesterday();
+
+					// --- Determine Data Type and Process ---
+
+					if (dataDateStr === todayYesterday.yesterday) {
+						// --- YESTERDAY PATH ---
+
+						const yesterday = singleDayData;
+
+						this.selfConsumptionYesterday = [
+							yesterday.solar,
+							yesterday.battery,
+							100 - yesterday.solar - yesterday.battery // Calculated Grid/Other
+						];
+
+						// Update the DOM for yesterday's value
+						let totalYesterday = Math.round(this.selfConsumptionYesterday[0]) + Math.round(this.selfConsumptionYesterday[1]);
+						this.updateNode(
+							this.identifier + "-SelfPoweredYesterday",
+							totalYesterday,
+							"% " + this.translate("yesterday")
+						);
+
+						console.log("MMM-Powerwall: Processed YESTERDAY selfConsumption data.");
+
+					} else if (dataDateStr === todayYesterday.today) {
+						// --- TODAY PATH ---
+
+						const today = singleDayData;
+
+						this.selfConsumptionToday = [
+							today.solar,
+							today.battery,
+							100 - today.solar - today.battery // Calculated Grid/Other
+						];
+
+						// Update the DOM for today's total value
+						let totalToday = Math.round(this.selfConsumptionToday[0]) + Math.round(this.selfConsumptionToday[1]);
+						this.updateNode(
+							this.identifier + "-SelfPoweredTotal",
+							totalToday,
+							"%"
+						);
+
+						// Update the Chart (relies only on TODAY's data)
+						let scChart = this.charts.selfConsumption;
+						if (scChart) {
+							scChart.data.datasets[0].data = this.selfConsumptionToday;
+							scChart.update();
+						}
+
+						console.log("MMM-Powerwall: Processed TODAY selfConsumption data and updated chart.");
+
+					} else {
+						console.warn(`MMM-Powerwall: Received selfConsumption data date (${dataDateStr}) that is neither today nor yesterday. Ignoring.`);
 					}
 				}
 				break;
@@ -766,76 +813,135 @@ Module.register("MMM-Powerwall", {
 		this.checkTimeouts();
 	},
 
+	getTodayYesterday: function () {
+		// 1. Establish the reference date strings based on the current system time
+		//    (This is necessary because we need an absolute "today" to define "yesterday")
+		const now = new Date();
+
+		// Get the date string for the server's current *local* date
+		// Note: We create a date object representing 00:00:00 local time for precision
+		const localToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+		const localYesterday = new Date(localToday);
+		localYesterday.setDate(localYesterday.getDate() - 1);
+
+		// Convert these local Date objects back to their ISO YYYY-MM-DD string format
+		// This is the date string we expect from the API payload (e.g., '2025-12-13')
+		const todayStr = localToday.toISOString().split('T')[0];
+		const yesterdayStr = localYesterday.toISOString().split('T')[0];
+
+		return {
+			today: todayStr,
+			yesterday: yesterdayStr
+		}
+	},
+
 	generateDaystart: function (payload) {
-		this.yesterdaySolar = payload.energy[0].solar_energy_exported;
-		this.yesterdayUsage = (
-			payload.energy[0].consumer_energy_imported_from_grid +
-			payload.energy[0].consumer_energy_imported_from_solar +
-			payload.energy[0].consumer_energy_imported_from_battery
-		);
-		this.yesterdayImport = payload.energy[0].grid_energy_imported;
-		this.yesterdayExport = (
-			payload.energy[0].grid_energy_exported_from_solar +
-			payload.energy[0].grid_energy_exported_from_battery +
-			payload.energy[0].grid_energy_exported_from_generator
-		);
+		let dayPayload = payload?.energy;
+		if (!dayPayload || dayPayload.length === 0) return;
 
-		let todaySolar = payload.energy[1].solar_energy_exported;
+		// Helper to extract "YYYY-MM-DD" from the API timestamp string
+		// Example input: "2025-12-13T20:50:00-05:00" -> returns "2025-12-13"
 
-		let todayGridIn = payload.energy[1].grid_energy_imported;
-		let todayGridOut = (
-			payload.energy[1].grid_energy_exported_from_solar +
-			payload.energy[1].grid_energy_exported_from_battery +
-			payload.energy[1].grid_energy_exported_from_generator
-		);
+		const aggregateIntervals = (dayPayload) => {
+			// Define all fields we need to aggregate
+			const FIELDS_TO_SUM = [
+				'solar_energy_exported', 'grid_energy_imported', 'grid_energy_exported_from_solar',
+				'grid_energy_exported_from_battery', 'grid_energy_exported_from_generator',
+				'battery_energy_exported', 'battery_energy_imported_from_grid',
+				'battery_energy_imported_from_solar', 'battery_energy_imported_from_generator',
+				'consumer_energy_imported_from_grid', 'consumer_energy_imported_from_solar',
+				'consumer_energy_imported_from_battery'
+			];
 
-		let todayBatteryIn = payload.energy[1].battery_energy_exported;
-		let todayBatteryOut = (
-			payload.energy[1].battery_energy_imported_from_grid +
-			payload.energy[1].battery_energy_imported_from_solar +
-			payload.energy[1].battery_energy_imported_from_generator
-		);
+			let results = {};
+			FIELDS_TO_SUM.forEach(field => { results[field] = 0; });
 
-		let todayUsage = (
-			payload.energy[1].consumer_energy_imported_from_grid +
-			payload.energy[1].consumer_energy_imported_from_solar +
-			payload.energy[1].consumer_energy_imported_from_battery
-		);
-
-		this.dayStart = {
-			solar: {
-				export: (
-					this.teslaAggregates.solar.energy_exported -
-					todaySolar
-				)
-			},
-			grid: {
-				export: (
-					this.teslaAggregates.site.energy_exported -
-					todayGridOut
-				),
-				import: (
-					this.teslaAggregates.site.energy_imported -
-					todayGridIn
-				)
-			},
-			house: {
-				import: (
-					this.teslaAggregates.load.energy_imported -
-					todayUsage
-				)
-			},
-			battery: {
-				export: (
-					this.teslaAggregates.battery.energy_exported -
-					todayBatteryIn
-				),
-				import: (
-					this.teslaAggregates.battery.energy_imported -
-					todayBatteryOut
-				)
+			if (!dayPayload || dayPayload.length === 0) {
+				return results;
 			}
+
+			dayPayload.forEach(entry => {
+				FIELDS_TO_SUM.forEach(k => {
+					results[k] += (Number(entry[k]) || 0);
+				});
+			});
+
+			return results;
 		};
+
+		// 1. DETERMINE DATA TYPE (TODAY or YESTERDAY)
+		const firstTimestamp = dayPayload[0].timestamp;
+		const dataDateStr = getDateKey(firstTimestamp);
+
+		// Get today's and yesterday's date strings for comparison (based on current system time)
+		const todayYesterday = this.getTodayYesterday();
+
+		const aggregatedTotals = aggregateIntervals(dayPayload);
+
+		// 2. ROUTE AND PERFORM CALCULATIONS
+		if (dataDateStr === todayYesterday.yesterday) {
+			// --- YESTERDAY CALCULATIONS ---
+
+			this.yesterdaySolar = aggregatedTotals.solar_energy_exported;
+			this.yesterdayUsage = (
+				aggregatedTotals.consumer_energy_imported_from_grid +
+				aggregatedTotals.consumer_energy_imported_from_solar +
+				aggregatedTotals.consumer_energy_imported_from_battery
+			);
+			this.yesterdayImport = aggregatedTotals.grid_energy_imported;
+			this.yesterdayExport = (
+				aggregatedTotals.grid_energy_exported_from_solar +
+				aggregatedTotals.grid_energy_exported_from_battery +
+				aggregatedTotals.grid_energy_exported_from_generator
+			);
+
+			console.log("MMM-Powerwall: Processed YESTERDAY data.");
+
+		} else if (dataDateStr === todayYesterday.today) {
+			// --- TODAY'S LOGIC / FINAL CALCULATION ---
+
+			let todaySolar = aggregatedTotals.solar_energy_exported;
+			let todayGridIn = aggregatedTotals.grid_energy_imported;
+			let todayGridOut = (
+				aggregatedTotals.grid_energy_exported_from_solar +
+				aggregatedTotals.grid_energy_exported_from_battery +
+				aggregatedTotals.grid_energy_exported_from_generator
+			);
+			let todayBatteryIn = aggregatedTotals.battery_energy_exported;
+			let todayBatteryOut = (
+				aggregatedTotals.battery_energy_imported_from_grid +
+				aggregatedTotals.battery_energy_imported_from_solar +
+				aggregatedTotals.battery_energy_imported_from_generator
+			);
+			let todayUsage = (
+				aggregatedTotals.consumer_energy_imported_from_grid +
+				aggregatedTotals.consumer_energy_imported_from_solar +
+				aggregatedTotals.consumer_energy_imported_from_battery
+			);
+
+			// Also set dayStart
+			this.dayStart = {
+				solar: {
+					export: (this.teslaAggregates.solar.energy_exported - todaySolar)
+				},
+				grid: {
+					export: (this.teslaAggregates.site.energy_exported - todayGridOut),
+					import: (this.teslaAggregates.site.energy_imported - todayGridIn)
+				},
+				house: {
+					import: (this.teslaAggregates.load.energy_imported - todayUsage)
+				},
+				battery: {
+					export: (this.teslaAggregates.battery.energy_exported - todayBatteryIn),
+					import: (this.teslaAggregates.battery.energy_imported - todayBatteryOut)
+				}
+			};
+
+			console.log("MMM-Powerwall: Processed TODAY data and calculated dayStart.");
+
+		} else {
+			console.warn(`MMM-Powerwall: Received data date (${dataDateStr}) that is neither today nor yesterday. Ignoring.`);
+		}
 	},
 
 	updatePowerLine: function () {
