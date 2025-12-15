@@ -233,8 +233,6 @@ Module.register("MMM-Powerwall", {
 	},
 
 	updateEnergy: function () {
-		// Energy gets updated with the local timeout, because it's not
-		// requested on a recurring basis.  Recency affects the accuracy.
 		if (this.callsToEnable.energy &&
 			this.teslaAPIEnabled && this.config.siteID) {
 			this.doTimeout(
