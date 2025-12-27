@@ -532,8 +532,7 @@ Module.register("MMM-Powerwall", {
 					this.config.siteID == payload.siteID) {
 
 					this.scheduleCloudUpdate();
-					let yesterday = payload.selfConsumption[0];
-					let today = payload.selfConsumption[1];
+					let scData = payload.selfConsumption; let yesterday, today; if (scData.length === 1) { today = scData[0]; yesterday = { solar: 0, battery: 0 }; } else { yesterday = scData[0]; today = scData[1]; }
 					this.selfConsumptionYesterday = [
 						yesterday.solar,
 						yesterday.battery,
@@ -767,39 +766,93 @@ Module.register("MMM-Powerwall", {
 	},
 
 	generateDaystart: function (payload) {
-		this.yesterdaySolar = payload.energy[0].solar_energy_exported;
+		// Sum up time-series entries to get today's totals
+		let energyData = payload.energy;
+		if (!energyData || energyData.length === 0) {
+			this.Log("No energy data available");
+			return;
+		}
+		
+		// Aggregate all entries into today's total
+		let today = {
+			solar_energy_exported: 0,
+			consumer_energy_imported_from_grid: 0,
+			consumer_energy_imported_from_solar: 0,
+			consumer_energy_imported_from_battery: 0,
+			grid_energy_imported: 0,
+			grid_energy_exported_from_solar: 0,
+			grid_energy_exported_from_battery: 0,
+			grid_energy_exported_from_generator: 0,
+			battery_energy_exported: 0,
+			battery_energy_imported_from_grid: 0,
+			battery_energy_imported_from_solar: 0,
+			battery_energy_imported_from_generator: 0
+		};
+		
+		energyData.forEach(function(entry) {
+			today.solar_energy_exported += entry.solar_energy_exported || 0;
+			today.consumer_energy_imported_from_grid += entry.consumer_energy_imported_from_grid || 0;
+			today.consumer_energy_imported_from_solar += entry.consumer_energy_imported_from_solar || 0;
+			today.consumer_energy_imported_from_battery += entry.consumer_energy_imported_from_battery || 0;
+			today.grid_energy_imported += entry.grid_energy_imported || 0;
+			today.grid_energy_exported_from_solar += entry.grid_energy_exported_from_solar || 0;
+			today.grid_energy_exported_from_battery += entry.grid_energy_exported_from_battery || 0;
+			today.grid_energy_exported_from_generator += entry.grid_energy_exported_from_generator || 0;
+			today.battery_energy_exported += entry.battery_energy_exported || 0;
+			today.battery_energy_imported_from_grid += entry.battery_energy_imported_from_grid || 0;
+			today.battery_energy_imported_from_solar += entry.battery_energy_imported_from_solar || 0;
+			today.battery_energy_imported_from_generator += entry.battery_energy_imported_from_generator || 0;
+		});
+		
+		// Set yesterday to zero (we only have today's data)
+		let yesterday = {
+			solar_energy_exported: 0,
+			consumer_energy_imported_from_grid: 0,
+			consumer_energy_imported_from_solar: 0,
+			consumer_energy_imported_from_battery: 0,
+			grid_energy_imported: 0,
+			grid_energy_exported_from_solar: 0,
+			grid_energy_exported_from_battery: 0,
+			grid_energy_exported_from_generator: 0,
+			battery_energy_exported: 0,
+			battery_energy_imported_from_grid: 0,
+			battery_energy_imported_from_solar: 0,
+			battery_energy_imported_from_generator: 0
+		};
+
+		this.yesterdaySolar = yesterday.solar_energy_exported;
 		this.yesterdayUsage = (
-			payload.energy[0].consumer_energy_imported_from_grid +
-			payload.energy[0].consumer_energy_imported_from_solar +
-			payload.energy[0].consumer_energy_imported_from_battery
+			yesterday.consumer_energy_imported_from_grid +
+			yesterday.consumer_energy_imported_from_solar +
+			yesterday.consumer_energy_imported_from_battery
 		);
-		this.yesterdayImport = payload.energy[0].grid_energy_imported;
+		this.yesterdayImport = yesterday.grid_energy_imported;
 		this.yesterdayExport = (
-			payload.energy[0].grid_energy_exported_from_solar +
-			payload.energy[0].grid_energy_exported_from_battery +
-			payload.energy[0].grid_energy_exported_from_generator
+			yesterday.grid_energy_exported_from_solar +
+			yesterday.grid_energy_exported_from_battery +
+			yesterday.grid_energy_exported_from_generator
 		);
 
-		let todaySolar = payload.energy[1].solar_energy_exported;
+		let todaySolar = today.solar_energy_exported;
 
-		let todayGridIn = payload.energy[1].grid_energy_imported;
+		let todayGridIn = today.grid_energy_imported;
 		let todayGridOut = (
-			payload.energy[1].grid_energy_exported_from_solar +
-			payload.energy[1].grid_energy_exported_from_battery +
-			payload.energy[1].grid_energy_exported_from_generator
+			today.grid_energy_exported_from_solar +
+			today.grid_energy_exported_from_battery +
+			today.grid_energy_exported_from_generator
 		);
 
-		let todayBatteryIn = payload.energy[1].battery_energy_exported;
+		let todayBatteryIn = today.battery_energy_exported;
 		let todayBatteryOut = (
-			payload.energy[1].battery_energy_imported_from_grid +
-			payload.energy[1].battery_energy_imported_from_solar +
-			payload.energy[1].battery_energy_imported_from_generator
+			today.battery_energy_imported_from_grid +
+			today.battery_energy_imported_from_solar +
+			today.battery_energy_imported_from_generator
 		);
 
 		let todayUsage = (
-			payload.energy[1].consumer_energy_imported_from_grid +
-			payload.energy[1].consumer_energy_imported_from_solar +
-			payload.energy[1].consumer_energy_imported_from_battery
+			today.consumer_energy_imported_from_grid +
+			today.consumer_energy_imported_from_solar +
+			today.consumer_energy_imported_from_battery
 		);
 
 		this.dayStart = {

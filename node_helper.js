@@ -17,6 +17,20 @@ const spawn = require("await-spawn");
 const mqtt = require("async-mqtt");
 const mutex = require("async-mutex").Mutex;
 
+// Helper function for calendar_history date parameters
+function getCalendarHistoryDates() {
+    const now = new Date();
+    // Use UTC dates to avoid timezone issues
+    const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1, 0, 0, 0));
+    const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 0, 0, 0));
+    // Format as ISO 8601 (already UTC)
+    const today = yesterday.toISOString();
+    const end = tomorrow.toISOString();
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || "America/New_York";
+    return { today, tomorrow: end, tz };
+}
+
+
 const MI_KM_FACTOR = 1.609344;
 
 module.exports = NodeHelper.create({
@@ -1050,22 +1064,22 @@ module.exports = NodeHelper.create({
 	},
 
 	doTeslaApiGetEnergy: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=energy";
+		const dates = getCalendarHistoryDates(); url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/calendar_history?kind=energy&period=day&start_date=" + dates.today + "&end_date=" + dates.tomorrow + "&time_zone=" + encodeURIComponent(dates.tz);
 		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy");
 	},
 
 	doTeslaApiGetPowerHistory: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=power";
+		const dates2 = getCalendarHistoryDates(); url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/calendar_history?kind=power&period=day&start_date=" + dates2.today + "&end_date=" + dates2.tomorrow + "&time_zone=" + encodeURIComponent(dates2.tz);
 		await this.doTeslaApi(url, username, "siteID", siteID, this.powerHistory, "PowerHistory", "time_series", "powerHistory");
 	},
 
 	doTeslaApiGetBackupHistory: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=backup";
+		const dates3 = getCalendarHistoryDates(); url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/calendar_history?kind=backup&start_date=" + dates3.today + "&end_date=" + dates3.tomorrow + "&time_zone=" + encodeURIComponent(dates3.tz);
 		await this.doTeslaApi(url, username, "siteID", siteID, this.backup, "Backup", "events", "backup");
 	},
 
 	doTeslaApiGetSelfConsumption: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=self_consumption&period=day";
+		const dates4 = getCalendarHistoryDates(); url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/calendar_history?kind=self_consumption&period=day&start_date=" + dates4.today + "&end_date=" + dates4.tomorrow + "&time_zone=" + encodeURIComponent(dates4.tz);
 		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption");
 	},
 
