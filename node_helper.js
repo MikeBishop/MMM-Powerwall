@@ -15,7 +15,12 @@ const { check, validationResult, matchedData } = require('express-validator');
 const bodyParser = require('./../../node_modules/body-parser');
 const spawn = require("await-spawn");
 const mqtt = require("async-mqtt");
+const { config } = require("process");
 const mutex = require("async-mutex").Mutex;
+
+const NAAP_URL = "https://fleet-api.prd.na.vn.cloud.tesla.com"
+const EMEA_URL = "https://fleet-api.prd.eu.vn.cloud.tesla.com"
+const CN_URL = "https://fleet-api.prd.cn.vn.cloud.tesla.cn"
 
 const MI_KM_FACTOR = 1.609344;
 
@@ -39,6 +44,7 @@ module.exports = NodeHelper.create({
 		this.filenames = [];
 		this.lastUpdate = 0;
 		this.debug = false;
+		this.clientID = null;
 		this.thisConfigs = [];
 		this.tokenFile = path.resolve(__dirname + "/tokens.json");
 		this.localPwFile = path.resolve(__dirname + "/localpw.json");
@@ -46,8 +52,19 @@ module.exports = NodeHelper.create({
 
 		await this.loadTranslation("en");
 		await this.combineConfig();
+		if (config.region == "EMEA") {
+			this.API_base = EMEA_URL;
+		}
+		else if (config.region == "CN") {
+			this.API_base = CN_URL;
+		}
+		else {
+			this.API_base = NAAP_URL;
+		}
+
 		await this.configureAccounts();
 		await this.createAuthPage();
+
 	},
 
 	createAuthPage: async function () {
@@ -89,10 +106,11 @@ module.exports = NodeHelper.create({
 						// so we know the validity period.
 						this.teslaApiAccounts[username] = await this.doTeslaApiTokenRefresh(req.body["refresh_token"]);
 					}
-					catch {
+					catch (error) {
+						this.log(error)
 						errors["refresh_token"] = {
 							value: "",
-							msg: this.translation.invalidtoken,
+							msg: this.translation.invalidtoken + error,
 							param: "refresh_token",
 							location: "refresh_token"
 						};
@@ -106,7 +124,7 @@ module.exports = NodeHelper.create({
 						expires_in: 3888000,
 						created_at: Date.now() / 1000
 					};
-					url = "https://owner-api.teslamotors.com/api/1/products";
+					url = this.API_base + "/api/1/products";
 
 					this.log("Checking token validity");
 					let response = await this.doTeslaApi(url, username);
@@ -213,6 +231,7 @@ module.exports = NodeHelper.create({
 		}
 
 		this.debug = this.thisConfigs.some(config => config.debug);
+		this.clientID = (this.thisConfigs.find(c => c.clientID) || {}).clientID;
 		this.loadTranslation(this.configOnHd.language);
 	},
 
@@ -641,23 +660,26 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			if (siteID) {
-				this.initializeCache(this.energy, username, siteID);
-			}
-			else {
-				return;
-			}
+			payload.dates.forEach(async date => {
+				let dateKey = date.split("T")[0];
+				if (siteID) {
+					this.initializeCache(this.energy, username, siteID, dateKey);
+				}
+				else {
+					return;
+				}
 
-			if (this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
-				await self.doTeslaApiGetEnergy(username, siteID);
-			}
-			else {
-				this.sendSocketNotification("EnergyData", {
-					username: username,
-					siteID: siteID,
-					energy: this.energy[username][siteID].lastResult
-				});
-			}
+				if (this.energy[username][siteID][dateKey].lastUpdate + payload.updateInterval < Date.now()) {
+					await self.doTeslaApiGetEnergy(username, siteID, date);
+				}
+				else {
+					this.sendSocketNotification("EnergyData", {
+						username: username,
+						siteID: siteID,
+						energy: this.energy[username][siteID][dateKey].lastResult
+					});
+				}
+			});
 		}
 		else if (notification === "UpdateSelfConsumption") {
 			let username = payload.username;
@@ -667,23 +689,27 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			if (siteID) {
-				this.initializeCache(this.selfConsumption, username, siteID);
-			}
-			else {
-				return;
-			}
+			payload.dates.forEach(async date => {
+				let dateKey = date.split("T")[0];
 
-			if (this.selfConsumption[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
-				await self.doTeslaApiGetSelfConsumption(username, siteID);
-			}
-			else {
-				this.sendSocketNotification("SelfConsumption", {
-					username: username,
-					siteID: siteID,
-					selfConsumption: this.selfConsumption[username][siteID].lastResult
-				});
-			}
+				if (siteID) {
+					this.initializeCache(this.selfConsumption, username, siteID, dateKey);
+				}
+				else {
+					return;
+				}
+
+				if (this.selfConsumption[username][siteID][dateKey].lastUpdate + payload.updateInterval < Date.now()) {
+					await self.doTeslaApiGetSelfConsumption(username, siteID, date);
+				}
+				else {
+					this.sendSocketNotification("SelfConsumption", {
+						username: username,
+						siteID: siteID,
+						selfConsumption: this.selfConsumption[username][siteID][dateKey].lastResult
+					});
+				}
+			})
 		}
 		else if (notification === "UpdatePowerHistory") {
 			let username = payload.username;
@@ -756,7 +782,7 @@ module.exports = NodeHelper.create({
 
 			let useCache = !(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
 				<= Date.now());
-			this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
+			await this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
 		}
 	},
 
@@ -805,7 +831,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiGetStormWatch: async function (username, siteID) {
 		if (username && siteID) {
-			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
+			let url = this.API_base + "/api/1/energy_sites/" + siteID + "/live_status";
 			let cloudStatus = await this.doTeslaApi(url, username, null, siteID, this.storm);
 
 			if (cloudStatus) {
@@ -820,7 +846,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiGetSiteInfo: function (username, siteID) {
 		if (username && siteID) {
-			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/site_info";
+			let url = this.API_base + "/api/1/energy_sites/" + siteID + "/site_info";
 			return this.doTeslaApi(url, username);
 		}
 	},
@@ -898,7 +924,7 @@ module.exports = NodeHelper.create({
 	},
 
 	inferSiteID: async function (username) {
-		url = "https://owner-api.teslamotors.com/api/1/products";
+		url = this.API_base + "/api/1/products";
 
 		this.log("Fetching products list");
 		let response = await this.doTeslaApi(url, username);
@@ -969,10 +995,15 @@ module.exports = NodeHelper.create({
 	},
 
 	doTeslaApiTokenRefresh: async function (token) {
+		if (!this.clientID) {
+			throw "Missing Fleet API Client ID! Set in config as \'clientID\'";
+		}
 		let args = [
 			path.resolve(__dirname + "/refresh.py"),
+			this.clientID,
 			token
 		];
+		this.log(`Running python3 ${args}`);
 		let tokenBL = await spawn("python3", args);
 		this.log("Refreshed Tesla API tokens")
 		token = JSON.parse(tokenBL.toString());
@@ -982,7 +1013,11 @@ module.exports = NodeHelper.create({
 
 	doTeslaApi: async function (url, username, id_key = null,
 		deviceID = null, cache_node = null, event_name = null,
-		response_key = null, event_key = null) {
+		response_key = null, event_key = null, cache_key = null) {
+		if (cache_key == null && username && deviceID) {
+			cache_key = [username, deviceID];
+		}
+
 		let result = {};
 		let now = Date.now();
 
@@ -1030,14 +1065,8 @@ module.exports = NodeHelper.create({
 				this.sendSocketNotification(event_name, event);
 			}
 
-			if (response && cache_node && deviceID) {
-				if (!cache_node[username]) {
-					cache_node[username] = {};
-				}
-				if (!cache_node[username][deviceID]) {
-					cache_node[username][deviceID] = {};
-				}
-				this.updateCache(response, cache_node, [username, deviceID], now);
+			if (response && cache_node && cache_key) {
+				this.updateCache(response, cache_node, cache_key, now);
 			}
 
 			return response;
@@ -1049,31 +1078,85 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApiGetEnergy: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=energy";
-		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy");
+	getLocalDayBoundaries: function (isoString) {
+
+		// 1. Parse the ISO string into a Date object.
+		const referenceDate = new Date(isoString);
+
+		// --- Calculate Local Midnight (Start of Day: 00:00:00) ---
+
+		// Create a new Date object representing the local date of the reference time,
+		// explicitly setting the time components to 0 (local midnight).
+		const localMidnight = new Date(
+			referenceDate.getFullYear(),
+			referenceDate.getMonth(),
+			referenceDate.getDate(),
+			0, // Hour
+			0, // Minute
+			0, // Second
+			0  // Millisecond
+		);
+
+		// Convert local midnight to a UTC ISO string (e.g., "2025-12-13T05:00:00.000Z" for EST)
+		const startISO = localMidnight.toISOString();
+
+
+		// --- Calculate Local End of Day (End of Day: 23:59:59.999) ---
+
+		// Get the next local midnight, and subtract 1 millisecond.
+		const nextLocalMidnight = new Date(localMidnight);
+		nextLocalMidnight.setDate(nextLocalMidnight.getDate() + 1);
+
+		// This gives us 23:59:59.999 on the target local day.
+		const localEndOfDay = new Date(nextLocalMidnight.getTime() - 1);
+
+		// Convert local end-of-day to a UTC ISO string
+		const endISO = localEndOfDay.toISOString();
+
+		return {
+			startISO: startISO,
+			endISO: endISO
+		};
+	},
+
+	doTeslaApiGetEnergy: async function (username, siteID, date) {
+		let boundaries = this.getLocalDayBoundaries(date);
+		let dateKey = date.split("T")[0];
+		url = this.API_base + "/api/1/energy_sites/" + siteID +
+			"/calendar_history?period=day&kind=energy&start_date=" +
+			boundaries.startISO + "&end_date=" + boundaries.endISO;
+		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy", [username, siteID, dateKey]);
 	},
 
 	doTeslaApiGetPowerHistory: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=power";
+		let boundaries = this.getLocalDayBoundaries(new Date().toISOString());
+		url = this.API_base + "/api/1/energy_sites/" + siteID +
+			"/calendar_history?period=day&kind=power&start_date=" +
+			boundaries.startISO + "&end_date=" + boundaries.endISO;
 		await this.doTeslaApi(url, username, "siteID", siteID, this.powerHistory, "PowerHistory", "time_series", "powerHistory");
 	},
 
 	doTeslaApiGetBackupHistory: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=backup";
+		url = this.API_base + "/api/1/energy_sites/" + siteID + "/calendar_history?kind=backup&period=year";
 		await this.doTeslaApi(url, username, "siteID", siteID, this.backup, "Backup", "events", "backup");
 	},
 
-	doTeslaApiGetSelfConsumption: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=self_consumption&period=day";
-		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption");
+	doTeslaApiGetSelfConsumption: async function (username, siteID, date) {
+		let boundaries = this.getLocalDayBoundaries(date);
+		let dateKey = date.split("T")[0];
+
+		url = this.API_base + "/api/1/energy_sites/" + siteID +
+			"/calendar_history?kind=self_consumption&period=day&start_date=" +
+			boundaries.startISO + "&end_date=" + boundaries.endISO;
+		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption", [username, siteID, dateKey]);
 	},
 
 	doTeslaApiGetVehicleList: async function (username) {
-		url = "https://owner-api.teslamotors.com/api/1/products";
+		url = this.API_base + "/api/1/products";
 		let response = await this.doTeslaApi(url, username);
 
-		// response is an array of vehicle objects.  Don't need all the properties.
+		// response is an array of vehicle objects.  Don't need all the
+		// properties.
 		if (Array.isArray(response)) {
 			return response.filter(x => x.vehicle_id != null).map(
 				function (vehicle) {
@@ -1130,7 +1213,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiWakeVehicle: async function (username, vehicleID) {
 		let timeout = 5000;
-		let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/wake_up";
+		let url = this.API_base + "/api/1/vehicles/" + vehicleID + "/wake_up";
 		let state = "initial";
 
 		do {
@@ -1153,7 +1236,7 @@ module.exports = NodeHelper.create({
 		let state = "cached";
 		const forceWake = !(this.vehicleData[username][vehicleID].lastResult);
 		if (!useCached || forceWake) {
-			let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
+			let url = this.API_base + "/api/1/vehicles/" + vehicleID;
 			let response = await this.doTeslaApi(url, username);
 			if (response) {
 				state = response.state;
@@ -1177,7 +1260,7 @@ module.exports = NodeHelper.create({
 		var data = null;
 		if (state === "online") {
 			// Get vehicle state
-			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/vehicle_data";
+			url = this.API_base + "/api/1/vehicles/" + vehicleID + "/vehicle_data";
 			url += "?endpoints=" + [...REQ_FIELDS, "location_data"].join("%3B");
 			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
