@@ -45,6 +45,7 @@ are being introduced because of Tesla's new authentication model.**
 | `powerwallIP`         | *Required* IP address of the Powerwall endpoint to query
 | `powerwallPassword`   | *Optional* Password for local Powerwall endpoint
 | `teslaAPIUsername`    | *Recommended* Username for your Tesla account
+| `clientID`            | *Required for Fleet API tokens* Client ID of your Tesla Fleet API application, used to refresh tokens. Not needed for Owner API tokens; the module detects which kind of token you provided and uses the matching API
 | `siteID`              | *Optional* if your Tesla account has exactly one energy site; required if multiple are present
 | `twcManagerIP`        | *Optional* IP address or hostname of TWCManager instance; if omitted, Tesla API data will be used
 | `twcManagerPort`      | *Optional* port of TWCManager's web interface; default is `8080`

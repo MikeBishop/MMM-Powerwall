@@ -7,6 +7,7 @@ import sys
 import requests
 
 MAX_ATTEMPTS = 7
+OWNER_CLIENT_ID = "ownerapi"
 UA = "PostmanRuntime/7.26.10" #"Mozilla/5.0 (Linux; Android 10; Pixel 3 Build/QQ2A.200305.002; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/85.0.4183.81 Mobile Safari/537.36"
 
 def vprint(*args, **kwargs):
@@ -23,7 +24,14 @@ def refresh(args):
         "refresh_token": token
     }
 
-    resp = session.post("https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token", headers=headers, json=payload)
+    if args.id == OWNER_CLIENT_ID:
+        # Owner API tokens refresh at auth.tesla.com
+        payload["scope"] = 'openid email offline_access'
+        url = "https://auth.tesla.com/oauth2/v3/token"
+    else:
+        url = "https://fleet-auth.prd.vn.cloud.tesla.com/oauth2/v3/token"
+
+    resp = session.post(url, headers=headers, json=payload)
 
     if not resp.ok:
         vprint("Refresh failed")
@@ -36,7 +44,7 @@ def refresh(args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument("id", type=str, help="Fleet API client ID")
+    parser.add_argument("id", type=str, help="Fleet API client ID, or \"ownerapi\" for an Owner API token")
     parser.add_argument("token", type=str, help="Tesla refresh token")
     args = parser.parse_args()
     refresh(args)

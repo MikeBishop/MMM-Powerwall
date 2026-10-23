@@ -15,12 +15,17 @@ const { check, validationResult, matchedData } = require('express-validator');
 const bodyParser = require('./../../node_modules/body-parser');
 const spawn = require("await-spawn");
 const mqtt = require("async-mqtt");
-const { config } = require("process");
 const mutex = require("async-mutex").Mutex;
 
-const NAAP_URL = "https://fleet-api.prd.na.vn.cloud.tesla.com"
-const EMEA_URL = "https://fleet-api.prd.eu.vn.cloud.tesla.com"
-const CN_URL = "https://fleet-api.prd.cn.vn.cloud.tesla.cn"
+const OWNER_URL = "https://owner-api.teslamotors.com"
+const FLEET_URLS = {
+	NA: "https://fleet-api.prd.na.vn.cloud.tesla.com",
+	EU: "https://fleet-api.prd.eu.vn.cloud.tesla.com",
+	CN: "https://fleet-api.prd.cn.vn.cloud.tesla.cn"
+}
+// Owner API refresh tokens are JWTs from this issuer; Fleet ones are opaque
+const OWNER_TOKEN_ISSUER = "https://auth.tesla.com/oauth2/v3"
+const OWNER_CLIENT_ID = "ownerapi"
 
 const MI_KM_FACTOR = 1.609344;
 const BACKUP_REFRESH_MS = 6 * 60 * 60 * 1000;
@@ -55,19 +60,52 @@ module.exports = NodeHelper.create({
 
 		await this.loadTranslation("en");
 		await this.combineConfig();
-		if (config.region == "EMEA") {
-			this.API_base = EMEA_URL;
-		}
-		else if (config.region == "CN") {
-			this.API_base = CN_URL;
-		}
-		else {
-			this.API_base = NAAP_URL;
-		}
-
 		await this.configureAccounts();
 		await this.createAuthPage();
 
+	},
+
+	// A JWT's claims, read without verifying the signature, or null if the
+	// token is not a JWT.
+	decodeToken: function (token) {
+		try {
+			let claims = JSON.parse(
+				Buffer.from(token.split(".")[1], "base64url").toString());
+			return (claims && typeof claims === "object") ? claims : null;
+		}
+		catch {
+			return null;
+		}
+	},
+
+	// Base URL for requests made with this access token. An Owner API token
+	// can also carry ou_code, so aud is checked for owner-api first.
+	apiBaseForToken: function (accessToken) {
+		let claims = this.decodeToken(accessToken) || {};
+		let aud = claims.aud || [];
+		if (!Array.isArray(aud)) {
+			aud = [aud];
+		}
+		aud = aud.map(String);
+		if (aud.some(entry => entry.includes("owner-api"))) {
+			return OWNER_URL;
+		}
+		if (FLEET_URLS[claims.ou_code]) {
+			return FLEET_URLS[claims.ou_code];
+		}
+		return Object.values(FLEET_URLS).find(base =>
+			aud.some(entry => entry.includes(new URL(base).host))) ||
+			FLEET_URLS.NA;
+	},
+
+	apiBase: function (username) {
+		let tokens = this.teslaApiAccounts[username];
+		return this.apiBaseForToken(tokens && tokens.access_token);
+	},
+
+	isOwnerRefreshToken: function (token) {
+		let claims = this.decodeToken(token);
+		return !!claims && claims.iss === OWNER_TOKEN_ISSUER;
 	},
 
 	createAuthPage: async function () {
@@ -127,7 +165,7 @@ module.exports = NodeHelper.create({
 						expires_in: 3888000,
 						created_at: Date.now() / 1000
 					};
-					url = this.API_base + "/api/1/products";
+					url = this.apiBase(username) + "/api/1/products";
 
 					this.log("Checking token validity");
 					let response = await this.doTeslaApi(url, username);
@@ -853,7 +891,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiGetStormWatch: async function (username, siteID) {
 		if (username && siteID) {
-			let url = this.API_base + "/api/1/energy_sites/" + siteID + "/live_status";
+			let url = this.apiBase(username) + "/api/1/energy_sites/" + siteID + "/live_status";
 			let cloudStatus = await this.doTeslaApi(url, username, null, siteID, this.storm);
 
 			if (cloudStatus) {
@@ -868,7 +906,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiGetSiteInfo: function (username, siteID) {
 		if (username && siteID) {
-			let url = this.API_base + "/api/1/energy_sites/" + siteID + "/site_info";
+			let url = this.apiBase(username) + "/api/1/energy_sites/" + siteID + "/site_info";
 			return this.doTeslaApi(url, username);
 		}
 	},
@@ -946,7 +984,7 @@ module.exports = NodeHelper.create({
 	},
 
 	inferSiteID: async function (username) {
-		url = this.API_base + "/api/1/products";
+		url = this.apiBase(username) + "/api/1/products";
 
 		this.log("Fetching products list");
 		let response = await this.doTeslaApi(url, username);
@@ -1017,12 +1055,14 @@ module.exports = NodeHelper.create({
 	},
 
 	doTeslaApiTokenRefresh: async function (token) {
-		if (!this.clientID) {
+		let clientID = this.isOwnerRefreshToken(token) ?
+			OWNER_CLIENT_ID : this.clientID;
+		if (!clientID) {
 			throw "Missing Fleet API Client ID! Set in config as \'clientID\'";
 		}
 		let args = [
 			path.resolve(__dirname + "/refresh.py"),
-			this.clientID,
+			clientID,
 			token
 		];
 		this.log(`Running python3 ${args}`);
@@ -1159,7 +1199,7 @@ module.exports = NodeHelper.create({
 	doTeslaApiGetEnergy: async function (username, siteID, date) {
 		let boundaries = this.getLocalDayBoundaries(date);
 		let dateKey = this.localDateKey(date);
-		url = this.API_base + "/api/1/energy_sites/" + siteID +
+		url = this.apiBase(username) + "/api/1/energy_sites/" + siteID +
 			"/calendar_history?period=day&kind=energy&start_date=" +
 			boundaries.startISO + "&end_date=" + boundaries.endISO;
 		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy", [username, siteID, dateKey]);
@@ -1167,14 +1207,14 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiGetPowerHistory: async function (username, siteID) {
 		let boundaries = this.getLocalDayBoundaries(new Date().toISOString());
-		url = this.API_base + "/api/1/energy_sites/" + siteID +
+		url = this.apiBase(username) + "/api/1/energy_sites/" + siteID +
 			"/calendar_history?period=day&kind=power&start_date=" +
 			boundaries.startISO + "&end_date=" + boundaries.endISO;
 		await this.doTeslaApi(url, username, "siteID", siteID, this.powerHistory, "PowerHistory", "time_series", "powerHistory");
 	},
 
 	doTeslaApiGetBackupHistory: async function (username, siteID) {
-		url = this.API_base + "/api/1/energy_sites/" + siteID + "/calendar_history?kind=backup&period=year";
+		url = this.apiBase(username) + "/api/1/energy_sites/" + siteID + "/calendar_history?kind=backup&period=year";
 		await this.doTeslaApi(url, username, "siteID", siteID, this.backup, "Backup", "events", "backup");
 	},
 
@@ -1182,14 +1222,14 @@ module.exports = NodeHelper.create({
 		let boundaries = this.getLocalDayBoundaries(date);
 		let dateKey = this.localDateKey(date);
 
-		url = this.API_base + "/api/1/energy_sites/" + siteID +
+		url = this.apiBase(username) + "/api/1/energy_sites/" + siteID +
 			"/calendar_history?kind=self_consumption&period=day&start_date=" +
 			boundaries.startISO + "&end_date=" + boundaries.endISO;
 		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption", [username, siteID, dateKey]);
 	},
 
 	doTeslaApiGetVehicleList: async function (username) {
-		url = this.API_base + "/api/1/products";
+		url = this.apiBase(username) + "/api/1/products";
 		let response = await this.doTeslaApi(url, username);
 
 		// response is an array of vehicle objects.  Don't need all the
@@ -1250,7 +1290,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiWakeVehicle: async function (username, vehicleID) {
 		let timeout = 5000;
-		let url = this.API_base + "/api/1/vehicles/" + vehicleID + "/wake_up";
+		let url = this.apiBase(username) + "/api/1/vehicles/" + vehicleID + "/wake_up";
 		let state = "initial";
 
 		do {
@@ -1273,7 +1313,7 @@ module.exports = NodeHelper.create({
 		let state = "cached";
 		const forceWake = !(this.vehicleData[username][vehicleID].lastResult);
 		if (!useCached || forceWake) {
-			let url = this.API_base + "/api/1/vehicles/" + vehicleID;
+			let url = this.apiBase(username) + "/api/1/vehicles/" + vehicleID;
 			let response = await this.doTeslaApi(url, username);
 			if (response) {
 				state = response.state;
@@ -1297,7 +1337,7 @@ module.exports = NodeHelper.create({
 		var data = null;
 		if (state === "online") {
 			// Get vehicle state
-			url = this.API_base + "/api/1/vehicles/" + vehicleID + "/vehicle_data";
+			url = this.apiBase(username) + "/api/1/vehicles/" + vehicleID + "/vehicle_data";
 			url += "?endpoints=" + [...REQ_FIELDS, "location_data"].join("%3B");
 			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
