@@ -32,9 +32,6 @@ var config = {
 ```
 You will need to restart the MagicMirror process to load the node_helper.
 
-Authentication depends on Python, due to issues with Node and Raspberry Pi.
-Make sure you have Python and requests installed:  `sudo apt install python3 python3-requests`
-
 **Do not forget to run `npm install` after updating the module; new dependencies
 are being introduced because of Tesla's new authentication model.**
 

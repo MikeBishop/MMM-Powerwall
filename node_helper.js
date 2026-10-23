@@ -13,7 +13,6 @@ const path = require("path");
 const nunjucks = require("./../../node_modules/nunjucks");
 const { check, validationResult, matchedData } = require('express-validator');
 const bodyParser = require('./../../node_modules/body-parser');
-const spawn = require("await-spawn");
 const mqtt = require("async-mqtt");
 const http2 = require("http2");
 const mutex = require("async-mutex").Mutex;
@@ -28,6 +27,7 @@ const FLEET_URLS = {
 const OWNER_TOKEN_ISSUER = "https://auth.tesla.com/oauth2/v3"
 const OWNER_AUTH_ORIGIN = "https://auth.tesla.com"
 const OWNER_CLIENT_ID = "ownerapi"
+const FLEET_AUTH_ORIGIN = "https://fleet-auth.prd.vn.cloud.tesla.com"
 
 const MI_KM_FACTOR = 1.609344;
 const BACKUP_REFRESH_MS = 6 * 60 * 60 * 1000;
@@ -1057,32 +1057,36 @@ module.exports = NodeHelper.create({
 	},
 
 	doTeslaApiTokenRefresh: async function (token) {
+		let request;
 		if (this.isOwnerRefreshToken(token)) {
-			token = await this.doOwnerApiTokenRefresh(token);
+			request = [OWNER_AUTH_ORIGIN, {
+				grant_type: "refresh_token",
+				client_id: OWNER_CLIENT_ID,
+				refresh_token: token,
+				scope: "openid email offline_access"
+			}];
 		}
 		else {
 			if (!this.clientID) {
 				throw "Missing Fleet API Client ID! Set in config as \'clientID\'";
 			}
-			let args = [
-				path.resolve(__dirname + "/refresh.py"),
-				this.clientID,
-				token
-			];
-			this.log(`Running python3 ${args}`);
-			let tokenBL = await spawn("python3", args);
-			token = JSON.parse(tokenBL.toString());
+			request = [FLEET_AUTH_ORIGIN, {
+				grant_type: "refresh_token",
+				client_id: this.clientID,
+				refresh_token: token
+			}];
 		}
+		token = await this.postTokenRequest(...request);
 		this.log("Refreshed Tesla API tokens")
 		token.created_at = Date.now() / 1000;
 		return token;
 	},
 
-	// Refreshed over HTTP/1.1, auth.tesla.com issues Owner API tokens that
-	// owner-api refuses with 403, so this uses HTTP/2 and TLS 1.3.
-	doOwnerApiTokenRefresh: function (refreshToken) {
+	// HTTP/2 and TLS 1.3: refreshed over HTTP/1.1, auth.tesla.com issues
+	// Owner API tokens that owner-api refuses with 403.
+	postTokenRequest: function (origin, payload) {
 		return new Promise((resolve, reject) => {
-			let session = http2.connect(OWNER_AUTH_ORIGIN, { minVersion: "TLSv1.3" });
+			let session = http2.connect(origin, { minVersion: "TLSv1.3" });
 			session.on("error", reject);
 			let request = session.request({
 				":method": "POST",
@@ -1105,14 +1109,9 @@ module.exports = NodeHelper.create({
 					}
 				}
 				catch { }
-				reject("Owner API token refresh failed: " + status);
+				reject("Token refresh failed: " + status + " " + body);
 			});
-			request.end(JSON.stringify({
-				grant_type: "refresh_token",
-				client_id: OWNER_CLIENT_ID,
-				refresh_token: refreshToken,
-				scope: "openid email offline_access"
-			}));
+			request.end(JSON.stringify(payload));
 		});
 	},
 
