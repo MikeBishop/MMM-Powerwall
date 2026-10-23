@@ -19,7 +19,7 @@
     "node-fetch": "^3.2.10",
     "querystring": "^0.2.0",
     "tough-cookie": "^4.0.0",
-    "validator": ">=13.7.0"
+    "validator": ">=13.15.35"
   },
   "devDependencies": {
     "pseudoloc-js": "^1.2.2",
