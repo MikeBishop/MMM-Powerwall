@@ -308,8 +308,6 @@ module.exports = NodeHelper.create({
 				...this.teslaApiAccounts,
 				...fileContents
 			};
-
-			this.log(JSON.stringify(this.teslaApiAccounts));
 		}
 		else {
 			this.log("Token file is empty");
