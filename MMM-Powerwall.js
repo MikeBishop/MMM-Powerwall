@@ -217,6 +217,7 @@ Module.register("MMM-Powerwall", {
 			this.file("node_modules/chartjs-plugin-annotation/dist/chartjs-plugin-annotation.min.js"),
 			this.file("node_modules/luxon/build/global/luxon.min.js"),
 			this.file("node_modules/chartjs-adapter-luxon/dist/chartjs-adapter-luxon.umd.min.js"),
+			this.file("compositor.js"),
 		];
 	},
 
@@ -648,9 +649,11 @@ Module.register("MMM-Powerwall", {
 						delete statusFor.deferUntil;
 					}
 
-					if (!statusFor.img && payload.config.car_type) {
+					let compositorUrl = !statusFor.img && payload.config.car_type &&
+						this.createCompositorUrl(payload.config);
+					if (compositorUrl) {
 						let image = new Image();
-						image.src = this.createCompositorUrl(payload.config);
+						image.src = compositorUrl;
 						image.onload = async function (ev) {
 							statusFor.img = image
 							if (statusFor === self.vehicleInFocus) {
@@ -2406,88 +2409,10 @@ Module.register("MMM-Powerwall", {
 	},
 
 	createCompositorUrl: function (config) {
-		let url = "https://static-assets.tesla.com/v1/compositor/?";
-		let params = [
-			"view=STUD_3QTR",
-			"size=400",
-			"bkba_opt=1"
-		];
-		let model_map = {
-			"models": "ms",
-			"modelx": "mx",
-			"model3": "m3",
-			"modely": "my"
-		};
-		params.push("model=" + model_map[config.car_type]);
-		let options = [];
-		if (config.option_codes) {
-			options = config.option_codes.split(",");
+		let { url, warnings } = TeslaCompositor.build(config);
+		for (const warning of warnings) {
+			this.Log(warning);
 		}
-
-		this.substituteOptions({
-			"Pinwheel18": "W38B",
-			"AeroTurbine20": "WT20",
-			"Sportwheel19": "W39B",
-			"Stiletto19": "W39B",
-			"AeroTurbine19": "WTAS",
-			"Turbine19": "WTTB",
-			"Arachnid21Grey": "WTAB",
-			"Performancewheel20": "W32P",
-			"Stiletto20": "W32P",
-			"AeroTurbine22": "WT22",
-			"Super21Gray": "WTSG",
-			"Induction20Black": "WY20P",
-			"Gemini19": "WY19B",
-		}, config.wheel_type, options);
-
-		this.substituteOptions({
-			"ObsidianBlack": "PMBL",
-			"SolidBlack": "PMBL",
-			"MetallicBlack": "PMBL",
-			"DeepBlueMetallic": "PPSB",
-			"DeepBlue": "PPSB",
-			"RedMulticoat": "PPMR",
-			"Red": "PPMR",
-			"MidnightSilverMetallic": "PMNG",
-			"MidnightSilver": "PMNG",
-			"SteelGrey": "PMNG",
-			"SilverMetallic": "PMNG",
-			"MetallicBrown": "PMAB",
-			"Brown": "PMAB",
-			"Silver": "PMSS",
-			"TitaniumCopper": "PPTI",
-			"DolphinGrey": "PMTG",
-			"Green": "PMSG",
-			"MetallicGreen": "PMSG",
-			"PearlWhiteMulticoat": "PPSW",
-			"PearlWhite": "PPSW",
-			"Pearl": "PPSW",
-			"SolidWhite": "PBCW",
-			"White": "PBCW",
-			"SignatureBlue": "PMMB",
-			"MetallicBlue": "PMMB",
-			"SignatureRed": "PPSR",
-			"Quicksilver": "PN00",
-			"MidnightCherryRed": "PR00",
-		}, config.exterior_color, options);
-
-		params.push("options=" + options.join(","));
-		url += params.join("&");
 		return url;
-	},
-
-	substituteOptions: function (map, value, options) {
-		if (map[value]) {
-			for (const option of Object.values(map)) {
-				let toRemove = options.indexOf(option);
-				if (toRemove >= 0) {
-					options.splice(toRemove, 1);
-				}
-			}
-			options.push(map[value]);
-		}
-		else {
-			this.Log("Unknown vehicle trait encountered: " + value);
-		}
 	}
 });
