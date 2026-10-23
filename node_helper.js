@@ -33,6 +33,9 @@ const MI_KM_FACTOR = 1.609344;
 const BACKUP_REFRESH_MS = 6 * 60 * 60 * 1000;
 // How long after a day ends before its history is treated as final
 const DAY_FINALIZE_GRACE_MS = 60 * 60 * 1000;
+// Tesla's API tends to fail by hanging; give up rather than hold the
+// notification's mutex forever.
+const TESLA_TIMEOUT_MS = 30 * 1000;
 
 module.exports = NodeHelper.create({
 
@@ -1161,7 +1164,14 @@ module.exports = NodeHelper.create({
 	postTokenRequest: function (origin, payload) {
 		return new Promise((resolve, reject) => {
 			let session = http2.connect(origin, { minVersion: "TLSv1.3" });
-			session.on("error", reject);
+			let fail = error => {
+				clearTimeout(timer);
+				session.destroy();
+				reject(error);
+			};
+			let timer = setTimeout(() => fail("Token refresh timed out"),
+				TESLA_TIMEOUT_MS);
+			session.on("error", fail);
 			let request = session.request({
 				":method": "POST",
 				":path": "/oauth2/v3/token",
@@ -1172,8 +1182,9 @@ module.exports = NodeHelper.create({
 			request.setEncoding("utf8");
 			request.on("response", headers => status = headers[":status"]);
 			request.on("data", chunk => body += chunk);
-			request.on("error", reject);
+			request.on("error", fail);
 			request.on("end", () => {
+				clearTimeout(timer);
 				session.close();
 				try {
 					let tokens = JSON.parse(body);
@@ -1209,6 +1220,7 @@ module.exports = NodeHelper.create({
 
 		try {
 			result = await fetch(url, {
+				signal: AbortSignal.timeout(TESLA_TIMEOUT_MS),
 				headers: {
 					"Authorization": "Bearer " + this.teslaApiAccounts[username].access_token
 				}
@@ -1375,6 +1387,7 @@ module.exports = NodeHelper.create({
 			result = await fetch(url, {
 				method: "POST",
 				body: JSON.stringify(body),
+				signal: AbortSignal.timeout(TESLA_TIMEOUT_MS),
 				headers: {
 					"Authorization": "Bearer " + this.teslaApiAccounts[username].access_token
 				}
@@ -1385,17 +1398,19 @@ module.exports = NodeHelper.create({
 			return {};
 		}
 
-		if (result.ok) {
-			let json = await result.json();
-			this.log(JSON.stringify(json));
-			let response = json.response;
-			return response;
-		}
-		else {
+		try {
+			if (result.ok) {
+				let json = await result.json();
+				this.log(JSON.stringify(json));
+				return json.response;
+			}
 			this.log(url + " returned " + result.status);
 			this.log(await result.text());
-			return {};
 		}
+		catch (e) {
+			this.log(e);
+		}
+		return {};
 	},
 
 	delay: function wait(ms) {
