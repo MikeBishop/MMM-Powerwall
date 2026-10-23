@@ -257,7 +257,8 @@ Module.register("MMM-Powerwall", {
 				username: this.config.teslaAPIUsername,
 				siteID: this.config.siteID,
 				updateInterval: this.config.cloudUpdateInterval - 500,
-				dates: [today.toISOString(), yesterday.toISOString()]
+				dates: [today.toISOString(), yesterday.toISOString()],
+				outagePending: !!this.gridOutageStart
 			});
 		}
 	},

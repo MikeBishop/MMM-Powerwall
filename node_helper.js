@@ -23,6 +23,9 @@ const EMEA_URL = "https://fleet-api.prd.eu.vn.cloud.tesla.com"
 const CN_URL = "https://fleet-api.prd.cn.vn.cloud.tesla.cn"
 
 const MI_KM_FACTOR = 1.609344;
+const BACKUP_REFRESH_MS = 6 * 60 * 60 * 1000;
+// How long after a day ends before its history is treated as final
+const DAY_FINALIZE_GRACE_MS = 60 * 60 * 1000;
 
 module.exports = NodeHelper.create({
 
@@ -355,6 +358,7 @@ module.exports = NodeHelper.create({
 							"charger_voltage",
 							"charger_actual_current",
 							"time_to_full_charge",
+							"sentry_mode",
 						].map(topic => namespace + "+/" + topic),
 						{
 							rh: 1
@@ -503,6 +507,9 @@ module.exports = NodeHelper.create({
 					(time && (time > 0)) ? "Charging" :
 						cached.charge_state.charging_state]
 			],
+			"sentry_mode": (sentry) => [
+				["sentry_mode", sentry === "true"]
+			],
 		};
 		const map = {
 			"geofence": [],
@@ -518,7 +525,8 @@ module.exports = NodeHelper.create({
 			"charger_actual_current": ["charge_state"],
 			"time_to_full_charge": ["charge_state"],
 			"charging_state": ["charge_state"],
-			"plugged_in": ["charge_state"]
+			"plugged_in": ["charge_state"],
+			"sentry_mode": ["vehicle_state"]
 		};
 
 		var updates;
@@ -660,26 +668,26 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			payload.dates.forEach(async date => {
-				let dateKey = date.split("T")[0];
-				if (siteID) {
-					this.initializeCache(this.energy, username, siteID, dateKey);
-				}
-				else {
-					return;
-				}
+			if (!siteID) {
+				return;
+			}
 
-				if (this.energy[username][siteID][dateKey].lastUpdate + payload.updateInterval < Date.now()) {
+			for (const date of payload.dates) {
+				let dateKey = this.localDateKey(date);
+				this.initializeCache(this.energy, username, siteID, dateKey);
+				let cached = this.energy[username][siteID][dateKey];
+
+				if (this.needsRefresh(cached, payload.updateInterval, date)) {
 					await self.doTeslaApiGetEnergy(username, siteID, date);
 				}
 				else {
 					this.sendSocketNotification("EnergyData", {
 						username: username,
 						siteID: siteID,
-						energy: this.energy[username][siteID][dateKey].lastResult
+						energy: cached.lastResult
 					});
 				}
-			});
+			}
 		}
 		else if (notification === "UpdateSelfConsumption") {
 			let username = payload.username;
@@ -689,27 +697,26 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			payload.dates.forEach(async date => {
-				let dateKey = date.split("T")[0];
+			if (!siteID) {
+				return;
+			}
 
-				if (siteID) {
-					this.initializeCache(this.selfConsumption, username, siteID, dateKey);
-				}
-				else {
-					return;
-				}
+			for (const date of payload.dates) {
+				let dateKey = this.localDateKey(date);
+				this.initializeCache(this.selfConsumption, username, siteID, dateKey);
+				let cached = this.selfConsumption[username][siteID][dateKey];
 
-				if (this.selfConsumption[username][siteID][dateKey].lastUpdate + payload.updateInterval < Date.now()) {
+				if (this.needsRefresh(cached, payload.updateInterval, date)) {
 					await self.doTeslaApiGetSelfConsumption(username, siteID, date);
 				}
 				else {
 					this.sendSocketNotification("SelfConsumption", {
 						username: username,
 						siteID: siteID,
-						selfConsumption: this.selfConsumption[username][siteID][dateKey].lastResult
+						selfConsumption: cached.lastResult
 					});
 				}
-			})
+			}
 		}
 		else if (notification === "UpdatePowerHistory") {
 			let username = payload.username;
@@ -737,7 +744,11 @@ module.exports = NodeHelper.create({
 					powerHistory: this.powerHistory[username][siteID].lastResult
 				});
 			}
-			if (this.backup[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+			// Outages are rare; only poll often while the frontend has
+			// seen one locally that the cloud hasn't reported yet.
+			let backupInterval = payload.outagePending ?
+				payload.updateInterval : BACKUP_REFRESH_MS;
+			if (this.backup[username][siteID].lastUpdate + backupInterval < Date.now()) {
 				await self.doTeslaApiGetBackupHistory(username, siteID);
 			}
 			else {
@@ -780,10 +791,21 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			let useCache = !(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
-				<= Date.now());
+			// Teslamate pushes changes over MQTT; silence means nothing changed,
+			// not that the cache is stale.
+			let useCache = this.isTrackedByTeslamate(username, vehicleID) ||
+				!(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
+					<= Date.now());
 			await this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
 		}
+	},
+
+	isTrackedByTeslamate: function (username, vehicleID) {
+		let tm = this.mqttClients[username];
+		if (!tm || !tm.client || !tm.client.connected || !tm.vehicles) {
+			return false;
+		}
+		return Object.values(tm.vehicles).some(vehicle => vehicle.id == vehicleID);
 	},
 
 	checkTeslaCredentials: function (username) {
@@ -1119,9 +1141,24 @@ module.exports = NodeHelper.create({
 		};
 	},
 
+	// Key by local day, not UTC date, so evening requests don't collide
+	// with the next day's cache entry.
+	localDateKey: function (isoString) {
+		return this.getLocalDayBoundaries(isoString).startISO;
+	},
+
+	needsRefresh: function (cached, updateInterval, date) {
+		let dayEnd = Date.parse(this.getLocalDayBoundaries(date).endISO);
+		if (cached.lastResult && cached.lastUpdate > dayEnd + DAY_FINALIZE_GRACE_MS) {
+			// Fetched after the day was over; it won't change
+			return false;
+		}
+		return cached.lastUpdate + updateInterval < Date.now();
+	},
+
 	doTeslaApiGetEnergy: async function (username, siteID, date) {
 		let boundaries = this.getLocalDayBoundaries(date);
-		let dateKey = date.split("T")[0];
+		let dateKey = this.localDateKey(date);
 		url = this.API_base + "/api/1/energy_sites/" + siteID +
 			"/calendar_history?period=day&kind=energy&start_date=" +
 			boundaries.startISO + "&end_date=" + boundaries.endISO;
@@ -1143,7 +1180,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiGetSelfConsumption: async function (username, siteID, date) {
 		let boundaries = this.getLocalDayBoundaries(date);
-		let dateKey = date.split("T")[0];
+		let dateKey = this.localDateKey(date);
 
 		url = this.API_base + "/api/1/energy_sites/" + siteID +
 			"/calendar_history?kind=self_consumption&period=day&start_date=" +
