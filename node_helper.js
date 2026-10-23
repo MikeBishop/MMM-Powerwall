@@ -13,11 +13,26 @@ const path = require("path");
 const nunjucks = require("./../../node_modules/nunjucks");
 const { check, validationResult, matchedData } = require('express-validator');
 const bodyParser = require('./../../node_modules/body-parser');
-const spawn = require("await-spawn");
 const mqtt = require("async-mqtt");
+const http2 = require("http2");
 const mutex = require("async-mutex").Mutex;
 
+const OWNER_URL = "https://owner-api.teslamotors.com"
+const FLEET_URLS = {
+	NA: "https://fleet-api.prd.na.vn.cloud.tesla.com",
+	EU: "https://fleet-api.prd.eu.vn.cloud.tesla.com",
+	CN: "https://fleet-api.prd.cn.vn.cloud.tesla.cn"
+}
+// Owner API refresh tokens are JWTs from this issuer; Fleet ones are opaque
+const OWNER_TOKEN_ISSUER = "https://auth.tesla.com/oauth2/v3"
+const OWNER_AUTH_ORIGIN = "https://auth.tesla.com"
+const OWNER_CLIENT_ID = "ownerapi"
+const FLEET_AUTH_ORIGIN = "https://fleet-auth.prd.vn.cloud.tesla.com"
+
 const MI_KM_FACTOR = 1.609344;
+const BACKUP_REFRESH_MS = 6 * 60 * 60 * 1000;
+// How long after a day ends before its history is treated as final
+const DAY_FINALIZE_GRACE_MS = 60 * 60 * 1000;
 
 module.exports = NodeHelper.create({
 
@@ -39,6 +54,7 @@ module.exports = NodeHelper.create({
 		this.filenames = [];
 		this.lastUpdate = 0;
 		this.debug = false;
+		this.clientID = null;
 		this.thisConfigs = [];
 		this.tokenFile = path.resolve(__dirname + "/tokens.json");
 		this.localPwFile = path.resolve(__dirname + "/localpw.json");
@@ -48,6 +64,50 @@ module.exports = NodeHelper.create({
 		await this.combineConfig();
 		await this.configureAccounts();
 		await this.createAuthPage();
+
+	},
+
+	// A JWT's claims, read without verifying the signature, or null if the
+	// token is not a JWT.
+	decodeToken: function (token) {
+		try {
+			let claims = JSON.parse(
+				Buffer.from(token.split(".")[1], "base64url").toString());
+			return (claims && typeof claims === "object") ? claims : null;
+		}
+		catch {
+			return null;
+		}
+	},
+
+	// Base URL for requests made with this access token. An Owner API token
+	// can also carry ou_code, so aud is checked for owner-api first.
+	apiBaseForToken: function (accessToken) {
+		let claims = this.decodeToken(accessToken) || {};
+		let aud = claims.aud || [];
+		if (!Array.isArray(aud)) {
+			aud = [aud];
+		}
+		aud = aud.map(String);
+		if (aud.some(entry => entry.includes("owner-api"))) {
+			return OWNER_URL;
+		}
+		if (FLEET_URLS[claims.ou_code]) {
+			return FLEET_URLS[claims.ou_code];
+		}
+		return Object.values(FLEET_URLS).find(base =>
+			aud.some(entry => entry.includes(new URL(base).host))) ||
+			FLEET_URLS.NA;
+	},
+
+	apiBase: function (username) {
+		let tokens = this.teslaApiAccounts[username];
+		return this.apiBaseForToken(tokens && tokens.access_token);
+	},
+
+	isOwnerRefreshToken: function (token) {
+		let claims = this.decodeToken(token);
+		return !!claims && claims.iss === OWNER_TOKEN_ISSUER;
 	},
 
 	createAuthPage: async function () {
@@ -89,10 +149,11 @@ module.exports = NodeHelper.create({
 						// so we know the validity period.
 						this.teslaApiAccounts[username] = await this.doTeslaApiTokenRefresh(req.body["refresh_token"]);
 					}
-					catch {
+					catch (error) {
+						this.log(error)
 						errors["refresh_token"] = {
 							value: "",
-							msg: this.translation.invalidtoken,
+							msg: this.translation.invalidtoken + error,
 							param: "refresh_token",
 							location: "refresh_token"
 						};
@@ -106,7 +167,7 @@ module.exports = NodeHelper.create({
 						expires_in: 3888000,
 						created_at: Date.now() / 1000
 					};
-					url = "https://owner-api.teslamotors.com/api/1/products";
+					url = this.apiBase(username) + "/api/1/products";
 
 					this.log("Checking token validity");
 					let response = await this.doTeslaApi(url, username);
@@ -213,6 +274,7 @@ module.exports = NodeHelper.create({
 		}
 
 		this.debug = this.thisConfigs.some(config => config.debug);
+		this.clientID = (this.thisConfigs.find(c => c.clientID) || {}).clientID;
 		this.loadTranslation(this.configOnHd.language);
 	},
 
@@ -246,8 +308,6 @@ module.exports = NodeHelper.create({
 				...this.teslaApiAccounts,
 				...fileContents
 			};
-
-			this.log(JSON.stringify(this.teslaApiAccounts));
 		}
 		else {
 			this.log("Token file is empty");
@@ -274,47 +334,28 @@ module.exports = NodeHelper.create({
 					var client = await mqtt.connectAsync(tm.url, tm.options);
 					this.mqttClients[username].client = client;
 
-					let vehicleDetective = {};
-					let self = this;
+					tm.vehicles = {};
+					tm.detective = {};
 
 					client.on("message", async (topic, message) => {
 						if (topic.startsWith(namespace)) {
 							message = message.toString();
-							[id, value] = topic.slice(namespace.length).split('/');
+							let [id, value] = topic.slice(namespace.length).split('/');
 							this.log("Teslamate MQTT: " + [id, value, message].join(", "));
-							if (!tm.vehicles) {
-								tm.vehicles = {}
-							}
-							if (!(id in tm.vehicles)) {
-								if (!vehicleDetective[id]) {
-									vehicleDetective[id] = {};
-								}
-								vehicleDetective[id][value] = message;
-
-								if (self.vehicles[username] &&
-									vehicleDetective[id].display_name &&
-									vehicleDetective[id].odometer
-								) {
-									// We have enough to try looking
-									for (let vehicle of self.vehicles[username]) {
-										if (vehicle.display_name == vehicleDetective[id].display_name &&
-											Math.abs(vehicle.odometer - vehicleDetective[id].odometer) < Math.min(100, .01 * vehicle.odometer)
-										) {
-											for (const val in vehicleDetective[id]) {
-												this.updateVehicleData(username, vehicle, val, vehicleDetective[id][val])
-											}
-											delete vehicle.accumulator;
-											tm.vehicles[id] = vehicle;
-											break;
-										}
-									}
-								}
-							}
 
 							if (id in tm.vehicles) {
-								// Get the info needed to update cache
 								let vehicle = tm.vehicles[id];
 								this.updateVehicleData(username, vehicle, value, message);
+								if (value === "state") {
+									await this.fillVehicleDataGaps(username, vehicle, message);
+								}
+							}
+							else {
+								if (!tm.detective[id]) {
+									tm.detective[id] = {};
+								}
+								tm.detective[id][value] = message;
+								this.matchTeslamateVehicles(username);
 							}
 						}
 					});
@@ -336,6 +377,10 @@ module.exports = NodeHelper.create({
 							"charger_voltage",
 							"charger_actual_current",
 							"time_to_full_charge",
+							"sentry_mode",
+							"model",
+							"exterior_color",
+							"wheel_type",
 						].map(topic => namespace + "+/" + topic),
 						{
 							rh: 1
@@ -356,6 +401,8 @@ module.exports = NodeHelper.create({
 					// See if there are any cars on the account.
 					this.vehicles[username] = await this.doTeslaApiGetVehicleList(username);
 				}
+				// Retained Teslamate messages may have arrived before the list
+				this.matchTeslamateVehicles(username);
 			}
 		}
 
@@ -449,6 +496,90 @@ module.exports = NodeHelper.create({
 		}
 	},
 
+	matchTeslamateVehicles: function (username) {
+		let tm = this.mqttClients[username];
+		let vehicles = this.vehicles[username];
+		if (!tm || !tm.detective || !Array.isArray(vehicles)) {
+			return;
+		}
+
+		for (const id in tm.detective) {
+			let seen = tm.detective[id];
+			if (!seen.display_name) {
+				continue;
+			}
+			// Odometer (km) confirms the match when both sides have one;
+			// otherwise a unique name is enough.
+			let named = vehicles.filter(v => v.display_name == seen.display_name);
+			let vehicle = named.length == 1 &&
+				(named[0].odometer == null || seen.odometer == null) ?
+				named[0] :
+				named.find(v => v.odometer != null && seen.odometer != null &&
+					Math.abs(v.odometer - seen.odometer) < Math.min(100, .01 * v.odometer));
+			if (!vehicle) {
+				continue;
+			}
+
+			this.log("Teslamate car " + id + " is " + vehicle.display_name);
+			this.seedVehicleCache(username, vehicle);
+			tm.vehicles[id] = vehicle;
+			delete tm.detective[id];
+			for (const topic in seen) {
+				this.updateVehicleData(username, vehicle, topic, seen[topic]);
+			}
+			this.fillVehicleDataGaps(username, vehicle, seen.state);
+		}
+	},
+
+	seedVehicleCache: function (username, vehicle) {
+		this.initializeCache(this.vehicleData, username, vehicle.id);
+		let entry = this.vehicleData[username][vehicle.id];
+		if (!entry.lastResult) {
+			// Skeleton for Teslamate to fill in; avoids waking the car
+			entry.lastResult = {
+				drive_state: {},
+				charge_state: {},
+				vehicle_state: {},
+				vehicle_config: {},
+				gui_settings: {
+					gui_distance_units: this.configOnHd.units === "imperial" ? "mi/hr" : "km/hr"
+				}
+			};
+			vehicle.needsApiData = true;
+		}
+	},
+
+	// Teslamate doesn't publish display units or option codes. Fetch them
+	// once while the car is awake anyway, rather than waking it.
+	fillVehicleDataGaps: async function (username, vehicle, state) {
+		const AWAKE_STATES = ["online", "charging", "driving"];
+		const RETRY_MS = 30 * 60 * 1000;
+		if (!vehicle.needsApiData || vehicle.fetchingApiData ||
+			!AWAKE_STATES.includes(state) ||
+			(vehicle.lastApiAttempt && vehicle.lastApiAttempt + RETRY_MS > Date.now())) {
+			return;
+		}
+
+		vehicle.fetchingApiData = true;
+		vehicle.lastApiAttempt = Date.now();
+		try {
+			let url = this.apiBase(username) + "/api/1/vehicles/" + vehicle.id +
+				"/vehicle_data?endpoints=gui_settings%3Bvehicle_config";
+			let data = await this.doTeslaApi(url, username);
+			if (data && data.gui_settings && data.vehicle_config) {
+				let cached = this.vehicleData[username][vehicle.id].lastResult;
+				cached.gui_settings = data.gui_settings;
+				Object.assign(cached.vehicle_config, data.vehicle_config);
+				cached.option_codes = data.option_codes;
+				vehicle.needsApiData = false;
+				this.sendVehicleData(username, vehicle.id, "mqtt", cached);
+			}
+		}
+		finally {
+			vehicle.fetchingApiData = false;
+		}
+	},
+
 	updateVehicleData: function (username, vehicle, mqttTopic, mqttMessage) {
 
 		let cached = this.vehicleData[username][vehicle.id].lastResult
@@ -484,6 +615,12 @@ module.exports = NodeHelper.create({
 					(time && (time > 0)) ? "Charging" :
 						cached.charge_state.charging_state]
 			],
+			"sentry_mode": (sentry) => [
+				["sentry_mode", sentry === "true"]
+			],
+			"model": (model) => [
+				["car_type", "model" + model.toLowerCase()]
+			],
 		};
 		const map = {
 			"geofence": [],
@@ -499,7 +636,11 @@ module.exports = NodeHelper.create({
 			"charger_actual_current": ["charge_state"],
 			"time_to_full_charge": ["charge_state"],
 			"charging_state": ["charge_state"],
-			"plugged_in": ["charge_state"]
+			"plugged_in": ["charge_state"],
+			"sentry_mode": ["vehicle_state"],
+			"car_type": ["vehicle_config"],
+			"exterior_color": ["vehicle_config"],
+			"wheel_type": ["vehicle_config"]
 		};
 
 		var updates;
@@ -641,22 +782,25 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			if (siteID) {
-				this.initializeCache(this.energy, username, siteID);
-			}
-			else {
+			if (!siteID) {
 				return;
 			}
 
-			if (this.energy[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
-				await self.doTeslaApiGetEnergy(username, siteID);
-			}
-			else {
-				this.sendSocketNotification("EnergyData", {
-					username: username,
-					siteID: siteID,
-					energy: this.energy[username][siteID].lastResult
-				});
+			for (const date of payload.dates) {
+				let dateKey = this.localDateKey(date);
+				this.initializeCache(this.energy, username, siteID, dateKey);
+				let cached = this.energy[username][siteID][dateKey];
+
+				if (this.needsRefresh(cached, payload.updateInterval, date)) {
+					await self.doTeslaApiGetEnergy(username, siteID, date);
+				}
+				else {
+					this.sendSocketNotification("EnergyData", {
+						username: username,
+						siteID: siteID,
+						energy: cached.lastResult
+					});
+				}
 			}
 		}
 		else if (notification === "UpdateSelfConsumption") {
@@ -667,22 +811,25 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			if (siteID) {
-				this.initializeCache(this.selfConsumption, username, siteID);
-			}
-			else {
+			if (!siteID) {
 				return;
 			}
 
-			if (this.selfConsumption[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
-				await self.doTeslaApiGetSelfConsumption(username, siteID);
-			}
-			else {
-				this.sendSocketNotification("SelfConsumption", {
-					username: username,
-					siteID: siteID,
-					selfConsumption: this.selfConsumption[username][siteID].lastResult
-				});
+			for (const date of payload.dates) {
+				let dateKey = this.localDateKey(date);
+				this.initializeCache(this.selfConsumption, username, siteID, dateKey);
+				let cached = this.selfConsumption[username][siteID][dateKey];
+
+				if (this.needsRefresh(cached, payload.updateInterval, date)) {
+					await self.doTeslaApiGetSelfConsumption(username, siteID, date);
+				}
+				else {
+					this.sendSocketNotification("SelfConsumption", {
+						username: username,
+						siteID: siteID,
+						selfConsumption: cached.lastResult
+					});
+				}
 			}
 		}
 		else if (notification === "UpdatePowerHistory") {
@@ -711,7 +858,11 @@ module.exports = NodeHelper.create({
 					powerHistory: this.powerHistory[username][siteID].lastResult
 				});
 			}
-			if (this.backup[username][siteID].lastUpdate + payload.updateInterval < Date.now()) {
+			// Outages are rare; only poll often while the frontend has
+			// seen one locally that the cloud hasn't reported yet.
+			let backupInterval = payload.outagePending ?
+				payload.updateInterval : BACKUP_REFRESH_MS;
+			if (this.backup[username][siteID].lastUpdate + backupInterval < Date.now()) {
 				await self.doTeslaApiGetBackupHistory(username, siteID);
 			}
 			else {
@@ -754,10 +905,21 @@ module.exports = NodeHelper.create({
 				return;
 			}
 
-			let useCache = !(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
-				<= Date.now());
-			this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
+			// Teslamate pushes changes over MQTT; silence means nothing changed,
+			// not that the cache is stale.
+			let useCache = this.isTrackedByTeslamate(username, vehicleID) ||
+				!(this.vehicleData[username][vehicleID].lastUpdate + payload.updateInterval
+					<= Date.now());
+			await this.doTeslaApiGetVehicleData(username, vehicleID, useCache);
 		}
+	},
+
+	isTrackedByTeslamate: function (username, vehicleID) {
+		let tm = this.mqttClients[username];
+		if (!tm || !tm.client || !tm.client.connected || !tm.vehicles) {
+			return false;
+		}
+		return Object.values(tm.vehicles).some(vehicle => vehicle.id == vehicleID);
 	},
 
 	checkTeslaCredentials: function (username) {
@@ -805,7 +967,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiGetStormWatch: async function (username, siteID) {
 		if (username && siteID) {
-			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/live_status";
+			let url = this.apiBase(username) + "/api/1/energy_sites/" + siteID + "/live_status";
 			let cloudStatus = await this.doTeslaApi(url, username, null, siteID, this.storm);
 
 			if (cloudStatus) {
@@ -820,7 +982,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiGetSiteInfo: function (username, siteID) {
 		if (username && siteID) {
-			let url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/site_info";
+			let url = this.apiBase(username) + "/api/1/energy_sites/" + siteID + "/site_info";
 			return this.doTeslaApi(url, username);
 		}
 	},
@@ -898,7 +1060,7 @@ module.exports = NodeHelper.create({
 	},
 
 	inferSiteID: async function (username) {
-		url = "https://owner-api.teslamotors.com/api/1/products";
+		url = this.apiBase(username) + "/api/1/products";
 
 		this.log("Fetching products list");
 		let response = await this.doTeslaApi(url, username);
@@ -969,20 +1131,71 @@ module.exports = NodeHelper.create({
 	},
 
 	doTeslaApiTokenRefresh: async function (token) {
-		let args = [
-			path.resolve(__dirname + "/refresh.py"),
-			token
-		];
-		let tokenBL = await spawn("python3", args);
+		let request;
+		if (this.isOwnerRefreshToken(token)) {
+			request = [OWNER_AUTH_ORIGIN, {
+				grant_type: "refresh_token",
+				client_id: OWNER_CLIENT_ID,
+				refresh_token: token,
+				scope: "openid email offline_access"
+			}];
+		}
+		else {
+			if (!this.clientID) {
+				throw "Missing Fleet API Client ID! Set in config as \'clientID\'";
+			}
+			request = [FLEET_AUTH_ORIGIN, {
+				grant_type: "refresh_token",
+				client_id: this.clientID,
+				refresh_token: token
+			}];
+		}
+		token = await this.postTokenRequest(...request);
 		this.log("Refreshed Tesla API tokens")
-		token = JSON.parse(tokenBL.toString());
 		token.created_at = Date.now() / 1000;
 		return token;
 	},
 
+	// HTTP/2 and TLS 1.3: refreshed over HTTP/1.1, auth.tesla.com issues
+	// Owner API tokens that owner-api refuses with 403.
+	postTokenRequest: function (origin, payload) {
+		return new Promise((resolve, reject) => {
+			let session = http2.connect(origin, { minVersion: "TLSv1.3" });
+			session.on("error", reject);
+			let request = session.request({
+				":method": "POST",
+				":path": "/oauth2/v3/token",
+				"content-type": "application/json"
+			});
+			let status;
+			let body = "";
+			request.setEncoding("utf8");
+			request.on("response", headers => status = headers[":status"]);
+			request.on("data", chunk => body += chunk);
+			request.on("error", reject);
+			request.on("end", () => {
+				session.close();
+				try {
+					let tokens = JSON.parse(body);
+					if (status == 200 && tokens.access_token) {
+						resolve(tokens);
+						return;
+					}
+				}
+				catch { }
+				reject("Token refresh failed: " + status + " " + body);
+			});
+			request.end(JSON.stringify(payload));
+		});
+	},
+
 	doTeslaApi: async function (url, username, id_key = null,
 		deviceID = null, cache_node = null, event_name = null,
-		response_key = null, event_key = null) {
+		response_key = null, event_key = null, cache_key = null) {
+		if (cache_key == null && username && deviceID) {
+			cache_key = [username, deviceID];
+		}
+
 		let result = {};
 		let now = Date.now();
 
@@ -1030,14 +1243,8 @@ module.exports = NodeHelper.create({
 				this.sendSocketNotification(event_name, event);
 			}
 
-			if (response && cache_node && deviceID) {
-				if (!cache_node[username]) {
-					cache_node[username] = {};
-				}
-				if (!cache_node[username][deviceID]) {
-					cache_node[username][deviceID] = {};
-				}
-				this.updateCache(response, cache_node, [username, deviceID], now);
+			if (response && cache_node && cache_key) {
+				this.updateCache(response, cache_node, cache_key, now);
 			}
 
 			return response;
@@ -1049,31 +1256,100 @@ module.exports = NodeHelper.create({
 		}
 	},
 
-	doTeslaApiGetEnergy: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=energy";
-		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy");
+	getLocalDayBoundaries: function (isoString) {
+
+		// 1. Parse the ISO string into a Date object.
+		const referenceDate = new Date(isoString);
+
+		// --- Calculate Local Midnight (Start of Day: 00:00:00) ---
+
+		// Create a new Date object representing the local date of the reference time,
+		// explicitly setting the time components to 0 (local midnight).
+		const localMidnight = new Date(
+			referenceDate.getFullYear(),
+			referenceDate.getMonth(),
+			referenceDate.getDate(),
+			0, // Hour
+			0, // Minute
+			0, // Second
+			0  // Millisecond
+		);
+
+		// Convert local midnight to a UTC ISO string (e.g., "2025-12-13T05:00:00.000Z" for EST)
+		const startISO = localMidnight.toISOString();
+
+
+		// --- Calculate Local End of Day (End of Day: 23:59:59.999) ---
+
+		// Get the next local midnight, and subtract 1 millisecond.
+		const nextLocalMidnight = new Date(localMidnight);
+		nextLocalMidnight.setDate(nextLocalMidnight.getDate() + 1);
+
+		// This gives us 23:59:59.999 on the target local day.
+		const localEndOfDay = new Date(nextLocalMidnight.getTime() - 1);
+
+		// Convert local end-of-day to a UTC ISO string
+		const endISO = localEndOfDay.toISOString();
+
+		return {
+			startISO: startISO,
+			endISO: endISO
+		};
+	},
+
+	// Key by local day, not UTC date, so evening requests don't collide
+	// with the next day's cache entry.
+	localDateKey: function (isoString) {
+		return this.getLocalDayBoundaries(isoString).startISO;
+	},
+
+	needsRefresh: function (cached, updateInterval, date) {
+		let dayEnd = Date.parse(this.getLocalDayBoundaries(date).endISO);
+		if (cached.lastResult && cached.lastUpdate > dayEnd + DAY_FINALIZE_GRACE_MS) {
+			// Fetched after the day was over; it won't change
+			return false;
+		}
+		return cached.lastUpdate + updateInterval < Date.now();
+	},
+
+	doTeslaApiGetEnergy: async function (username, siteID, date) {
+		let boundaries = this.getLocalDayBoundaries(date);
+		let dateKey = this.localDateKey(date);
+		url = this.apiBase(username) + "/api/1/energy_sites/" + siteID +
+			"/calendar_history?period=day&kind=energy&start_date=" +
+			boundaries.startISO + "&end_date=" + boundaries.endISO;
+		await this.doTeslaApi(url, username, "siteID", siteID, this.energy, "EnergyData", "time_series", "energy", [username, siteID, dateKey]);
 	},
 
 	doTeslaApiGetPowerHistory: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?period=day&kind=power";
+		let boundaries = this.getLocalDayBoundaries(new Date().toISOString());
+		url = this.apiBase(username) + "/api/1/energy_sites/" + siteID +
+			"/calendar_history?period=day&kind=power&start_date=" +
+			boundaries.startISO + "&end_date=" + boundaries.endISO;
 		await this.doTeslaApi(url, username, "siteID", siteID, this.powerHistory, "PowerHistory", "time_series", "powerHistory");
 	},
 
 	doTeslaApiGetBackupHistory: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=backup";
+		url = this.apiBase(username) + "/api/1/energy_sites/" + siteID + "/calendar_history?kind=backup&period=year";
 		await this.doTeslaApi(url, username, "siteID", siteID, this.backup, "Backup", "events", "backup");
 	},
 
-	doTeslaApiGetSelfConsumption: async function (username, siteID) {
-		url = "https://owner-api.teslamotors.com/api/1/energy_sites/" + siteID + "/history?kind=self_consumption&period=day";
-		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption");
+	doTeslaApiGetSelfConsumption: async function (username, siteID, date) {
+		let boundaries = this.getLocalDayBoundaries(date);
+		let dateKey = this.localDateKey(date);
+
+		url = this.apiBase(username) + "/api/1/energy_sites/" + siteID +
+			"/calendar_history?kind=self_consumption&period=day&start_date=" +
+			boundaries.startISO + "&end_date=" + boundaries.endISO;
+		await this.doTeslaApi(url, username, "siteID", siteID, this.selfConsumption, "SelfConsumption", "time_series", "selfConsumption", [username, siteID, dateKey]);
 	},
 
 	doTeslaApiGetVehicleList: async function (username) {
-		url = "https://owner-api.teslamotors.com/api/1/products";
+		url = this.apiBase(username) + "/api/1/products";
 		let response = await this.doTeslaApi(url, username);
 
-		// response is an array of vehicle objects.  Don't need all the properties.
+		// response is an array of vehicle objects.  Don't need all the
+		// properties.
 		if (Array.isArray(response)) {
 			return response.filter(x => x.vehicle_id != null).map(
 				function (vehicle) {
@@ -1130,7 +1406,7 @@ module.exports = NodeHelper.create({
 
 	doTeslaApiWakeVehicle: async function (username, vehicleID) {
 		let timeout = 5000;
-		let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/wake_up";
+		let url = this.apiBase(username) + "/api/1/vehicles/" + vehicleID + "/wake_up";
 		let state = "initial";
 
 		do {
@@ -1151,9 +1427,11 @@ module.exports = NodeHelper.create({
 	doTeslaApiGetVehicleData: async function (username, vehicleID, useCached) {
 		// Slightly more complicated; involves calling multiple APIs
 		let state = "cached";
-		const forceWake = !(this.vehicleData[username][vehicleID].lastResult);
+		// With Teslamate, its MQTT feed fills the cache; never wake the car
+		const forceWake = !(this.vehicleData[username][vehicleID].lastResult) &&
+			!this.mqttClients[username];
 		if (!useCached || forceWake) {
-			let url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID;
+			let url = this.apiBase(username) + "/api/1/vehicles/" + vehicleID;
 			let response = await this.doTeslaApi(url, username);
 			if (response) {
 				state = response.state;
@@ -1177,7 +1455,7 @@ module.exports = NodeHelper.create({
 		var data = null;
 		if (state === "online") {
 			// Get vehicle state
-			url = "https://owner-api.teslamotors.com/api/1/vehicles/" + vehicleID + "/vehicle_data";
+			url = this.apiBase(username) + "/api/1/vehicles/" + vehicleID + "/vehicle_data";
 			url += "?endpoints=" + [...REQ_FIELDS, "location_data"].join("%3B");
 			data = await this.doTeslaApi(url, username, "ID", vehicleID, this.vehicleData);
 		}
@@ -1190,11 +1468,14 @@ module.exports = NodeHelper.create({
 
 		if (dataValid(data)) {
 			let odometer = data.vehicle_state.odometer;
-			if (data.gui_settings.gui_distance_units === "mi/hr") {
-				odometer *= 1.609344;
+			// Teslamate-seeded cache has no odometer
+			if (odometer != null) {
+				if (data.gui_settings.gui_distance_units === "mi/hr") {
+					odometer *= 1.609344;
+				}
+				(this.vehicles[username].find(vehicle => vehicle.id == vehicleID) ||
+					{}).odometer = odometer;
 			}
-			(this.vehicles[username].find(vehicle => vehicle.id == vehicleID) ||
-				{}).odometer = odometer;
 			if (!data.drive_state.longitude && data.drive_state.active_route_longitude) {
 				data.drive_state.longitude = data.drive_state.active_route_longitude;
 				data.drive_state.latitude = data.drive_state.active_route_latitude;
