@@ -194,11 +194,6 @@ Module.register("MMM-Powerwall", {
 		let result = {
 			id: this.identifier,
 			graphs: this.config.graphs,
-			translations: Object.assign(
-				{},
-				Translator.translationsFallback[this.name],
-				Translator.translations[this.name],
-			),
 			accountsNeedAuth: this.accountsNeedAuth,
 		};
 

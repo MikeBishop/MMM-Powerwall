@@ -6,7 +6,7 @@
             <div class="MMM-Powerwall" id="{{id}}-SolarDay">
                 <div class="MMM-Powerwall grid-left">
                     <div class="MMM-Powerwall col1 vflexbox">
-                        <div class="small bright spaced">{{translations.solar_current}}</div>
+                        <div class="small bright spaced">{{ "solar_current" | translate }}</div>
                         <div id="{{id}}-SolarProduction" class="big solar text spaced"></div>
                         <div class="small bright spaced" style="display:none" id="{{id}}-SolarTotalTextA"></div>
                         <div class="xsmall text" style="display:none" id="{{id}}-SolarYesterdayTotal"></div>
@@ -30,7 +30,7 @@
                     <canvas id="{{id}}-HouseSources"></canvas>
                 </div>
                 <div class="MMM-Powerwall col2 vflexbox">
-                    <div class="small bright spaced">{{translations.house_consuming}}</div>
+                    <div class="small bright spaced">{{ "house_consuming" | translate }}</div>
                     <div id="{{id}}-HouseConsumption" class="big house text spaced"></div>
                     <div class="small bright text spaced" id="{{id}}-UsageTotal" style="display:none"></div>
                     <div class="xsmall text" style="display:none" id="{{id}}-UsageTotalYesterday"></div>
@@ -45,7 +45,7 @@
                 <div class="MMM-Powerwall small bright text grid-direction" id="{{id}}-GridDirection"></div>
                 <div class="MMM-Powerwall vflexbox grid-number">
                     <div class="big grid text spaced" id="{{id}}-GridInOut"></div>
-                    <div class="medium bright storm-watch" style="display:none" id="{{id}}-StormWatch">{{translations.stormwatch}}</div>
+                    <div class="medium bright storm-watch" style="display:none" id="{{id}}-StormWatch">{{ "stormwatch" | translate }}</div>
                 </div>
                 <div class="MMM-Powerwall vflexbox grid-import">
                     <div class="small bright spaced text" id="{{id}}-GridInToday"></div>
@@ -73,7 +73,7 @@
                     <canvas id="{{id}}-SelfPoweredDetails"></canvas>
                     <div class="MMM-Powerwall overlay small">
                         <span class="bright"><span class="MMM-Powerwall bright big text" id="{{id}}-SelfPoweredTotal"></span><br>
-                        {{translations.selfpowered}}</span><br>
+                        {{ "selfpowered" | translate }}</span><br>
                         <span class="MMM-Powerwall text xsmall" id="{{id}}-SelfPoweredYesterday"></span>
                     </div>
                 </div>
@@ -107,12 +107,12 @@
                 <canvas id="{{id}}-PowerLine"></canvas>
             </div>
         {%- elif graph == "AuthNeeded" -%}
-            <h4><a href="/MMM-Powerwall/auth">{{translations.authNeeded}}</a></h4>
+            <h4><a href="/MMM-Powerwall/auth">{{ "authNeeded" | translate }}</a></h4>
             {% for account in accountsNeedAuth %}
                 <p class="small">{{account}}</p>
             {% endfor %}
         {%- else -%}
-        {{translations.unknown}}
+        {{ "unknown" | translate }}
         {%- endif -%}
     </div>
 {%- endfor %}
