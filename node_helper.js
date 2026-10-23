@@ -334,47 +334,28 @@ module.exports = NodeHelper.create({
 					var client = await mqtt.connectAsync(tm.url, tm.options);
 					this.mqttClients[username].client = client;
 
-					let vehicleDetective = {};
-					let self = this;
+					tm.vehicles = {};
+					tm.detective = {};
 
 					client.on("message", async (topic, message) => {
 						if (topic.startsWith(namespace)) {
 							message = message.toString();
-							[id, value] = topic.slice(namespace.length).split('/');
+							let [id, value] = topic.slice(namespace.length).split('/');
 							this.log("Teslamate MQTT: " + [id, value, message].join(", "));
-							if (!tm.vehicles) {
-								tm.vehicles = {}
-							}
-							if (!(id in tm.vehicles)) {
-								if (!vehicleDetective[id]) {
-									vehicleDetective[id] = {};
-								}
-								vehicleDetective[id][value] = message;
-
-								if (self.vehicles[username] &&
-									vehicleDetective[id].display_name &&
-									vehicleDetective[id].odometer
-								) {
-									// We have enough to try looking
-									for (let vehicle of self.vehicles[username]) {
-										if (vehicle.display_name == vehicleDetective[id].display_name &&
-											Math.abs(vehicle.odometer - vehicleDetective[id].odometer) < Math.min(100, .01 * vehicle.odometer)
-										) {
-											for (const val in vehicleDetective[id]) {
-												this.updateVehicleData(username, vehicle, val, vehicleDetective[id][val])
-											}
-											delete vehicle.accumulator;
-											tm.vehicles[id] = vehicle;
-											break;
-										}
-									}
-								}
-							}
 
 							if (id in tm.vehicles) {
-								// Get the info needed to update cache
 								let vehicle = tm.vehicles[id];
 								this.updateVehicleData(username, vehicle, value, message);
+								if (value === "state") {
+									await this.fillVehicleDataGaps(username, vehicle, message);
+								}
+							}
+							else {
+								if (!tm.detective[id]) {
+									tm.detective[id] = {};
+								}
+								tm.detective[id][value] = message;
+								this.matchTeslamateVehicles(username);
 							}
 						}
 					});
@@ -397,6 +378,9 @@ module.exports = NodeHelper.create({
 							"charger_actual_current",
 							"time_to_full_charge",
 							"sentry_mode",
+							"model",
+							"exterior_color",
+							"wheel_type",
 						].map(topic => namespace + "+/" + topic),
 						{
 							rh: 1
@@ -417,6 +401,8 @@ module.exports = NodeHelper.create({
 					// See if there are any cars on the account.
 					this.vehicles[username] = await this.doTeslaApiGetVehicleList(username);
 				}
+				// Retained Teslamate messages may have arrived before the list
+				this.matchTeslamateVehicles(username);
 			}
 		}
 
@@ -510,6 +496,90 @@ module.exports = NodeHelper.create({
 		}
 	},
 
+	matchTeslamateVehicles: function (username) {
+		let tm = this.mqttClients[username];
+		let vehicles = this.vehicles[username];
+		if (!tm || !tm.detective || !Array.isArray(vehicles)) {
+			return;
+		}
+
+		for (const id in tm.detective) {
+			let seen = tm.detective[id];
+			if (!seen.display_name) {
+				continue;
+			}
+			// Odometer (km) confirms the match when both sides have one;
+			// otherwise a unique name is enough.
+			let named = vehicles.filter(v => v.display_name == seen.display_name);
+			let vehicle = named.length == 1 &&
+				(named[0].odometer == null || seen.odometer == null) ?
+				named[0] :
+				named.find(v => v.odometer != null && seen.odometer != null &&
+					Math.abs(v.odometer - seen.odometer) < Math.min(100, .01 * v.odometer));
+			if (!vehicle) {
+				continue;
+			}
+
+			this.log("Teslamate car " + id + " is " + vehicle.display_name);
+			this.seedVehicleCache(username, vehicle);
+			tm.vehicles[id] = vehicle;
+			delete tm.detective[id];
+			for (const topic in seen) {
+				this.updateVehicleData(username, vehicle, topic, seen[topic]);
+			}
+			this.fillVehicleDataGaps(username, vehicle, seen.state);
+		}
+	},
+
+	seedVehicleCache: function (username, vehicle) {
+		this.initializeCache(this.vehicleData, username, vehicle.id);
+		let entry = this.vehicleData[username][vehicle.id];
+		if (!entry.lastResult) {
+			// Skeleton for Teslamate to fill in; avoids waking the car
+			entry.lastResult = {
+				drive_state: {},
+				charge_state: {},
+				vehicle_state: {},
+				vehicle_config: {},
+				gui_settings: {
+					gui_distance_units: this.configOnHd.units === "imperial" ? "mi/hr" : "km/hr"
+				}
+			};
+			vehicle.needsApiData = true;
+		}
+	},
+
+	// Teslamate doesn't publish display units or option codes. Fetch them
+	// once while the car is awake anyway, rather than waking it.
+	fillVehicleDataGaps: async function (username, vehicle, state) {
+		const AWAKE_STATES = ["online", "charging", "driving"];
+		const RETRY_MS = 30 * 60 * 1000;
+		if (!vehicle.needsApiData || vehicle.fetchingApiData ||
+			!AWAKE_STATES.includes(state) ||
+			(vehicle.lastApiAttempt && vehicle.lastApiAttempt + RETRY_MS > Date.now())) {
+			return;
+		}
+
+		vehicle.fetchingApiData = true;
+		vehicle.lastApiAttempt = Date.now();
+		try {
+			let url = this.apiBase(username) + "/api/1/vehicles/" + vehicle.id +
+				"/vehicle_data?endpoints=gui_settings%3Bvehicle_config";
+			let data = await this.doTeslaApi(url, username);
+			if (data && data.gui_settings && data.vehicle_config) {
+				let cached = this.vehicleData[username][vehicle.id].lastResult;
+				cached.gui_settings = data.gui_settings;
+				Object.assign(cached.vehicle_config, data.vehicle_config);
+				cached.option_codes = data.option_codes;
+				vehicle.needsApiData = false;
+				this.sendVehicleData(username, vehicle.id, "mqtt", cached);
+			}
+		}
+		finally {
+			vehicle.fetchingApiData = false;
+		}
+	},
+
 	updateVehicleData: function (username, vehicle, mqttTopic, mqttMessage) {
 
 		let cached = this.vehicleData[username][vehicle.id].lastResult
@@ -548,6 +618,9 @@ module.exports = NodeHelper.create({
 			"sentry_mode": (sentry) => [
 				["sentry_mode", sentry === "true"]
 			],
+			"model": (model) => [
+				["car_type", "model" + model.toLowerCase()]
+			],
 		};
 		const map = {
 			"geofence": [],
@@ -564,7 +637,10 @@ module.exports = NodeHelper.create({
 			"time_to_full_charge": ["charge_state"],
 			"charging_state": ["charge_state"],
 			"plugged_in": ["charge_state"],
-			"sentry_mode": ["vehicle_state"]
+			"sentry_mode": ["vehicle_state"],
+			"car_type": ["vehicle_config"],
+			"exterior_color": ["vehicle_config"],
+			"wheel_type": ["vehicle_config"]
 		};
 
 		var updates;
@@ -1351,7 +1427,9 @@ module.exports = NodeHelper.create({
 	doTeslaApiGetVehicleData: async function (username, vehicleID, useCached) {
 		// Slightly more complicated; involves calling multiple APIs
 		let state = "cached";
-		const forceWake = !(this.vehicleData[username][vehicleID].lastResult);
+		// With Teslamate, its MQTT feed fills the cache; never wake the car
+		const forceWake = !(this.vehicleData[username][vehicleID].lastResult) &&
+			!this.mqttClients[username];
 		if (!useCached || forceWake) {
 			let url = this.apiBase(username) + "/api/1/vehicles/" + vehicleID;
 			let response = await this.doTeslaApi(url, username);
@@ -1390,11 +1468,14 @@ module.exports = NodeHelper.create({
 
 		if (dataValid(data)) {
 			let odometer = data.vehicle_state.odometer;
-			if (data.gui_settings.gui_distance_units === "mi/hr") {
-				odometer *= 1.609344;
+			// Teslamate-seeded cache has no odometer
+			if (odometer != null) {
+				if (data.gui_settings.gui_distance_units === "mi/hr") {
+					odometer *= 1.609344;
+				}
+				(this.vehicles[username].find(vehicle => vehicle.id == vehicleID) ||
+					{}).odometer = odometer;
 			}
-			(this.vehicles[username].find(vehicle => vehicle.id == vehicleID) ||
-				{}).odometer = odometer;
 			if (!data.drive_state.longitude && data.drive_state.active_route_longitude) {
 				data.drive_state.longitude = data.drive_state.active_route_longitude;
 				data.drive_state.latitude = data.drive_state.active_route_latitude;
