@@ -151,4 +151,5 @@ In addition to any commiters to the repo, the following have helped figure certa
 
 - @ngardiner's work on TWCManager is amazing, and the car charging could not be tracked without it
 - @Kemmey provided initial code for interacting with the compositor
+- Compositor codes for newer models, colors, and wheels drew on the mapping tables in [vide/matedroid](https://github.com/vide/matedroid/blob/main/docs/ASSETS.md) and [woosal1337/my-tesla](https://github.com/woosal1337/my-tesla/blob/main/research/car-images.md)
 - Access to Tesla's v3 authentication endpoint adapted from [enode-engineering/tesla-oauth2](https://github.com/enode-engineering/tesla-oauth2)

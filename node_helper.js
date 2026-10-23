@@ -9,6 +9,7 @@ const NodeHelper = require("node_helper");
 const fs = require("fs").promises;
 const fetch = (...args) => import('node-fetch').then(({ default: fetch }) => fetch(...args));
 const powerwall = require("./powerwall");
+const TeslaCompositor = require("./compositor");
 const path = require("path");
 const nunjucks = require("./../../node_modules/nunjucks");
 const { check, validationResult, matchedData } = require('express-validator');
@@ -381,6 +382,7 @@ module.exports = NodeHelper.create({
 							"model",
 							"exterior_color",
 							"wheel_type",
+							"trim_badging",
 						].map(topic => namespace + "+/" + topic),
 						{
 							rh: 1
@@ -537,6 +539,7 @@ module.exports = NodeHelper.create({
 		if (!entry.lastResult) {
 			// Skeleton for Teslamate to fill in; avoids waking the car
 			entry.lastResult = {
+				vin: vehicle.vin,
 				drive_state: {},
 				charge_state: {},
 				vehicle_state: {},
@@ -619,7 +622,8 @@ module.exports = NodeHelper.create({
 				["sentry_mode", sentry === "true"]
 			],
 			"model": (model) => [
-				["car_type", "model" + model.toLowerCase()]
+				["car_type", model.toLowerCase() === "cybertruck" ?
+					"cybertruck" : "model" + model.toLowerCase()]
 			],
 		};
 		const map = {
@@ -640,7 +644,8 @@ module.exports = NodeHelper.create({
 			"sentry_mode": ["vehicle_state"],
 			"car_type": ["vehicle_config"],
 			"exterior_color": ["vehicle_config"],
-			"wheel_type": ["vehicle_config"]
+			"wheel_type": ["vehicle_config"],
+			"trim_badging": ["vehicle_config"]
 		};
 
 		var updates;
@@ -1507,7 +1512,9 @@ module.exports = NodeHelper.create({
 					car_type: undefined,
 					option_codes: undefined,
 					exterior_color: undefined,
-					wheel_type: undefined
+					wheel_type: undefined,
+					trim_badging: undefined,
+					model_year: undefined
 				}
 			});
 
@@ -1539,7 +1546,9 @@ module.exports = NodeHelper.create({
 				car_type: data.vehicle_config.car_type,
 				option_codes: data.option_codes,
 				exterior_color: data.vehicle_config.exterior_color,
-				wheel_type: data.vehicle_config.wheel_type
+				wheel_type: data.vehicle_config.wheel_type,
+				trim_badging: data.vehicle_config.trim_badging,
+				model_year: TeslaCompositor.modelYearFromVin(data.vin)
 			}
 		});
 
