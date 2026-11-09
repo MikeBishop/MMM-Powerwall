@@ -52,6 +52,7 @@ are being introduced because of Tesla's new authentication model.**
 | `home`                | *Optional* Coordinates (`[lat, lon]`) of your home; used to indicate when car is at home and to get sunrise/sunset times
 | `debug`               | *Optional* Enables additional debug output to the browser tools Console and to stderr on the MM, useful for troubleshooting
 | `powerlineClip`       | *Optional* Controls clipping behavior on PowerLine graph; see below for values
+| `touColors`           | *Optional* Colors for time-of-use periods on the PowerLine graph, or `false` to hide them; see below
 | `teslamate`           | *Optional* See below
 
 ### Graphs
@@ -84,6 +85,25 @@ Possible values:
   - false - do not clip
   - null/default - clip at most one category
   - true - clip extremes
+
+#### PowerLine time-of-use periods
+
+If your Powerwall has a time-of-use tariff configured, the PowerLine graph's
+zero line is colored by rate period across the day. The tariff is read from
+`site_info` with a Fleet API token, or from `tariff_rate` with an Owner API
+token, and refreshed every six hours.
+
+`touColors` maps each period to a color; periods mapped to `null` keep the
+plain line. Your values are merged with the defaults:
+
+```js
+touColors: {
+	SUPER_OFF_PEAK: "#2ECC40",
+	OFF_PEAK: null,
+	PARTIAL_PEAK: "#FFDC00",
+	ON_PEAK: "#FF4136"
+}
+```
 
 ### Authentication
 

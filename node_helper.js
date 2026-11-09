@@ -32,6 +32,8 @@ const FLEET_AUTH_ORIGIN = "https://fleet-auth.prd.vn.cloud.tesla.com"
 
 const MI_KM_FACTOR = 1.609344;
 const BACKUP_REFRESH_MS = 6 * 60 * 60 * 1000;
+// Tariffs change rarely; seasons are resolved by the frontend
+const TARIFF_REFRESH_MS = 6 * 60 * 60 * 1000;
 // How long after a day ends before its history is treated as final
 const DAY_FINALIZE_GRACE_MS = 60 * 60 * 1000;
 // Tesla's API tends to fail by hanging; give up rather than hold the
@@ -49,6 +51,7 @@ module.exports = NodeHelper.create({
 		this.powerwallAccounts = {};
 		this.energy = {};
 		this.backup = {};
+		this.tariff = {};
 		this.selfConsumption = {};
 		this.storm = {};
 		this.vehicles = {};
@@ -851,6 +854,7 @@ module.exports = NodeHelper.create({
 			if (siteID) {
 				this.initializeCache(this.powerHistory, username, siteID);
 				this.initializeCache(this.backup, username, siteID);
+				this.initializeCache(this.tariff, username, siteID);
 			}
 			else {
 				return;
@@ -879,6 +883,13 @@ module.exports = NodeHelper.create({
 					siteID: siteID,
 					backup: this.backup[username][siteID].lastResult
 				});
+			}
+
+			if (this.tariff[username][siteID].lastUpdate + TARIFF_REFRESH_MS < Date.now()) {
+				await self.doTeslaApiGetTariff(username, siteID);
+			}
+			else {
+				this.sendTariff(username, siteID);
 			}
 
 		}
@@ -1349,6 +1360,41 @@ module.exports = NodeHelper.create({
 	doTeslaApiGetBackupHistory: async function (username, siteID) {
 		url = this.apiBase(username) + "/api/1/energy_sites/" + siteID + "/calendar_history?kind=backup&period=year";
 		await this.doTeslaApi(url, username, "siteID", siteID, this.backup, "Backup", "events", "backup");
+	},
+
+	// The Fleet API's site_info carries the tariff (tariff_content_v2); the
+	// Owner API's site_info doesn't, but its tariff_rate does. tariff_rate is
+	// billed differently on the Fleet API, so it's only used with Owner tokens.
+	doTeslaApiGetTariff: async function (username, siteID) {
+		let base = this.apiBase(username);
+		let tariff = null;
+		if (base === OWNER_URL) {
+			tariff = await this.doTeslaApi(base + "/api/1/energy_sites/" + siteID + "/tariff_rate", username);
+		}
+		else {
+			let info = await this.doTeslaApi(base + "/api/1/energy_sites/" + siteID + "/site_info", username);
+			if (info) {
+				// A site without TOU rates has no tariff; don't retry until the next refresh
+				tariff = info.tariff_content_v2 || {};
+			}
+		}
+
+		if (tariff && typeof tariff === "object") {
+			this.updateCache(tariff, this.tariff, [username, siteID]);
+		}
+		// On failure, keep (and resend) the last good tariff
+		this.sendTariff(username, siteID);
+	},
+
+	sendTariff: function (username, siteID) {
+		let tariff = this.tariff[username][siteID].lastResult;
+		if (tariff) {
+			this.sendSocketNotification("Tariff", {
+				username: username,
+				siteID: siteID,
+				tariff: tariff
+			});
+		}
 	},
 
 	doTeslaApiGetSelfConsumption: async function (username, siteID, date) {
