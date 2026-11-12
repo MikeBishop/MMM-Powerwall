@@ -195,6 +195,24 @@
     color: #B91413;
 }
 
+/* Time-of-use periods on the PowerLine zero line; transparent means the
+   plain line. Override in custom.css, e.g. ".MMM-Powerwall .tou-off-peak". */
+.MMM-Powerwall .tou-super-off-peak {
+    color: #2ECC40;
+}
+
+.MMM-Powerwall .tou-off-peak {
+    color: transparent;
+}
+
+.MMM-Powerwall .tou-partial-peak {
+    color: #FFDC00;
+}
+
+.MMM-Powerwall .tou-on-peak {
+    color: #FF4136;
+}
+
 .MMM-Powerwall .big {
     font-size: 45px;
     line-height: 50px;

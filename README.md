@@ -85,6 +85,26 @@ Possible values:
   - null/default - clip at most one category
   - true - clip extremes
 
+#### PowerLine time-of-use periods
+
+If your Powerwall has a time-of-use tariff configured, the PowerLine graph's
+zero line is colored by rate period across the day. The tariff is read from
+`site_info` with a Fleet API token, or from `tariff_rate` with an Owner API
+token, and refreshed every six hours.
+
+Each period's color comes from a CSS class, so you can override it in your
+`custom.css` like any other color. The defaults are:
+
+```css
+.MMM-Powerwall .tou-super-off-peak { color: #2ECC40; }
+.MMM-Powerwall .tou-off-peak { color: transparent; } /* plain line */
+.MMM-Powerwall .tou-partial-peak { color: #FFDC00; }
+.MMM-Powerwall .tou-on-peak { color: #FF4136; }
+```
+
+Set a period to `transparent` to leave it uncolored. To hide the periods
+entirely, make all four transparent.
+
 ### Authentication
 
 This module relies on being able to access your Powerwall both locally and via

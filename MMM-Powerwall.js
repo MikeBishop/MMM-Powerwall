@@ -83,6 +83,7 @@ Module.register("MMM-Powerwall", {
 	yesterdayExport: null,
 	gridStatus: "SystemGridConnected",
 	gridOutageStart: null,
+	tariff: null,
 	stormWatch: false,
 	dayStart: null,
 	dayMode: "day",
@@ -521,6 +522,15 @@ Module.register("MMM-Powerwall", {
 					this.scheduleCloudUpdate();
 					this.powerHistory = payload.powerHistory;
 					this.updatePowerLine();
+				}
+				break;
+			case "Tariff":
+				if (payload.username === this.config.teslaAPIUsername &&
+					this.config.siteID == payload.siteID) {
+					this.tariff = payload.tariff;
+					if (this.powerHistory) {
+						this.updatePowerLine();
+					}
 				}
 				break;
 			case "ChargeHistory":
@@ -963,43 +973,178 @@ Module.register("MMM-Powerwall", {
 			powerLine.options.scales.yAxis.max = newData.clip;
 			powerLine.options.scales.yAxis.min = -1 * newData.clip;
 
-			if (Array.isArray(this.backup)) {
-				let outages = this.backup;
-				if (this.gridOutageStart) {
-					outages.push({
-						timestamp: new Date(this.gridOutageStart).toISOString(),
-						duration: Date.now() - this.gridOutageStart
-					});
-				}
-				powerLine.options.plugins.annotation.annotations = [
-					...outages.map(
-						outage => {
-							return {
-								type: 'box',
-								xScaleID: 'xAxis',
-								xMin: outage.timestamp,
-								xMax: luxon.DateTime.fromISO(outage.timestamp).plus({ milliseconds: outage.duration }).toISO(),
-								backgroundColor: "rgba(255, 0, 0, 0.1)",
-								borderColor: "rgba(255,0,0,0.1)"
-							};
-						}
-					),
-					{
-						type: 'line',
-						mode: 'vertical',
-						scaleID: 'xAxis',
-						value: 0,
-						borderColor: 'black',
-						borderWidth: 0.5,
-						label: {
-							enabled: false
-						}
-					}
-				];
+			let outages = Array.isArray(this.backup) ? [...this.backup] : [];
+			if (this.gridOutageStart) {
+				outages.push({
+					timestamp: new Date(this.gridOutageStart).toISOString(),
+					duration: Date.now() - this.gridOutageStart
+				});
 			}
+			powerLine.options.plugins.annotation.annotations = [
+				...outages.map(
+					outage => {
+						return {
+							type: 'box',
+							xScaleID: 'xAxis',
+							xMin: outage.timestamp,
+							xMax: luxon.DateTime.fromISO(outage.timestamp).plus({ milliseconds: outage.duration }).toISO(),
+							backgroundColor: "rgba(255, 0, 0, 0.1)",
+							borderColor: "rgba(255,0,0,0.1)"
+						};
+					}
+				),
+				this.zeroLineAnnotation(),
+				...this.touAnnotations(lastMidnight)
+			];
 
 			powerLine.update();
 		}
+	},
+
+	zeroLineAnnotation: function () {
+		return {
+			type: 'line',
+			scaleID: 'yAxis',
+			value: 0,
+			borderColor: 'black',
+			borderWidth: 0.5,
+			label: {
+				enabled: false
+			}
+		};
+	},
+
+	// Resolves a TOU period's color from the stylesheet (.tou-<period>, e.g.
+	// .tou-on-peak), so it can be overridden in custom.css like any other
+	// color. Returns null when the color is transparent or unresolvable.
+	touColor: function (label) {
+		let root = document.getElementById(this.identifier) || document.body;
+		let probe = document.createElement("span");
+		probe.className = "tou-" + String(label).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+		probe.style.display = "none";
+		root.appendChild(probe);
+		let color = getComputedStyle(probe).color;
+		root.removeChild(probe);
+		return !color || /^rgba\(.*,\s*0\)$/.test(color) || color === "transparent" ? null : color;
+	},
+
+	// Colored segments along the zero line for each TOU period today. Each
+	// gets a thin dark edge so it stays visible over a fill of the same color.
+	touAnnotations: function (midnight) {
+		if (!this.tariff) {
+			return [];
+		}
+		let result = [];
+		for (let segment of this.touSegments(midnight)) {
+			let color = this.touColor(segment.label);
+			if (!color) {
+				continue;
+			}
+			let base = {
+				type: 'line',
+				xScaleID: 'xAxis',
+				yScaleID: 'yAxis',
+				xMin: segment.start.toISO(),
+				xMax: segment.end.toISO(),
+				yMin: 0,
+				yMax: 0,
+				label: {
+					enabled: false
+				}
+			};
+			result.push(
+				{ ...base, borderColor: 'black', borderWidth: 4 },
+				{ ...base, borderColor: color, borderWidth: 3 }
+			);
+		}
+		return result;
+	},
+
+	// Splits the day starting at midnight into [{start, end, label}] runs of
+	// the same TOU period. Follows TWCManager's reading of Tesla tariffs
+	// (ngardiner/TWCManager#744).
+	touSegments: function (midnight) {
+		let seasons = this.tariff && this.tariff.seasons;
+		if (!seasons || typeof seasons !== "object") {
+			return [];
+		}
+
+		// The narrowest season covering today wins, so a one-day season
+		// (e.g. a critical-peak day) beats its parent
+		let today = [midnight.month, midnight.day];
+		let before = (a, b) => a[0] < b[0] || (a[0] == b[0] && a[1] <= b[1]);
+		let best = null;
+		for (let season of Object.values(seasons)) {
+			if (!season || typeof season !== "object") {
+				continue;
+			}
+			let start = [season.fromMonth || 0, season.fromDay || 0];
+			let end = [season.toMonth || 0, season.toDay || 0];
+			let covers = before(start, end) ?
+				before(start, today) && before(today, end) :
+				before(start, today) || before(today, end);
+			if (covers) {
+				let span = ((end[0] * 31 + end[1] - start[0] * 31 - start[1]) % 372 + 372) % 372;
+				if (!best || span < best.span) {
+					best = { span: span, season: season };
+				}
+			}
+		}
+		if (!best) {
+			return [];
+		}
+
+		// Tesla numbers days from Monday = 0
+		let weekday = midnight.weekday - 1;
+		let windows = [];
+		let periods = best.season.tou_periods || {};
+		for (let label in periods) {
+			let list = periods[label];
+			if (list && !Array.isArray(list)) {
+				list = list.periods; // tariff_content_v2 wraps each list
+			}
+			for (let w of Array.isArray(list) ? list : []) {
+				let first = w.fromDayOfWeek || 0, last = w.toDayOfWeek || 0;
+				if (first <= last ? (weekday < first || weekday > last) : (weekday < first && weekday > last)) {
+					continue;
+				}
+				windows.push({
+					label: label,
+					start: (w.fromHour || 0) * 60 + (w.fromMinute || 0),
+					end: ((w.toHour || 0) * 60 + (w.toMinute || 0)) || 24 * 60 // 00:00 ends the day
+				});
+			}
+		}
+
+		let labelAt = minute => {
+			let match = windows.find(w => w.start < w.end ?
+				w.start <= minute && minute < w.end :
+				minute >= w.start || minute < w.end);
+			// Hours no window names carry the base rate
+			return match ? match.label : "OFF_PEAK";
+		};
+
+		let boundaries = [...new Set([0, 24 * 60, ...windows.flatMap(w => [w.start, w.end % (24 * 60)])])].
+			sort((a, b) => a - b);
+		let toTime = minute => minute >= 24 * 60 ?
+			midnight.endOf('day') :
+			midnight.set({ hour: Math.floor(minute / 60), minute: minute % 60 });
+		let segments = [];
+		for (let i = 0; i < boundaries.length - 1; i++) {
+			let label = labelAt(boundaries[i]);
+			let last = segments[segments.length - 1];
+			if (last && last.label === label) {
+				last.end = toTime(boundaries[i + 1]);
+			}
+			else {
+				segments.push({
+					label: label,
+					start: toTime(boundaries[i]),
+					end: toTime(boundaries[i + 1])
+				});
+			}
+		}
+		return segments;
 	},
 
 	drawStatusForVehicle: async function (statusFor, numCharging, hidden) {
@@ -2009,17 +2154,11 @@ Module.register("MMM-Powerwall", {
 						datalabels: false,
 						annotation: {
 							drawTime: 'afterDatasetsDraw',
-							annotations: [{
-								type: 'line',
-								mode: 'horizontal',
-								scaleID: 'yAxis',
-								value: 0,
-								borderColor: 'black',
-								borderWidth: 0.5,
-								label: {
-									enabled: false
-								}
-							}]
+							annotations: [
+								this.zeroLineAnnotation(),
+								...this.touAnnotations(
+									luxon.DateTime.local().setZone(this.timezone).startOf('day'))
+							]
 						}
 					},
 					scales: {
