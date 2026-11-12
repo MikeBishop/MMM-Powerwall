@@ -13,15 +13,6 @@ const CAR = { key: "car", color: "#B91413" };
 
 const getDateKey = (ts) => ts.split('T')[0];
 
-// Colors for time-of-use periods on the PowerLine zero line; a period with
-// no color (OFF_PEAK by default) is left as the plain line
-const DEFAULT_TOU_COLORS = {
-	SUPER_OFF_PEAK: "#2ECC40",
-	OFF_PEAK: null,
-	PARTIAL_PEAK: "#FFDC00",
-	ON_PEAK: "#FF4136"
-};
-
 const MI_KM_FACTOR = 1.609344;
 
 const REQUIRED_CALLS = {
@@ -74,7 +65,6 @@ Module.register("MMM-Powerwall", {
 		teslaAPIPassword: null,
 		home: null,
 		powerlineClip: null,
-		touColors: {},
 		debug: false
 	},
 	requiresVersion: "2.32.0", // Required version of MagicMirror
@@ -1024,17 +1014,29 @@ Module.register("MMM-Powerwall", {
 		};
 	},
 
+	// Resolves a TOU period's color from the stylesheet (.tou-<period>, e.g.
+	// .tou-on-peak), so it can be overridden in custom.css like any other
+	// color. Returns null when the color is transparent or unresolvable.
+	touColor: function (label) {
+		let root = document.getElementById(this.identifier) || document.body;
+		let probe = document.createElement("span");
+		probe.className = "tou-" + String(label).toLowerCase().replace(/[^a-z0-9]+/g, "-");
+		probe.style.display = "none";
+		root.appendChild(probe);
+		let color = getComputedStyle(probe).color;
+		root.removeChild(probe);
+		return !color || /^rgba\(.*,\s*0\)$/.test(color) || color === "transparent" ? null : color;
+	},
+
 	// Colored segments along the zero line for each TOU period today. Each
 	// gets a thin dark edge so it stays visible over a fill of the same color.
 	touAnnotations: function (midnight) {
-		let colors = this.config.touColors;
-		if (colors === false || !this.tariff) {
+		if (!this.tariff) {
 			return [];
 		}
-		colors = { ...DEFAULT_TOU_COLORS, ...(colors || {}) };
 		let result = [];
 		for (let segment of this.touSegments(midnight)) {
-			let color = colors[segment.label];
+			let color = this.touColor(segment.label);
 			if (!color) {
 				continue;
 			}

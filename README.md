@@ -52,7 +52,6 @@ are being introduced because of Tesla's new authentication model.**
 | `home`                | *Optional* Coordinates (`[lat, lon]`) of your home; used to indicate when car is at home and to get sunrise/sunset times
 | `debug`               | *Optional* Enables additional debug output to the browser tools Console and to stderr on the MM, useful for troubleshooting
 | `powerlineClip`       | *Optional* Controls clipping behavior on PowerLine graph; see below for values
-| `touColors`           | *Optional* Colors for time-of-use periods on the PowerLine graph, or `false` to hide them; see below
 | `teslamate`           | *Optional* See below
 
 ### Graphs
@@ -93,17 +92,18 @@ zero line is colored by rate period across the day. The tariff is read from
 `site_info` with a Fleet API token, or from `tariff_rate` with an Owner API
 token, and refreshed every six hours.
 
-`touColors` maps each period to a color; periods mapped to `null` keep the
-plain line. Your values are merged with the defaults:
+Each period's color comes from a CSS class, so you can override it in your
+`custom.css` like any other color. The defaults are:
 
-```js
-touColors: {
-	SUPER_OFF_PEAK: "#2ECC40",
-	OFF_PEAK: null,
-	PARTIAL_PEAK: "#FFDC00",
-	ON_PEAK: "#FF4136"
-}
+```css
+.MMM-Powerwall .tou-super-off-peak { color: #2ECC40; }
+.MMM-Powerwall .tou-off-peak { color: transparent; } /* plain line */
+.MMM-Powerwall .tou-partial-peak { color: #FFDC00; }
+.MMM-Powerwall .tou-on-peak { color: #FF4136; }
 ```
+
+Set a period to `transparent` to leave it uncolored. To hide the periods
+entirely, make all four transparent.
 
 ### Authentication
 
